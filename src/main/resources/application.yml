@@ -1,31 +1,30 @@
 spring:
   application:
     name: rca-agent
-  ai:
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY:}
-      chat:
-        options:
-          model: claude-opus-4-8
-          max-tokens: 8192
-    openai:
-      api-key: ${OPENAI_API_KEY:}
-      chat:
-        options:
-          model: gpt-4o
+
+server:
+  port: ${SERVER_PORT:8080}
 
 rca:
   llm:
     provider: ${RCA_LLM_PROVIDER:claude-cli}   # anthropic | openai | claude-cli
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${RCA_ANTHROPIC_MODEL:claude-opus-4-8}
+      max-tokens: ${RCA_ANTHROPIC_MAX_TOKENS:8192}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      model: ${RCA_OPENAI_MODEL:gpt-4o}
     claude-cli:
       command: ${CLAUDE_CLI_PATH:claude}
-      timeout-seconds: 120
+      timeout-seconds: ${CLAUDE_CLI_TIMEOUT_SECONDS:120}
 
-  notifier: ${RCA_NOTIFIER:console}            # console | slack | discord
-  slack:
-    webhook-url: ${SLACK_WEBHOOK_URL:}
-  discord:
-    webhook-url: ${DISCORD_WEBHOOK_URL:}
+  notify:
+    channel: ${RCA_NOTIFIER:console}           # console | slack | discord
+    slack:
+      webhook-url: ${SLACK_WEBHOOK_URL:}
+    discord:
+      webhook-url: ${DISCORD_WEBHOOK_URL:}
 
   grafana:
     tempo:
@@ -38,27 +37,36 @@ rca:
       url: ${MIMIR_URL:}
       user: ${MIMIR_USER:}
     token: ${GRAFANA_TOKEN:}
-    connect-timeout-ms: 3000
-    read-timeout-ms: 10000
+    connect-timeout-ms: ${GRAFANA_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${GRAFANA_READ_TIMEOUT_MS:10000}
 
   collect:
-    window-padding-seconds: 120
-    apps: content|auth|chat
-    app-label: app
-    level-label: level
-    log-limit: 1000
-    metric-step: 15s
+    window-padding-seconds: ${RCA_WINDOW_PADDING_SECONDS:120}
+    apps: ${RCA_APPS:content|auth|chat}
+    app-label: ${RCA_APP_LABEL:app}
+    level-label: ${RCA_LEVEL_LABEL:level}
+    log-limit: ${RCA_LOG_LIMIT:1000}
+    metric-step: ${RCA_METRIC_STEP:15s}
+    # env로 빼지 않는다: PromQL 목록은 env var 하나에 담기 어렵다. 배포별로 yml에서 덮어쓸 것.
     metric-queries:
       - "hikaricp_connections_active"
       - "hikaricp_connections_pending"
       - "rate(jvm_gc_pause_seconds_sum[5m])"
       - "kafka_consumer_fetch_manager_records_lag"
-    max-trace-bytes: 102400
-    top-spans: 30
+    max-trace-bytes: ${RCA_MAX_TRACE_BYTES:102400}
+    top-spans: ${RCA_TOP_SPANS:30}
+
+  # 시스템 프롬프트: 이 경로에 파일이 있으면 그것을, 없으면 classpath:prompts/system-prompt.md를 쓴다.
+  # 외부 파일은 조사할 때마다 다시 읽으므로 재시작 없이 수정할 수 있다.
+  prompt:
+    path: ${RCA_PROMPT_PATH:./prompts/system-prompt.md}
 
   report:
-    dir: ./reports
+    dir: ${RCA_REPORT_DIR:./reports}
+
+  log:
+    dir: ${RCA_LOG_DIR:./logs}
 
 logging:
   level:
-    com.yogurtte.rca: INFO
+    com.yogurtte.rca: ${RCA_LOG_LEVEL:INFO}

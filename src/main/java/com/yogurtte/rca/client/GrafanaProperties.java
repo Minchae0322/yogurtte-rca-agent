@@ -24,7 +24,7 @@ public record GrafanaProperties(
         }
     }
 
-    /** One RestClient per source: Basic auth (instanceId:token) plus connect/read timeouts. */
+    /** 소스마다 RestClient 하나: Basic 인증(인스턴스ID:토큰) + 연결/읽기 타임아웃. */
     public RestClient restClient(Endpoint endpoint) {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));

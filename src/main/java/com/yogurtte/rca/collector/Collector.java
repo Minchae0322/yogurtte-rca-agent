@@ -13,8 +13,8 @@ import com.yogurtte.rca.client.MimirClient;
 import com.yogurtte.rca.client.TempoClient;
 
 /**
- * Fetches trace, logs and metrics for one traceId.
- * A failing source never aborts the run - it is recorded as a failure note and collection continues.
+ * traceId 하나에 대한 트레이스/로그/메트릭을 수집한다.
+ * 한 소스가 실패해도 실행을 중단하지 않는다 - 실패 사유만 기록하고 수집을 계속한다.
  */
 @Component
 public class Collector {
@@ -50,7 +50,7 @@ public class Collector {
         }
         timings.put("tempoMs", System.currentTimeMillis() - started);
 
-        // Without a trace there is no anchor for the window, so fall back to "now +/- padding".
+        // 트레이스가 없으면 시간창의 기준점이 없으므로 "now +/- padding"으로 대체한다.
         var window = TimeWindow.fromTrace(traceJson, properties.windowPaddingSeconds());
         if (window == null) {
             window = TimeWindow.around(Instant.now(), properties.windowPaddingSeconds());
@@ -58,7 +58,7 @@ public class Collector {
                     + "using now +/- " + properties.windowPaddingSeconds() + "s instead.");
         }
 
-        // --- Loki: two separate queries ---
+        // --- Loki: 쿼리 2회 ---
         String errorWarnLogs = null;
         String traceIdLogs = null;
         started = System.currentTimeMillis();
@@ -78,7 +78,7 @@ public class Collector {
         }
         timings.put("lokiMs", System.currentTimeMillis() - started);
 
-        // --- Mimir: one query_range per configured expression ---
+        // --- Mimir: 설정된 식마다 query_range 1회 ---
         started = System.currentTimeMillis();
         for (var query : properties.metricQueries()) {
             try {
@@ -87,7 +87,7 @@ public class Collector {
                 if (hasSeries(body)) {
                     metrics.put(query, body);
                 } else {
-                    // e.g. kafka_consumer_fetch_manager_records_lag when Kafka metrics aren't exported.
+                    // 예: Kafka 메트릭이 노출되지 않았을 때의 kafka_consumer_fetch_manager_records_lag.
                     failures.add("Metric '" + query + "' returned no series in this window; skipped.");
                 }
             } catch (Exception e) {
@@ -101,7 +101,7 @@ public class Collector {
                 metrics, failures, timings);
     }
 
-    /** Prometheus answers with an empty "result" array when nothing matched. */
+    /** Prometheus는 매칭된 것이 없으면 "result" 배열을 비워서 응답한다. */
     private static boolean hasSeries(String body) {
         if (body == null || body.isBlank()) {
             return false;

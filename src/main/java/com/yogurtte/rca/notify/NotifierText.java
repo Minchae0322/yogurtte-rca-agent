@@ -2,7 +2,7 @@ package com.yogurtte.rca.notify;
 
 import com.yogurtte.rca.report.RcaReport;
 
-/** Shared message body for the webhook notifiers. */
+/** webhook notifier들이 공유하는 메시지 본문. */
 final class NotifierText {
 
     private NotifierText() {

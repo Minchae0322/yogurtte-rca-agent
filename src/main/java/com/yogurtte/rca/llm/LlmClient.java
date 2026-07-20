@@ -1,9 +1,9 @@
-package com.yogurtte.rca.analyzer;
+package com.yogurtte.rca.llm;
 
 public interface LlmClient {
 
     LlmResult analyze(String systemPrompt, String context);
 
-    /** Provider id, recorded in the report. */
+    /** 리포트에 기록되는 provider 식별자. */
     String provider();
 }

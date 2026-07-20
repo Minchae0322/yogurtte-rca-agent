@@ -17,9 +17,9 @@ public class MimirClient {
         this.rawStore = rawStore;
     }
 
-    /** /prometheus/api/v1/query_range. start/end are unix seconds. */
+    /** /prometheus/api/v1/query_range. start/end는 unix 초 단위다. */
     public String queryRange(String traceId, String promql, Instant start, Instant end, String step) {
-        // Same reason as LokiClient: PromQL label matchers use { and }, which are URI template syntax.
+        // LokiClient와 같은 이유: PromQL 레이블 매처의 { }가 URI 템플릿 문법과 겹친다.
         var body = restClient.get()
                 .uri(builder -> builder.path("/prometheus/api/v1/query_range")
                         .queryParam("query", "{promql}")

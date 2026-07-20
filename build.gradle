@@ -25,13 +25,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-    // Model modules, not starters: we build the ChatModel ourselves inside an
-    // @ConditionalOnProperty bean, so only the selected provider is ever instantiated
-    // and auto-configuration never has to disambiguate two ChatModel beans.
+    // starter가 아니라 model 모듈만 쓴다: ChatModel을 @ConditionalOnProperty 빈 안에서
+    // 직접 만들기 때문에 선택된 provider만 인스턴스화되고, 자동설정이 ChatModel 빈
+    // 두 개를 두고 고민할 일도 없다.
     implementation 'org.springframework.ai:spring-ai-anthropic'
     implementation 'org.springframework.ai:spring-ai-openai'
 
-    // Slack/Discord are plain webhook POSTs via RestClient - no SDKs.
+    // Slack/Discord는 RestClient로 webhook POST만 한다 - SDK 없음.
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.wiremock:wiremock-standalone:3.9.2'

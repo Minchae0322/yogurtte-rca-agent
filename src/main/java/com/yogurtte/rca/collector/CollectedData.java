@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Everything gathered for one investigation. Any field may be null when that source failed -
- * the matching reason is recorded in {@code failures} and shown to the model instead.
+ * 한 번의 조사를 위해 수집한 전부. 소스가 실패한 필드는 null일 수 있다 -
+ * 그 사유는 {@code failures}에 기록되어 대신 모델에게 보여진다.
  */
 public record CollectedData(
         String traceId,

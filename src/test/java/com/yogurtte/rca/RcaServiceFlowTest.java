@@ -18,8 +18,8 @@ import org.junit.jupiter.api.io.TempDir;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.yogurtte.rca.analyzer.ContextAssembler;
-import com.yogurtte.rca.analyzer.LlmClient;
-import com.yogurtte.rca.analyzer.LlmResult;
+import com.yogurtte.rca.analyzer.PromptProperties;
+import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.LokiClient;
 import com.yogurtte.rca.client.MimirClient;
@@ -27,17 +27,20 @@ import com.yogurtte.rca.client.RawResponseStore;
 import com.yogurtte.rca.client.TempoClient;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.Collector;
+import com.yogurtte.rca.llm.LlmClient;
+import com.yogurtte.rca.llm.LlmResult;
 import com.yogurtte.rca.notify.Notifier;
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportProperties;
+import com.yogurtte.rca.service.RcaService;
 
 /**
- * Whole v0 pass with a fake LlmClient: Tempo and Mimir answer, Loki is down.
- * The run must still finish and say so rather than aborting.
+ * fake LlmClient로 v0 전체 흐름을 돈다: Tempo와 Mimir는 응답하고 Loki는 죽어 있다.
+ * 그래도 실행은 중단 없이 완주하고, 그 사실을 결과에 남겨야 한다.
  */
 class RcaServiceFlowTest {
 
-    /** Records the context it was handed so the test can assert on what the model would see. */
+    /** 건네받은 컨텍스트를 기록해서, 모델이 보게 될 내용을 테스트가 검증할 수 있게 한다. */
     static class FakeLlmClient implements LlmClient {
         String seenSystemPrompt;
         String seenContext;
@@ -62,6 +65,11 @@ class RcaServiceFlowTest {
         public void send(RcaReport report) {
             sent.add(report);
         }
+
+        @Override
+        public String channel() {
+            return "recording";
+        }
     }
 
     private WireMockServer server;
@@ -83,7 +91,7 @@ class RcaServiceFlowTest {
                             {"name":"notify","startTimeUnixNano":"%d","endTimeUnixNano":"%d"}]}]}]}
                         """.formatted(nanos(base), nanos(base.plusSeconds(3))))));
 
-        // Loki is unavailable for this run.
+        // 이 실행에서 Loki는 죽어 있다.
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
                 .willReturn(aResponse().withStatus(503)));
 
@@ -107,7 +115,10 @@ class RcaServiceFlowTest {
 
         llmClient = new FakeLlmClient();
         notifier = new RecordingNotifier();
-        service = new RcaService(collector, new ContextAssembler(collectProperties), llmClient, notifier);
+        // 외부 프롬프트 경로 미설정 -> classpath 기본 프롬프트를 쓴다.
+        var promptLoader = new SystemPromptLoader(new PromptProperties(null));
+        service = new RcaService(collector, new ContextAssembler(collectProperties), promptLoader,
+                llmClient, notifier);
     }
 
     @AfterEach
@@ -126,12 +137,12 @@ class RcaServiceFlowTest {
         assertThat(report.timings().llmMs()).isEqualTo(42);
         assertThat(report.totalElapsedMs()).isGreaterThanOrEqualTo(0);
 
-        // Both Loki queries failed, and the context tells the model so instead of hiding it.
+        // Loki 쿼리 2개가 모두 실패했고, 컨텍스트는 이를 숨기지 않고 모델에게 알린다.
         assertThat(report.collectionFailures()).hasSize(2);
         assertThat(report.collectionFailures()).allMatch(failure -> failure.startsWith("Loki"));
         assertThat(llmClient.seenContext).contains("# 수집 실패/누락").contains("Loki");
 
-        // Sources that did work are present.
+        // 성공한 소스는 컨텍스트에 들어 있다.
         assertThat(llmClient.seenContext).contains("notify").contains("hikaricp_connections_active");
         assertThat(llmClient.seenSystemPrompt).contains("너는 SRE다");
 
@@ -155,14 +166,14 @@ class RcaServiceFlowTest {
                 """.formatted(spans);
 
         var properties = new CollectProperties(120, "content|auth|chat", "app", "level",
-                1000, "15s", List.of(), 100, 30);  // 100-byte cap forces the trim
+                1000, "15s", List.of(), 100, 30);  // 100 바이트 한도로 트리밍을 강제한다
         var data = new com.yogurtte.rca.collector.CollectedData(
                 "trace-2", bigTrace, null, null, null, null, List.of(), null);
 
         var context = new ContextAssembler(properties).assemble(data, "q");
 
         assertThat(context).contains("duration 상위 30개 span만");
-        // Top 30 by duration is spans 399 down to 370; everything shorter is dropped.
+        // duration 상위 30개는 399번부터 370번까지; 그보다 짧은 span은 전부 버려진다.
         assertThat(context).contains("span-with-a-deliberately-long-name-399");
         assertThat(context).contains("span-with-a-deliberately-long-name-370");
         assertThat(context).doesNotContain("span-with-a-deliberately-long-name-369");

@@ -3,7 +3,7 @@ package com.yogurtte.rca.collector;
 import java.time.Instant;
 import java.util.List;
 
-/** Query window derived from a trace: earliest span start to latest span end, padded on both sides. */
+/** 트레이스에서 유도한 조회 시간창: 가장 이른 span 시작 ~ 가장 늦은 span 종료, 양쪽에 padding. */
 public record TimeWindow(Instant start, Instant end) {
 
     public static TimeWindow fromTrace(String traceJson, int paddingSeconds) {
@@ -22,7 +22,7 @@ public record TimeWindow(Instant start, Instant end) {
                 toInstant(maxEnd).plusSeconds(paddingSeconds));
     }
 
-    /** Fallback when the trace is unavailable: a window of the same width around now. */
+    /** 트레이스를 못 구했을 때의 대체: 기준 시각을 중심으로 같은 폭의 시간창. */
     public static TimeWindow around(Instant reference, int paddingSeconds) {
         return new TimeWindow(reference.minusSeconds(paddingSeconds), reference.plusSeconds(paddingSeconds));
     }

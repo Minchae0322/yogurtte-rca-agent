@@ -9,8 +9,8 @@ import com.yogurtte.rca.collector.CollectedData;
 import com.yogurtte.rca.collector.TraceSpans;
 
 /**
- * Pastes everything collected into one text blob. Deliberately minimal processing -
- * v0 hands the model raw data and lets it do the reasoning.
+ * 수집한 모든 것을 하나의 텍스트 덩어리로 이어 붙인다. 가공은 의도적으로 최소화했다 -
+ * v0는 모델에게 원본 데이터를 주고 추론을 맡긴다.
  */
 @Component
 public class ContextAssembler {
@@ -61,7 +61,7 @@ public class ContextAssembler {
         return sb.toString();
     }
 
-    /** Over the size cap the raw JSON is replaced by the longest spans, which is what matters for latency. */
+    /** 크기 한도를 넘으면 원본 JSON 대신 가장 긴 span들로 대체한다. 지연 분석에는 그게 핵심이기 때문이다. */
     private String traceSection(String traceJson) {
         if (traceJson == null || traceJson.isBlank()) {
             return "(수집 실패 - 트레이스 없음)";

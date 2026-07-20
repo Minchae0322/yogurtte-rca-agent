@@ -9,7 +9,7 @@ import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportStore;
 
 @Component
-@ConditionalOnProperty(name = "rca.notifier", havingValue = "console", matchIfMissing = true)
+@ConditionalOnProperty(name = "rca.notify.channel", havingValue = "console", matchIfMissing = true)
 public class ConsoleNotifier implements Notifier {
 
     private static final Logger log = LoggerFactory.getLogger(ConsoleNotifier.class);
@@ -28,6 +28,7 @@ public class ConsoleNotifier implements Notifier {
                 traceId : {}
                 question: {}
                 provider: {}
+                prompt  : {}
                 tokens  : in={} out={}
                 elapsed : total={}ms (tempo={} loki={} mimir={} assemble={} llm={})
                 context : {} chars
@@ -36,7 +37,7 @@ public class ConsoleNotifier implements Notifier {
                 {}
                 ====================================================
                 """,
-                report.traceId(), report.question(), report.llmProvider(),
+                report.traceId(), report.question(), report.llmProvider(), report.promptSource(),
                 report.inputTokens(), report.outputTokens(),
                 report.totalElapsedMs(), report.timings().tempoMs(), report.timings().lokiMs(),
                 report.timings().mimirMs(), report.timings().assembleMs(), report.timings().llmMs(),
@@ -49,5 +50,10 @@ public class ConsoleNotifier implements Notifier {
         } catch (Exception e) {
             log.warn("failed to save report json: {}", e.getMessage());
         }
+    }
+
+    @Override
+    public String channel() {
+        return "console";
     }
 }

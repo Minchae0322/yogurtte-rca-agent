@@ -17,10 +17,10 @@ public class LokiClient {
         this.rawStore = rawStore;
     }
 
-    /** /loki/api/v1/query_range. Loki wants start/end as unix nanoseconds. */
+    /** /loki/api/v1/query_range. Loki는 start/end를 unix 나노초로 받는다. */
     public String queryRange(String traceId, String label, String logql, Instant start, Instant end, int limit) {
-        // LogQL selectors contain { and }, which UriBuilder would otherwise read as template
-        // variables. Passing the expression as a bound variable keeps it literal and encoded.
+        // LogQL 셀렉터에는 { }가 들어가는데, UriBuilder는 이를 템플릿 변수로 해석해 버린다.
+        // 식을 바인딩 변수로 넘기면 리터럴로 유지되면서 인코딩도 된다.
         var body = restClient.get()
                 .uri(builder -> builder.path("/loki/api/v1/query_range")
                         .queryParam("query", "{logql}")

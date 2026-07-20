@@ -4,7 +4,6 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -13,9 +12,9 @@ import org.springframework.web.client.RestClient;
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportStore;
 
-/** One webhook POST. No SDK. */
+/** webhook POST 한 번. SDK 없음. */
 @Component
-@ConditionalOnProperty(name = "rca.notifier", havingValue = "slack")
+@ConditionalOnProperty(name = "rca.notify.channel", havingValue = "slack")
 public class SlackNotifier implements Notifier {
 
     private static final Logger log = LoggerFactory.getLogger(SlackNotifier.class);
@@ -25,12 +24,13 @@ public class SlackNotifier implements Notifier {
     private final ReportStore reportStore;
     private final String webhookUrl;
 
-    public SlackNotifier(ReportStore reportStore, @Value("${rca.slack.webhook-url:}") String webhookUrl) {
-        if (webhookUrl == null || webhookUrl.isBlank()) {
-            throw new IllegalStateException("rca.notifier=slack requires SLACK_WEBHOOK_URL");
+    public SlackNotifier(ReportStore reportStore, NotifyProperties properties) {
+        var slack = properties.slack();
+        if (slack == null || slack.webhookUrl() == null || slack.webhookUrl().isBlank()) {
+            throw new IllegalStateException("rca.notify.channel=slack requires SLACK_WEBHOOK_URL");
         }
         this.reportStore = reportStore;
-        this.webhookUrl = webhookUrl;
+        this.webhookUrl = slack.webhookUrl();
     }
 
     @Override
@@ -47,5 +47,11 @@ public class SlackNotifier implements Notifier {
                 .body(Map.of("text", NotifierText.render(report, MAX_CHARS)))
                 .retrieve()
                 .toBodilessEntity();
+        log.info("report for trace {} sent to slack", report.traceId());
+    }
+
+    @Override
+    public String channel() {
+        return "slack";
     }
 }

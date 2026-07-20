@@ -7,8 +7,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Flattens Tempo's OTLP-shaped trace JSON into a plain span list.
- * Both TimeWindow and the context assembler need this, so it lives here as static helpers.
+ * Tempo의 OTLP 형태 트레이스 JSON을 평평한 span 리스트로 펼친다.
+ * TimeWindow와 컨텍스트 조립기가 둘 다 쓰므로 static 헬퍼로 여기에 둔다.
  */
 public final class TraceSpans {
 
@@ -39,7 +39,7 @@ public final class TraceSpans {
             return spans;
         }
 
-        // Tempo returns "batches"; some versions/exports use the OTLP "resourceSpans" name.
+        // Tempo는 "batches"로 응답한다; 일부 버전/내보내기는 OTLP 이름인 "resourceSpans"를 쓴다.
         var batches = root.has("batches") ? root.get("batches") : root.get("resourceSpans");
         if (batches == null || !batches.isArray()) {
             return spans;
@@ -71,7 +71,7 @@ public final class TraceSpans {
         return spans;
     }
 
-    /** Renders the N longest spans as compact text, used when the raw trace is too big to inline. */
+    /** 가장 긴 span N개를 압축된 텍스트로 렌더링한다. 원본 트레이스가 너무 커서 통째로 못 넣을 때 사용. */
     public static String topByDuration(List<Span> spans, int limit) {
         var sorted = new ArrayList<>(spans);
         sorted.sort((a, b) -> Long.compare(b.durationNanos(), a.durationNanos()));

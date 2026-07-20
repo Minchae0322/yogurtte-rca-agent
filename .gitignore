@@ -1,6 +1,7 @@
 .env
 application-local.yml
 reports/
+logs/
 *.pem
 
 # Build

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 import com.yogurtte.rca.report.ReportProperties;
 
-/** Dumps every raw external response to ./reports/raw/ so runs can be re-scored later. */
+/** 외부 API 원본 응답을 전부 ./reports/raw/에 남겨, 나중에 실행을 재채점할 수 있게 한다. */
 @Component
 public class RawResponseStore {
 
@@ -37,7 +37,7 @@ public class RawResponseStore {
             var file = rawDir.resolve("%s-%s-%s.json".formatted(traceId, TS.format(Instant.now()), sanitize(name)));
             Files.writeString(file, body, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            // Persisting raw payloads is best-effort; never fail an investigation over it.
+            // 원본 저장은 best-effort다; 이것 때문에 조사를 실패시키지 않는다.
             log.warn("failed to save raw response {} for trace {}: {}", name, traceId, e.getMessage());
         }
     }

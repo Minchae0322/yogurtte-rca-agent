@@ -1,5 +1,6 @@
-package com.yogurtte.rca;
+package com.yogurtte.rca.api;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 import org.springframework.http.ResponseEntity;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.yogurtte.rca.report.RcaReport;
+import com.yogurtte.rca.service.RcaService;
 
 @RestController
 @Validated
@@ -24,7 +26,7 @@ public class RcaController {
     }
 
     @PostMapping("/investigate")
-    public ResponseEntity<RcaReport> investigate(@RequestBody @jakarta.validation.Valid InvestigateRequest request) {
+    public ResponseEntity<RcaReport> investigate(@RequestBody @Valid InvestigateRequest request) {
         return ResponseEntity.ok(rcaService.investigate(request.traceId(), request.question()));
     }
 }

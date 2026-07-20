@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-/** Writes ./reports/{traceId}-{ts}.json. Every notifier persists the report before delivering it. */
+/** ./reports/{traceId}-{ts}.json을 쓴다. 어떤 notifier든 전달 전에 리포트를 먼저 저장한다. */
 @Component
 public class ReportStore {
 

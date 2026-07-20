@@ -14,7 +14,7 @@ public class TempoClient {
         this.rawStore = rawStore;
     }
 
-    /** Raw trace JSON from GET {TEMPO_URL}/api/traces/{traceId}. */
+    /** GET {TEMPO_URL}/api/traces/{traceId}로 받은 원본 트레이스 JSON. */
     public String fetchTrace(String traceId) {
         var body = restClient.get()
                 .uri("/api/traces/{traceId}", traceId)

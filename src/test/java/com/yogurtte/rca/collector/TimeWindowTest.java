@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class TimeWindowTest {
 
-    /** Two spans across two batches: window must span the earliest start to the latest end, padded. */
+    /** 두 batch에 걸친 span 2개: 시간창은 가장 이른 시작 ~ 가장 늦은 종료를 padding 포함해 덮어야 한다. */
     @Test
     void derivesPaddedWindowFromEarliestStartAndLatestEnd() {
         var start = Instant.parse("2026-07-20T10:00:00Z");
@@ -68,7 +68,7 @@ class TimeWindowTest {
         assertThat(spans).hasSize(2);
         assertThat(spans.get(0).service()).isEqualTo("chat");
 
-        // Ranking puts the 5s span above the 1s one.
+        // 랭킹은 5초 span을 1초 span보다 위에 둔다.
         var top = TraceSpans.topByDuration(spans, 1);
         assertThat(top).contains("slow").doesNotContain("fast");
     }

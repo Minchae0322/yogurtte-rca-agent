@@ -1,33 +1,33 @@
-package com.yogurtte.rca.analyzer;
+package com.yogurtte.rca.llm;
 
 import java.util.List;
 
+import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "rca.llm.provider", havingValue = "openai")
-public class OpenAiLlmClient implements LlmClient {
+@ConditionalOnProperty(name = "rca.llm.provider", havingValue = "anthropic")
+public class AnthropicLlmClient implements LlmClient {
 
-    private final OpenAiChatModel chatModel;
+    private final AnthropicChatModel chatModel;
 
-    public OpenAiLlmClient(
-            @Value("${spring.ai.openai.api-key:}") String apiKey,
-            @Value("${spring.ai.openai.chat.options.model:gpt-4o}") String model) {
-
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("rca.llm.provider=openai requires OPENAI_API_KEY");
+    public AnthropicLlmClient(LlmProperties properties) {
+        var anthropic = properties.anthropic();
+        if (anthropic == null || anthropic.apiKey() == null || anthropic.apiKey().isBlank()) {
+            throw new IllegalStateException("rca.llm.provider=anthropic requires ANTHROPIC_API_KEY");
         }
-        this.chatModel = OpenAiChatModel.builder()
-                .openAiApi(OpenAiApi.builder().apiKey(apiKey).build())
-                .defaultOptions(OpenAiChatOptions.builder().model(model).build())
+        this.chatModel = AnthropicChatModel.builder()
+                .anthropicApi(AnthropicApi.builder().apiKey(anthropic.apiKey()).build())
+                .defaultOptions(AnthropicChatOptions.builder()
+                        .model(anthropic.model())
+                        .maxTokens(anthropic.maxTokens())
+                        .build())
                 .build();
     }
 
@@ -47,6 +47,6 @@ public class OpenAiLlmClient implements LlmClient {
 
     @Override
     public String provider() {
-        return "openai";
+        return "anthropic";
     }
 }

@@ -4,7 +4,6 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -13,9 +12,9 @@ import org.springframework.web.client.RestClient;
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportStore;
 
-/** One webhook POST. No SDK. Discord caps a message at 2000 characters. */
+/** webhook POST 한 번. SDK 없음. Discord는 메시지를 2000자로 제한한다. */
 @Component
-@ConditionalOnProperty(name = "rca.notifier", havingValue = "discord")
+@ConditionalOnProperty(name = "rca.notify.channel", havingValue = "discord")
 public class DiscordNotifier implements Notifier {
 
     private static final Logger log = LoggerFactory.getLogger(DiscordNotifier.class);
@@ -25,12 +24,13 @@ public class DiscordNotifier implements Notifier {
     private final ReportStore reportStore;
     private final String webhookUrl;
 
-    public DiscordNotifier(ReportStore reportStore, @Value("${rca.discord.webhook-url:}") String webhookUrl) {
-        if (webhookUrl == null || webhookUrl.isBlank()) {
-            throw new IllegalStateException("rca.notifier=discord requires DISCORD_WEBHOOK_URL");
+    public DiscordNotifier(ReportStore reportStore, NotifyProperties properties) {
+        var discord = properties.discord();
+        if (discord == null || discord.webhookUrl() == null || discord.webhookUrl().isBlank()) {
+            throw new IllegalStateException("rca.notify.channel=discord requires DISCORD_WEBHOOK_URL");
         }
         this.reportStore = reportStore;
-        this.webhookUrl = webhookUrl;
+        this.webhookUrl = discord.webhookUrl();
     }
 
     @Override
@@ -47,5 +47,11 @@ public class DiscordNotifier implements Notifier {
                 .body(Map.of("content", NotifierText.render(report, MAX_CHARS)))
                 .retrieve()
                 .toBodilessEntity();
+        log.info("report for trace {} sent to discord", report.traceId());
+    }
+
+    @Override
+    public String channel() {
+        return "discord";
     }
 }

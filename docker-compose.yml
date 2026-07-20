@@ -1,0 +1,24 @@
+services:
+  rca-agent:
+    build: .
+    ports:
+      # 호스트 포트는 .env의 SERVER_PORT로 바꿀 수 있다; 컨테이너 안은 항상 8080이다
+      - "${SERVER_PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      # env_file보다 우선한다. 컨테이너 내부 경로/포트는 고정
+      SERVER_PORT: 8080
+      RCA_REPORT_DIR: /app/reports
+      RCA_LOG_DIR: /app/logs
+      RCA_PROMPT_PATH: /app/prompts/system-prompt.md
+      # 컨테이너 안에는 claude CLI가 없다 - 도커에서는 .env에
+      # RCA_LLM_PROVIDER=anthropic(또는 openai)과 해당 API 키를 설정할 것.
+      # 아래 기본값은 .env에 RCA_LLM_PROVIDER가 아예 없을 때만 적용된다
+      RCA_LLM_PROVIDER: ${RCA_LLM_PROVIDER:-anthropic}
+    volumes:
+      # 리포트/로그는 호스트에 남긴다
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      # 프롬프트 튜닝: 호스트의 ./prompts/system-prompt.md를 고치면
+      # 재시작/리빌드 없이 다음 조사부터 바로 반영된다
+      - ./prompts:/app/prompts:ro

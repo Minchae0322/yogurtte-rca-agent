@@ -1,135 +1,178 @@
-# rca-agent (v0)
+<div align="center">
 
-K3s 위 Spring MSA(content / auth / chat)의 장애 원인을 분석하는 RCA 에이전트입니다.
+# 🔍 rca-agent
 
-**v0 = baseline.** LLM에 도구를 주지 않습니다. 코드가 Tempo/Loki/Mimir에서 데이터를 모아
-통째로 컨텍스트에 넣고 한 번 호출합니다. 에이전틱 루프도, 도구 호출도, MCP도 없습니다.
+**장애 traceId 하나로 시작하는 AI Root Cause Analysis**
 
-```
-POST /investigate → collect(Tempo/Loki/Mimir) → assemble → LLM 1회 → notify
-```
+Tempo·Loki·Mimir의 관측 데이터를 모아 LLM이 원인 후보를 랭킹하고,
+근거·확신도·반증 데이터·다음 조치까지 담은 리포트를 만듭니다.
 
-## 요구사항
+![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0-6DB33F)
+![Grafana Stack](https://img.shields.io/badge/Tempo·Loki·Mimir-Grafana-F46800?logo=grafana&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
-- JDK 21
-- (provider가 `claude-cli`인 경우) 로컬에 설치된 `claude` CLI
+</div>
 
-## 실행
+새벽에 알림이 늦게 왔다는 제보를 받으면, 대시보드 세 개를 오가며 트레이스·로그·메트릭을
+직접 이어 맞춰야 합니다. rca-agent는 그 과정을 API 호출 하나로 줄입니다 — traceId를 주면
+수집·조립·분석·통보까지 한 번에 끝납니다.
+
+**v0 = baseline.** 에이전틱 루프 없이, 코드가 데이터를 모아 통째로 컨텍스트에 넣고
+LLM을 한 번 호출합니다. 이후 버전의 성능을 비교할 기준선입니다.
+
+## 데모
 
 ```bash
-cp .env.example .env      # 값 채우기
-./gradlew bootRun
-```
-
-```bash
-curl -X POST http://localhost:8080/investigate \
+curl -X POST localhost:8080/investigate \
   -H 'Content-Type: application/json' \
   -d '{"traceId":"4bf92f3577b34da6a3ce929d0e0e4736","question":"왜 알림이 늦었어?"}'
 ```
 
-응답과 동일한 리포트가 콘솔에 출력되고 `./reports/{traceId}-{ts}.json`에 저장됩니다.
+리포트(예시 요약):
 
-## 환경변수
+```markdown
+## 1. 원인 후보 랭킹
+1. chat 서비스 Kafka consumer lag로 인한 알림 발송 지연
+2. HikariCP 커넥션 고갈로 인한 조회 지연
 
-값은 전부 `.env`(gitignore됨)에서 주입합니다. `application.yml`에는 placeholder만 있습니다.
+## 2. 후보별 근거
+1. Kafka consumer lag
+   - 근거: kafka_consumer_fetch_manager_records_lag가 10:02부터 1,200까지 상승,
+     push-dispatcher#dispatch span 996ms (전체 1.26s 중 79%)
+   - 확신도: 높음
+   - 반증 데이터: 없음
+...
 
-### Grafana Cloud
-
-| 변수 | 값을 얻는 위치 |
-|---|---|
-| `TEMPO_URL` / `TEMPO_USER` | Grafana Cloud 콘솔 → 해당 Stack → **Tempo "Send Traces"** 카드의 URL과 User(숫자 인스턴스 ID) |
-| `LOKI_URL` / `LOKI_USER` | 같은 Stack 화면의 **Loki "Send Logs"** 카드 |
-| `MIMIR_URL` / `MIMIR_USER` | 같은 Stack 화면의 **Prometheus "Send Metrics"** 카드 |
-| `GRAFANA_TOKEN` | 콘솔 → **Security → Access Policies** → `traces:read` `logs:read` `metrics:read` 스코프로 토큰 생성 |
-
-세 소스는 인스턴스 ID가 서로 다르므로 URL/USER를 따로 설정하고, 토큰 하나를 공유합니다.
-인증은 Basic Auth(`인스턴스ID:토큰`), 타임아웃은 연결 3s / 읽기 10s입니다.
-
-### LLM
-
-| 변수 | 값을 얻는 위치 |
-|---|---|
-| `RCA_LLM_PROVIDER` | `anthropic` \| `openai` \| `claude-cli` (기본값 `claude-cli`) |
-| `ANTHROPIC_API_KEY` | console.anthropic.com → Settings → API Keys |
-| `OPENAI_API_KEY` | platform.openai.com → API keys |
-| `CLAUDE_CLI_PATH` | 로컬 `claude` 바이너리 절대경로. 비우면 PATH에서 찾습니다 |
-
-`claude-cli`는 API 키 없이 구독 계정으로 로컬 실행할 때 씁니다.
-`claude -p --output-format json`을 실행하고 stdout JSON에서 `result`와 `usage`를 뽑습니다.
-프롬프트는 argv가 아니라 **stdin**으로 넘깁니다 — 조립된 컨텍스트가 수십 KB라 커맨드라인
-길이 제한을 넘기기 때문입니다. `usage`가 없으면 토큰 수는 `-1`로 기록합니다.
-프로세스 타임아웃은 120초이고, 비정상 종료 시 stderr가 에러 메시지에 포함됩니다.
-
-### Notifier
-
-| 변수 | 값을 얻는 위치 |
-|---|---|
-| `RCA_NOTIFIER` | `console` \| `slack` \| `discord` (기본값 `console`) |
-| `SLACK_WEBHOOK_URL` | Slack 앱 → Incoming Webhooks → Add New Webhook to Workspace |
-| `DISCORD_WEBHOOK_URL` | Discord 채널 → 채널 편집 → 연동 → 웹후크 → 새 웹후크 |
-
-Slack/Discord는 SDK 없이 webhook POST 한 번입니다. 어느 notifier든 리포트 JSON은 항상 저장합니다.
-
-## 수집 내용
-
-`traceId` 하나로 시작합니다.
-
-1. **Tempo** — `GET /api/traces/{traceId}`
-2. **시간창** — 트레이스의 가장 이른 span 시작 ~ 가장 늦은 span 종료, 양쪽 ±2분
-   (`rca.collect.window-padding-seconds`)
-3. **Loki** — `/loki/api/v1/query_range` 2회
-   - `{app=~"content|auth|chat"} | logfmt | level=~"ERROR|WARN"`
-   - `{app=~"content|auth|chat"} |= "<traceId>"`
-   - 레이블명은 `rca.collect.app-label` / `level-label`로 변경 가능
-4. **Mimir** — `/prometheus/api/v1/query_range`
-   - `hikaricp_connections_active`, `hikaricp_connections_pending`,
-     `rate(jvm_gc_pause_seconds_sum[5m])`, `kafka_consumer_fetch_manager_records_lag`
-   - 시리즈가 없으면 스킵하고 그 사실을 컨텍스트에 남깁니다
-
-**한 소스가 실패해도 전체를 중단하지 않습니다.** 실패 사유를 컨텍스트의 `# 수집 실패/누락`
-섹션에 적고 나머지로 진행하며, 모델에게 그 공백만큼 확신도를 낮추라고 지시합니다.
-트레이스가 없어 시간창을 못 구하면 `now ± 2분`으로 대체합니다.
-
-트레이스 JSON이 100KB(`rca.collect.max-trace-bytes`)를 넘으면 duration 상위 30개 span만 넣습니다.
-
-## 측정
-
-조사마다 리포트 JSON에 기록됩니다.
-
-- 입력/출력 토큰 수 (provider가 usage를 안 주면 `-1`)
-- 총 소요시간, 그리고 단계별 소요 — `tempoMs` / `lokiMs` / `mimirMs` / `assembleMs` / `llmMs`
-- 컨텍스트 문자 수, 수집 실패 목록
-
-외부 API 원본 응답은 재채점용으로 `./reports/raw/`에 전부 저장됩니다.
-
-## 구조
-
-인터페이스는 딱 2개입니다. 그 외에는 추상화하지 않았습니다.
-
-```
-client/     TempoClient, LokiClient, MimirClient, RawResponseStore
-collector/  Collector, TimeWindow, TraceSpans, CollectedData
-analyzer/   LlmClient(interface), LlmResult, ContextAssembler, SystemPrompt
-            AnthropicLlmClient / OpenAiLlmClient / ClaudeCliLlmClient
-notify/     Notifier(interface), ConsoleNotifier / SlackNotifier / DiscordNotifier
-report/     RcaReport, Timings, ReportStore
+## 3. 권장 다음 조치
+- chat 컨슈머 스케일 아웃 후 lag 추이 확인
 ```
 
-`LlmClient`와 `Notifier` 구현체는 `@ConditionalOnProperty`로 `rca.llm.provider`,
-`rca.notifier` 값에 따라 하나만 생성됩니다.
+모든 조사는 토큰 수·단계별 소요시간·수집 실패 목록과 함께
+`./reports/{traceId}-{ts}.json`에 남고, 원본 응답은 `./reports/raw/`에 보존됩니다.
 
-## 테스트
+## 아키텍처
+
+```mermaid
+flowchart LR
+    U([POST /investigate]) --> S[RcaService]
+    S --> C[Collector]
+    C <-->|trace| T[(Tempo)]
+    C <-->|logs| L[(Loki)]
+    C <-->|metrics| M[(Mimir)]
+    C --> A[ContextAssembler]
+    P[/prompts/system-prompt.md/] --> LLM
+    A --> LLM{{LlmClient}}
+    LLM --> R[RcaReport]
+    R --> N[Notifier]
+    N --> O1([console]) & O2([Slack]) & O3([Discord])
+    R --> F[(reports/*.json)]
+```
+
+- **한 소스가 죽어도 조사는 완주합니다.** 실패 사실을 컨텍스트에 명시하고, 모델에게
+  그만큼 확신도를 낮추라고 지시합니다.
+- **LLM/Notifier는 설정으로 선택합니다.** `LlmClient`·`Notifier` 인터페이스 뒤에서
+  `@ConditionalOnProperty`로 구현체 하나만 뜹니다 (`claude-cli`는 API 키 없이 구독 계정 사용).
+- **트레이스가 100KB를 넘으면** duration 상위 30개 span만 추려 넣습니다.
+- **조사 중 모든 로그에 traceId가 MDC로 붙어** `./logs/`에서 조사 단위로 추적됩니다.
+
+## 빠른 시작
 
 ```bash
-./gradlew test
+cp .env.example .env       # 필수값과 설명은 .env.example 주석 참고
+./gradlew bootRun          # JDK 21
+# 또는
+docker compose up --build  # 컨테이너엔 claude CLI가 없음 → RCA_LLM_PROVIDER=anthropic|openai
 ```
 
-- `TempoClientTest` / `LokiClientTest` — WireMock. Basic Auth 헤더, 쿼리 파라미터, 에러 전파
-- `TimeWindowTest` — 시간창 계산, span 파싱, span 랭킹
-- `RcaServiceFlowTest` — fake `LlmClient`로 전체 흐름. Loki가 죽은 상태에서도 완주하는지,
-  트레이스 100KB 초과 시 상위 span만 남는지
+설정은 전부 env var입니다. 핵심 세 가지, 나머지는 `.env.example`에:
 
-## 범위 밖
+| 변수                                            | 값                                          |
+|-------------------------------------------------|---------------------------------------------|
+| `TEMPO/LOKI/MIMIR_URL·USER` + `GRAFANA_TOKEN`   | Grafana Cloud 접속 (필수)                   |
+| `RCA_LLM_PROVIDER`                              | `claude-cli`(기본) · `anthropic` · `openai` |
+| `RCA_NOTIFIER`                                  | `console`(기본) · `slack` · `discord`       |
 
-v0에 넣지 않았습니다: 도구 호출·에이전트 루프(v2), 요약·병목 추출(v1),
-webhook 수신·스케줄러(v0.5).
+## 프롬프트 튜닝 루프
+
+시스템 프롬프트는 코드가 아니라 `prompts/system-prompt.md` 파일이고, **조사할 때마다
+다시 읽습니다.**
+
+```
+프롬프트 수정 → /investigate 재호출 → reports/의 promptSource로 버전별 결과 비교
+```
+
+재시작·리빌드가 필요 없고, 도커에서도 볼륨 마운트라 동일하게 동작합니다.
+
+## Engineering Decision — OTel Agent 전환 검토
+
+> AI RCA의 품질은 관측 데이터 커버리지가 결정합니다. 그 커버리지를 어떻게 보장할지에
+> 대한 의사결정 기록입니다.
+
+AI 기반 RCA 시스템으로 확장하려면, AI가 분석할 관측 데이터(Trace, Metric, Log)의
+커버리지가 구조적으로 보장되어야 한다고 판단했습니다. 기존 Brave 기반 라이브러리 계측은
+개발자가 명시적으로 추가한 구간만 수집되는데, 실제로 Kafka observation 누락을 경험하며
+계측 사각지대가 존재할 수 있음을 확인했습니다.
+
+이에 따라 zero-code로 커버리지를 보장하는 OTel Agent 전환을 검토했습니다. 초기에는
+48시간 A/B 실험을 설계했으나, 전환 이전에 더 낮은 비용으로 검증 가능한 방법을 우선
+적용했습니다 — 대표 사용자 흐름(댓글 작성)을 기준으로 세 가지 시나리오의 E2E 트레이스를
+실측했습니다:
+
+1. 정상 요청 흐름 (HTTP → Service → Kafka Producer → Consumer → DB)
+2. 에러 발생 흐름 (예외 발생 및 retry 포함)
+3. 비동기 이벤트 처리 흐름 (fan-out 포함)
+
+**검증 결과:**
+
+- 전체 구간에서 trace context propagation 유지 확인
+- span 누락 없이 실행 시간, 에러 정보, 서비스 간 연결 관계 수집 확인
+- RCA 분석에 필요한 데이터 요건 충족
+
+![content-service E2E 트레이스: HTTP 진입부터 JDBC/Redis까지](docs/img.png)
+
+content-service의 `POST /feeds/{feedId}/comments` 트레이스(2 services, 30 spans).
+security filter → JDBC 쿼리 → Redis까지 span과 실행 시간이 전부 잡힙니다.
+
+![Kafka를 건너 chat-service까지 이어지는 같은 트레이스](docs/img_1.png)
+
+같은 트레이스가 `notification-publish` → Kafka(`user.notifications`) → chat-service
+consume → push dispatch까지 하나의 traceId로 이어집니다 — 비동기 경계에서도
+trace context가 전파됨을 확인했습니다.
+
+**결론:** OTel Agent 전환으로 얻을 추가 관측 이점은 제한적인 반면, Pod당 메모리 사용
+증가, CPU 경합 환경에서의 오버헤드, 운영·전환 리스크 같은 비용이 실재한다고 판단해
+현재 구조에서는 Brave 기반 계측을 유지하기로 결론 내렸습니다.
+
+단, 라이브러리 기반 계측 특성상 누락 리스크는 남으므로 운영 가이드로 커버리지를
+지속 관리합니다:
+
+- 신규 기능 개발 시 Observation 체크리스트 적용
+- 주요 사용자 흐름에 대한 주기적 트레이스 샘플링 검증
+
+## 로드맵
+
+| 버전   | 내용                                                | 상태    |
+|--------|-----------------------------------------------------|---------|
+| **v0** | 단일 패스 수집·분석 baseline                        | ✅ 현재 |
+| v0.5   | Alertmanager webhook 수신, 스케줄 조사              | 계획    |
+| v1     | 수집 데이터 요약·병목 자동 추출로 컨텍스트 최적화   | 계획    |
+| v2     | 도구 호출 기반 에이전트 루프 (LLM이 직접 추가 조회) | 계획    |
+
+## 개발
+
+```bash
+./gradlew test   # WireMock 클라이언트 테스트 + fake LLM 전체 흐름 테스트
+```
+
+```
+api → service → collector(client) + analyzer → llm → notify → report
+```
+
+인터페이스는 `LlmClient`와 `Notifier` 둘뿐이고, 설정 record는 각 기능 패키지에 함께
+둡니다. 기동 로그 `rca-agent ready: llm=... notifier=...`로 선택 결과를 확인할 수 있습니다.
+
+## License
+
+[MIT](LICENSE)
