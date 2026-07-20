@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.yogurtte'
+version = '0.0.1'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    springAiVersion = '1.0.0'
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Model modules, not starters: we build the ChatModel ourselves inside an
+    // @ConditionalOnProperty bean, so only the selected provider is ever instantiated
+    // and auto-configuration never has to disambiguate two ChatModel beans.
+    implementation 'org.springframework.ai:spring-ai-anthropic'
+    implementation 'org.springframework.ai:spring-ai-openai'
+
+    // Slack/Discord are plain webhook POSTs via RestClient - no SDKs.
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.wiremock:wiremock-standalone:3.9.2'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

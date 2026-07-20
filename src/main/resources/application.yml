@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: rca-agent
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: claude-opus-4-8
+          max-tokens: 8192
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o
+
+rca:
+  llm:
+    provider: ${RCA_LLM_PROVIDER:claude-cli}   # anthropic | openai | claude-cli
+    claude-cli:
+      command: ${CLAUDE_CLI_PATH:claude}
+      timeout-seconds: 120
+
+  notifier: ${RCA_NOTIFIER:console}            # console | slack | discord
+  slack:
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+  discord:
+    webhook-url: ${DISCORD_WEBHOOK_URL:}
+
+  grafana:
+    tempo:
+      url: ${TEMPO_URL:}
+      user: ${TEMPO_USER:}
+    loki:
+      url: ${LOKI_URL:}
+      user: ${LOKI_USER:}
+    mimir:
+      url: ${MIMIR_URL:}
+      user: ${MIMIR_USER:}
+    token: ${GRAFANA_TOKEN:}
+    connect-timeout-ms: 3000
+    read-timeout-ms: 10000
+
+  collect:
+    window-padding-seconds: 120
+    apps: content|auth|chat
+    app-label: app
+    level-label: level
+    log-limit: 1000
+    metric-step: 15s
+    metric-queries:
+      - "hikaricp_connections_active"
+      - "hikaricp_connections_pending"
+      - "rate(jvm_gc_pause_seconds_sum[5m])"
+      - "kafka_consumer_fetch_manager_records_lag"
+    max-trace-bytes: 102400
+    top-spans: 30
+
+  report:
+    dir: ./reports
+
+logging:
+  level:
+    com.yogurtte.rca: INFO

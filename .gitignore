@@ -1,0 +1,14 @@
+.env
+application-local.yml
+reports/
+*.pem
+
+# Build
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
