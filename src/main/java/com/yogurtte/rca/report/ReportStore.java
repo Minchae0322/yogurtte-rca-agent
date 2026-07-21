@@ -14,7 +14,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-/** ./reports/{traceId}-{ts}.json을 쓴다. 어떤 notifier든 전달 전에 리포트를 먼저 저장한다. */
+/**
+ * 조사마다 ./reports/{traceId}-{ts}.json(기계 분석용)과 .md(사람이 읽는 보고서)를 함께 쓴다.
+ * 어떤 notifier든 전달 전에 리포트를 먼저 저장한다.
+ */
 @Component
 public class ReportStore {
 
@@ -32,10 +35,20 @@ public class ReportStore {
         this.dir = Path.of(properties.dir());
     }
 
-    public Path save(RcaReport report) throws IOException {
+    /** 저장된 두 파일 경로. */
+    public record Saved(Path json, Path markdown) {
+    }
+
+    public Saved save(RcaReport report) throws IOException {
         Files.createDirectories(dir);
-        var file = dir.resolve("%s-%s.json".formatted(report.traceId(), TS.format(Instant.now())));
-        Files.writeString(file, mapper.writeValueAsString(report), StandardCharsets.UTF_8);
-        return file;
+        var base = "%s-%s".formatted(report.traceId(), TS.format(Instant.now()));
+
+        var json = dir.resolve(base + ".json");
+        Files.writeString(json, mapper.writeValueAsString(report), StandardCharsets.UTF_8);
+
+        var markdown = dir.resolve(base + ".md");
+        Files.writeString(markdown, ReportMarkdown.render(report), StandardCharsets.UTF_8);
+
+        return new Saved(json, markdown);
     }
 }

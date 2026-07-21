@@ -30,27 +30,25 @@ curl -X POST localhost:8080/investigate \
   -d '{"traceId":"4bf92f3577b34da6a3ce929d0e0e4736","question":"왜 알림이 늦었어?"}'
 ```
 
-리포트(예시 요약):
+실제 프로덕션 트레이스로 돌린 보고서 전문: **[docs/sample-report.md](docs/sample-report.md)**
 
-```markdown
-## 1. 원인 후보 랭킹
-1. chat 서비스 Kafka consumer lag로 인한 알림 발송 지연
-2. HikariCP 커넥션 고갈로 인한 조회 지연
+이 조사에서 에이전트는 content 동기 응답(129.8ms)은 정상이고, 병목은 Kafka 뒤
+chat-service의 `PushDispatcher.dispatch`가 먹은 **약 995ms**임을 특정했습니다 —
+그마저도 "자식 span으로 설명되지 않는 미계측 구간"이라 로그 부재를 근거로 확신도를
+스스로 낮췄습니다. 보고서 상단에 측정치가 함께 남습니다:
 
-## 2. 후보별 근거
-1. Kafka consumer lag
-   - 근거: kafka_consumer_fetch_manager_records_lag가 10:02부터 1,200까지 상승,
-     push-dispatcher#dispatch span 996ms (전체 1.26s 중 79%)
-   - 확신도: 높음
-   - 반증 데이터: 없음
-...
-
-## 3. 권장 다음 조치
-- chat 컨슈머 스케일 아웃 후 lag 추이 확인
+```
+| tokens | in 42,651 / out 4,950 · cost $0.4234 |
+| elapsed | total 79,749ms (tempo 1146 · loki 261 · mimir 355 · llm 77969) |
+## 수집 범위 (Coverage)
+- trace: 24,619B / 30 spans
+- metrics: 3 수집, 누락 [kafka_consumer_fetch_manager_records_lag]
+- context: 40,981 chars (~10,245 tok 추정)
 ```
 
-모든 조사는 토큰 수·단계별 소요시간·수집 실패 목록과 함께
-`./reports/{traceId}-{ts}.json`에 남고, 원본 응답은 `./reports/raw/`에 보존됩니다.
+모든 조사는 이 측정치와 함께 `./reports/{traceId}-{ts}.md`(보고서)와 `.json`(기계 분석용)
+두 형태로 남고, 원본 API 응답은 `./reports/raw/`에 보존됩니다 — 프롬프트를 튜닝하며
+버전별 품질·비용을 나란히 비교하기 위한 것입니다.
 
 ## 아키텍처
 

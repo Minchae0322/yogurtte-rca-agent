@@ -47,9 +47,10 @@ public class ConsoleNotifier implements Notifier {
                 report.analysis());
 
         try {
-            log.info("report saved to {}", reportStore.save(report));
+            var saved = reportStore.save(report);
+            log.info("report saved: {} (json: {})", saved.markdown(), saved.json());
         } catch (Exception e) {
-            log.warn("failed to save report json: {}", e.getMessage());
+            log.warn("failed to save report: {}", e.getMessage());
         }
     }
 
