@@ -9,10 +9,12 @@ final class NotifierText {
     }
 
     static String render(RcaReport report, int maxChars) {
+        var cost = report.costUsd() < 0 ? "" : " | cost $%.4f".formatted(report.costUsd());
         var header = """
                 *RCA* `%s`
                 q: %s
-                provider: %s | tokens in/out: %d/%d | total: %dms
+                provider: %s | tokens in/out: %d/%d%s | total: %dms
+                scope: %s
                 failures: %s
 
                 """.formatted(
@@ -21,7 +23,9 @@ final class NotifierText {
                 report.llmProvider(),
                 report.inputTokens(),
                 report.outputTokens(),
+                cost,
                 report.totalElapsedMs(),
+                scope(report.coverage()),
                 report.collectionFailures().isEmpty() ? "none" : String.join("; ", report.collectionFailures()));
 
         var budget = maxChars - header.length();
@@ -30,5 +34,17 @@ final class NotifierText {
             analysis = analysis.substring(0, budget - 20) + "\n... (truncated)";
         }
         return header + analysis;
+    }
+
+    /** webhook 한 줄용 압축 범위 표기. */
+    private static String scope(RcaReport.Coverage c) {
+        if (c == null) {
+            return "n/a";
+        }
+        return "trace %d spans/%,dB · logs %,d+%,dB · metrics %d/%d · ctx %,dc(~%,d tok)".formatted(
+                c.traceSpans(), c.traceBytes(),
+                c.errorWarnLogBytes(), c.traceIdLogBytes(),
+                c.metricsCollected().size(), c.metricsCollected().size() + c.metricsMissing().size(),
+                c.contextChars(), c.estimatedContextTokens());
     }
 }

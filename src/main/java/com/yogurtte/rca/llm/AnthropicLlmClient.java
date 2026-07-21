@@ -42,7 +42,8 @@ public class AnthropicLlmClient implements LlmClient {
                 response.getResult().getOutput().getText(),
                 usage == null || usage.getPromptTokens() == null ? -1 : usage.getPromptTokens(),
                 usage == null || usage.getCompletionTokens() == null ? -1 : usage.getCompletionTokens(),
-                elapsed);
+                elapsed,
+                -1.0); // API 응답은 비용을 직접 주지 않는다
     }
 
     @Override

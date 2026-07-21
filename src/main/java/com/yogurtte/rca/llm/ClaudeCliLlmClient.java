@@ -109,15 +109,26 @@ public class ClaudeCliLlmClient implements LlmClient {
 
             // 일부 CLI 버전/출력 형태에는 usage가 없다 - 추측하지 말고 -1로 기록한다.
             var usage = root.path("usage");
-            var inputTokens = usage.has("input_tokens") ? usage.get("input_tokens").asLong() : -1L;
             var outputTokens = usage.has("output_tokens") ? usage.get("output_tokens").asLong() : -1L;
 
-            return new LlmResult(text, inputTokens, outputTokens, elapsed);
+            // 큰 컨텍스트는 프롬프트 캐시로 들어가 input_tokens가 아니라 cache_* 필드에 잡힌다.
+            // 셋을 합쳐야 실제 입력 토큰이 나온다(안 그러면 in=2처럼 실제보다 훨씬 작게 보인다).
+            long inputTokens = -1L;
+            if (usage.has("input_tokens")) {
+                inputTokens = usage.get("input_tokens").asLong()
+                        + usage.path("cache_read_input_tokens").asLong(0)
+                        + usage.path("cache_creation_input_tokens").asLong(0);
+            }
+
+            // CLI는 이번 호출 비용을 달러로 알려준다. 없으면 -1.
+            var costUsd = root.has("total_cost_usd") ? root.get("total_cost_usd").asDouble() : -1.0;
+
+            return new LlmResult(text, inputTokens, outputTokens, elapsed, costUsd);
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
             log.warn("could not parse claude CLI JSON output, using raw stdout: {}", e.getMessage());
-            return new LlmResult(stdout, -1, -1, elapsed);
+            return new LlmResult(stdout, -1, -1, elapsed, -1.0);
         }
     }
 

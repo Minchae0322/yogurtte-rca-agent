@@ -49,7 +49,7 @@ class RcaServiceFlowTest {
         public LlmResult analyze(String systemPrompt, String context) {
             this.seenSystemPrompt = systemPrompt;
             this.seenContext = context;
-            return new LlmResult("원인 후보 1: Kafka consumer lag", 1234, 567, 42);
+            return new LlmResult("원인 후보 1: Kafka consumer lag", 1234, 567, 42, 0.0123);
         }
 
         @Override
@@ -95,7 +95,7 @@ class RcaServiceFlowTest {
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
                 .willReturn(aResponse().withStatus(503)));
 
-        server.stubFor(get(urlPathEqualTo("/prometheus/api/v1/query_range"))
+        server.stubFor(get(urlPathEqualTo("/api/v1/query_range"))
                 .willReturn(aResponse().withStatus(200).withBody(
                         "{\"status\":\"success\",\"data\":{\"result\":[{\"values\":[[1,\"7\"]]}]}}")));
 
@@ -118,7 +118,7 @@ class RcaServiceFlowTest {
         // 외부 프롬프트 경로 미설정 -> classpath 기본 프롬프트를 쓴다.
         var promptLoader = new SystemPromptLoader(new PromptProperties(null));
         service = new RcaService(collector, new ContextAssembler(collectProperties), promptLoader,
-                llmClient, notifier);
+                collectProperties, llmClient, notifier);
     }
 
     @AfterEach
@@ -145,6 +145,19 @@ class RcaServiceFlowTest {
         // 성공한 소스는 컨텍스트에 들어 있다.
         assertThat(llmClient.seenContext).contains("notify").contains("hikaricp_connections_active");
         assertThat(llmClient.seenSystemPrompt).contains("너는 SRE다");
+
+        // 비용은 fake가 보고한 값 그대로 실린다.
+        assertThat(report.costUsd()).isEqualTo(0.0123);
+
+        // 수집 범위: 트레이스 1 span, 메트릭은 1개 수집(누락 0), 컨텍스트 규모가 기록된다.
+        var cov = report.coverage();
+        assertThat(cov).isNotNull();
+        assertThat(cov.traceSpans()).isEqualTo(1);
+        assertThat(cov.traceBytes()).isGreaterThan(0);
+        assertThat(cov.metricsCollected()).containsExactly("hikaricp_connections_active");
+        assertThat(cov.metricsMissing()).isEmpty();
+        assertThat(cov.contextChars()).isEqualTo(report.contextChars());
+        assertThat(cov.estimatedContextTokens()).isEqualTo(report.contextChars() / 4L);
 
         assertThat(notifier.sent).hasSize(1);
         assertThat(notifier.sent.get(0)).isSameAs(report);

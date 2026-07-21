@@ -29,19 +29,20 @@ public class ConsoleNotifier implements Notifier {
                 question: {}
                 provider: {}
                 prompt  : {}
-                tokens  : in={} out={}
+                tokens  : in={} out={}{}
                 elapsed : total={}ms (tempo={} loki={} mimir={} assemble={} llm={})
-                context : {} chars
+                scope   :
+                {}
                 failures: {}
                 ----------------------------------------------------
                 {}
                 ====================================================
                 """,
                 report.traceId(), report.question(), report.llmProvider(), report.promptSource(),
-                report.inputTokens(), report.outputTokens(),
+                report.inputTokens(), report.outputTokens(), costSuffix(report.costUsd()),
                 report.totalElapsedMs(), report.timings().tempoMs(), report.timings().lokiMs(),
                 report.timings().mimirMs(), report.timings().assembleMs(), report.timings().llmMs(),
-                report.contextChars(),
+                formatCoverage(report.coverage()),
                 report.collectionFailures().isEmpty() ? "none" : report.collectionFailures(),
                 report.analysis());
 
@@ -50,6 +51,33 @@ public class ConsoleNotifier implements Notifier {
         } catch (Exception e) {
             log.warn("failed to save report json: {}", e.getMessage());
         }
+    }
+
+    private static String costSuffix(double costUsd) {
+        return costUsd < 0 ? "" : " cost=$%.4f".formatted(costUsd);
+    }
+
+    /** 이번 조사가 읽은 소스별 범위를 사람이 읽기 좋게 들여쓴 블록으로 만든다. */
+    private static String formatCoverage(RcaReport.Coverage c) {
+        if (c == null) {
+            return "  (없음)";
+        }
+        var metrics = "%d 수집".formatted(c.metricsCollected().size());
+        if (!c.metricsMissing().isEmpty()) {
+            metrics += ", 누락 " + c.metricsMissing();
+        }
+        return """
+                  window : %s ~ %s (%ds)
+                  trace  : %,dB / %d spans%s
+                  logs   : errwarn=%,dB traceId=%,dB
+                  metrics: %s
+                  context: %,d chars (~%,d tok 추정)"""
+                .formatted(
+                        c.windowStart(), c.windowEnd(), c.windowSeconds(),
+                        c.traceBytes(), c.traceSpans(), c.traceTrimmed() ? " (상위 span만)" : "",
+                        c.errorWarnLogBytes(), c.traceIdLogBytes(),
+                        metrics,
+                        c.contextChars(), c.estimatedContextTokens());
     }
 
     @Override
