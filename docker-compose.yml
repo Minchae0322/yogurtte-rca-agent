@@ -6,15 +6,14 @@ services:
       - "${SERVER_PORT:-8080}:8080"
     env_file: .env
     environment:
-      # env_file보다 우선한다. 컨테이너 내부 경로/포트는 고정
+      # 여기 있는 것만 .env를 덮어쓴다 - 컨테이너 내부에서만 의미 있는 경로/포트뿐이다.
+      # provider·notifier·API 키·토큰은 전부 .env(env_file)를 그대로 따른다.
       SERVER_PORT: 8080
       RCA_REPORT_DIR: /app/reports
       RCA_LOG_DIR: /app/logs
       RCA_PROMPT_PATH: /app/prompts/system-prompt.md
-      # 컨테이너 안에는 claude CLI가 없다 - 도커에서는 .env에
-      # RCA_LLM_PROVIDER=anthropic(또는 openai)과 해당 API 키를 설정할 것.
-      # 아래 기본값은 .env에 RCA_LLM_PROVIDER가 아예 없을 때만 적용된다
-      RCA_LLM_PROVIDER: ${RCA_LLM_PROVIDER:-anthropic}
+      # 호스트 절대경로는 컨테이너에 없으니, PATH에 설치된 claude를 쓰도록 고정
+      CLAUDE_CLI_PATH: claude
     volumes:
       # 리포트/로그는 호스트에 남긴다
       - ./reports:/app/reports
