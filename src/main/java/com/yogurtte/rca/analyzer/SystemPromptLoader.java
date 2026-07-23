@@ -5,55 +5,77 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 시스템 프롬프트를 마크다운 파일에서 읽는다.
+ * 모드별 시스템 프롬프트를 마크다운 파일에서 읽는다.
  *
- * <p>rca.prompt.path의 외부 파일이 있으면 그것을 쓰고, 재시작 없이 프롬프트를 튜닝할 수 있도록
- * 조사할 때마다 다시 읽는다. 외부 파일이 없거나 읽기에 실패하면 jar에 포함된 기본 프롬프트
- * (classpath:prompts/system-prompt.md)로 대체한다. 어떤 프롬프트로 실행했는지는
- * {@link Loaded#source()}로 리포트에 기록된다.
+ * <p>모드는 두 가지다: "rca"(장애 원인 분석)와 "review"(정상 트레이스 성능 리뷰).
+ * rca는 rca.prompt.path(기본 ./prompts/system-prompt.md)를 쓰고, review는 같은 디렉토리의
+ * review-prompt.md를 쓴다. 재시작 없이 프롬프트를 튜닝할 수 있도록 조사할 때마다 다시 읽고,
+ * 외부 파일이 없거나 읽기에 실패하면 jar에 포함된 기본 프롬프트로 대체한다.
+ * 어떤 프롬프트로 실행했는지는 {@link Loaded#source()}로 리포트에 기록된다.
  */
 @Component
 public class SystemPromptLoader {
 
     private static final Logger log = LoggerFactory.getLogger(SystemPromptLoader.class);
-    private static final String DEFAULT_RESOURCE = "prompts/system-prompt.md";
+
+    /** 모드 -> classpath 기본 리소스. */
+    private static final Map<String, String> DEFAULT_RESOURCES = Map.of(
+            "rca", "prompts/system-prompt.md",
+            "review", "prompts/review-prompt.md");
 
     /** 프롬프트 본문과 그 출처(외부 파일 경로 또는 classpath). */
     public record Loaded(String text, String source) {
     }
 
-    private final Path externalPath;
-    private final String defaultPrompt;
+    private final Map<String, Path> externalPaths = new LinkedHashMap<>();
+    private final Map<String, String> defaults = new LinkedHashMap<>();
 
     public SystemPromptLoader(PromptProperties properties) {
-        this.externalPath = (properties.path() == null || properties.path().isBlank())
+        var rcaPath = (properties.path() == null || properties.path().isBlank())
                 ? null
                 : Path.of(properties.path());
+        externalPaths.put("rca", rcaPath);
+        externalPaths.put("review", rcaPath == null ? null : rcaPath.resolveSibling("review-prompt.md"));
 
-        try (var in = getClass().getClassLoader().getResourceAsStream(DEFAULT_RESOURCE)) {
-            if (in == null) {
-                throw new IllegalStateException("classpath:" + DEFAULT_RESOURCE + " 리소스가 없다");
+        DEFAULT_RESOURCES.forEach((mode, resource) -> {
+            try (var in = getClass().getClassLoader().getResourceAsStream(resource)) {
+                if (in == null) {
+                    throw new IllegalStateException("classpath:" + resource + " 리소스가 없다");
+                }
+                defaults.put(mode, new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                throw new UncheckedIOException("기본 시스템 프롬프트를 읽지 못했다: " + resource, e);
             }
-            this.defaultPrompt = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("기본 시스템 프롬프트를 읽지 못했다", e);
-        }
+        });
 
-        if (externalPath != null && Files.isRegularFile(externalPath)) {
-            log.info("system prompt: {}", externalPath.toAbsolutePath());
-        } else {
-            log.info("system prompt: classpath:{} (외부 파일 {} 없음)", DEFAULT_RESOURCE,
-                    externalPath == null ? "미설정" : externalPath);
-        }
+        externalPaths.forEach((mode, path) -> {
+            if (path != null && Files.isRegularFile(path)) {
+                log.info("system prompt [{}]: {}", mode, path.toAbsolutePath());
+            } else {
+                log.info("system prompt [{}]: classpath:{} (외부 파일 {} 없음)", mode,
+                        DEFAULT_RESOURCES.get(mode), path == null ? "미설정" : path);
+            }
+        });
     }
 
+    /** 기존 호출 호환용 - rca 모드 프롬프트. */
     public Loaded load() {
+        return load("rca");
+    }
+
+    public Loaded load(String mode) {
+        if (!defaults.containsKey(mode)) {
+            throw new IllegalArgumentException("지원하지 않는 프롬프트 모드: " + mode);
+        }
+        var externalPath = externalPaths.get(mode);
         if (externalPath != null && Files.isRegularFile(externalPath)) {
             try {
                 return new Loaded(Files.readString(externalPath, StandardCharsets.UTF_8), externalPath.toString());
@@ -61,6 +83,6 @@ public class SystemPromptLoader {
                 log.warn("외부 프롬프트 {} 읽기 실패, 기본 프롬프트로 대체: {}", externalPath, e.getMessage());
             }
         }
-        return new Loaded(defaultPrompt, "classpath:" + DEFAULT_RESOURCE);
+        return new Loaded(defaults.get(mode), "classpath:" + DEFAULT_RESOURCES.get(mode));
     }
 }

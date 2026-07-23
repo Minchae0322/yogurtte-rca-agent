@@ -15,6 +15,7 @@ final class ReportMarkdown {
         sb.append("# RCA Report — `").append(report.traceId()).append("`\n\n");
 
         sb.append("| 항목 | 값 |\n|---|---|\n");
+        sb.append("| 모드 | ").append(report.mode()).append(" |\n");
         sb.append("| 질문 | ").append(nz(report.question())).append(" |\n");
         sb.append("| 시각 | ").append(report.startedAt()).append(" |\n");
         sb.append("| provider | ").append(report.llmProvider()).append(" |\n");

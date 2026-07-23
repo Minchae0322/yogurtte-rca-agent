@@ -27,6 +27,7 @@ public class ConsoleNotifier implements Notifier {
                 ==================== RCA REPORT ====================
                 traceId : {}
                 question: {}
+                mode    : {}
                 provider: {}
                 prompt  : {}
                 tokens  : in={} out={}{}
@@ -38,7 +39,7 @@ public class ConsoleNotifier implements Notifier {
                 {}
                 ====================================================
                 """,
-                report.traceId(), report.question(), report.llmProvider(), report.promptSource(),
+                report.traceId(), report.question(), report.mode(), report.llmProvider(), report.promptSource(),
                 report.inputTokens(), report.outputTokens(), costSuffix(report.costUsd()),
                 report.totalElapsedMs(), report.timings().tempoMs(), report.timings().lokiMs(),
                 report.timings().mimirMs(), report.timings().assembleMs(), report.timings().llmMs(),

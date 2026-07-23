@@ -20,6 +20,27 @@ class SystemPromptLoaderTest {
         assertThat(prompt.source()).isEqualTo("classpath:prompts/system-prompt.md");
     }
 
+    @Test
+    void reviewModeFallsBackToClasspathDefault(@TempDir Path dir) {
+        var loader = new SystemPromptLoader(new PromptProperties(dir.resolve("없는파일.md").toString()));
+
+        var prompt = loader.load("review");
+
+        assertThat(prompt.text()).contains("성능 엔지니어");
+        assertThat(prompt.source()).isEqualTo("classpath:prompts/review-prompt.md");
+    }
+
+    /** review 프롬프트는 rca 경로와 같은 디렉토리의 review-prompt.md에서 읽는다. */
+    @Test
+    void reviewModeReadsSiblingFileOfConfiguredPath(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("skill.md"), "rca용");
+        Files.writeString(dir.resolve("review-prompt.md"), "리뷰용 프롬프트");
+        var loader = new SystemPromptLoader(new PromptProperties(dir.resolve("skill.md").toString()));
+
+        assertThat(loader.load("review").text()).isEqualTo("리뷰용 프롬프트");
+        assertThat(loader.load("rca").text()).isEqualTo("rca용");
+    }
+
     /** 튜닝 루프의 핵심: 파일을 고치면 재시작 없이 다음 load()에 바로 반영된다. */
     @Test
     void reReadsExternalFileOnEveryLoad(@TempDir Path dir) throws Exception {

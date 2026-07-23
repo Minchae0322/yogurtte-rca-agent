@@ -11,7 +11,7 @@ final class NotifierText {
     static String render(RcaReport report, int maxChars) {
         var cost = report.costUsd() < 0 ? "" : " | cost $%.4f".formatted(report.costUsd());
         var header = """
-                *RCA* `%s`
+                *RCA* `%s` (%s)
                 q: %s
                 provider: %s | tokens in/out: %d/%d%s | total: %dms
                 scope: %s
@@ -19,6 +19,7 @@ final class NotifierText {
 
                 """.formatted(
                 report.traceId(),
+                report.mode(),
                 report.question(),
                 report.llmProvider(),
                 report.inputTokens(),

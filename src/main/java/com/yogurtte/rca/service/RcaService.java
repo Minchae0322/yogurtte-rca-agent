@@ -46,18 +46,23 @@ public class RcaService {
     }
 
     public RcaReport investigate(String traceId, String question) {
+        return investigate(traceId, question, "rca");
+    }
+
+    public RcaReport investigate(String traceId, String question, String mode) {
+        var normalizedMode = (mode == null || mode.isBlank()) ? "rca" : mode;
         MDC.put("traceId", traceId);
         try {
-            return run(traceId, question);
+            return run(traceId, question, normalizedMode);
         } finally {
             MDC.remove("traceId");
         }
     }
 
-    private RcaReport run(String traceId, String question) {
+    private RcaReport run(String traceId, String question, String mode) {
         var startedAt = Instant.now();
         var overallStart = System.currentTimeMillis();
-        log.info("investigating question={}", question);
+        log.info("investigating mode={} question={}", mode, question);
 
         var data = collector.collect(traceId);
 
@@ -66,7 +71,7 @@ public class RcaService {
         var assembleMs = System.currentTimeMillis() - assembleStart;
         log.info("context assembled: {} chars, {} collection failures", context.length(), data.failures().size());
 
-        var prompt = promptLoader.load();
+        var prompt = promptLoader.load(mode);
         log.info("system prompt: {}", prompt.source());
 
         var llmResult = llmClient.analyze(prompt.text(), context);
@@ -84,6 +89,7 @@ public class RcaService {
         var report = new RcaReport(
                 traceId,
                 question,
+                mode,
                 startedAt,
                 llmClient.provider(),
                 prompt.source(),
