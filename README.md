@@ -149,7 +149,25 @@ trace context가 전파됨을 확인했습니다.
 - 신규 기능 개발 시 Observation 체크리스트 적용
 - 주요 사용자 흐름에 대한 주기적 트레이스 샘플링 검증
 
+이 결정 이후 실전 조사에서 라이브러리 계측의 잔여 리스크(FCM 외부 호출 미계측 갭)가
+실제로 관측되었고, 그것이 코드 인지 RCA 로드맵의 근거가 되었습니다 — 전체 서사는
+[ADR-001](docs/decisions/adr-001-brave-over-otel.md)에 있습니다.
+
+## 문서
+
+결론만이 아니라 **판단 과정과 실측 수치**를 남깁니다.
+
+| 문서 | 내용 |
+|---|---|
+| [전략 로드맵](docs/strategy.md) | Phase별 계획과 각 단계의 진입 게이트·판단 기준 (chaos 평가셋 → 프롬프트 최적화 → 코드 인지 RCA) |
+| [관측성 아키텍처](docs/monitoring.md) | 수집 파이프라인 실측 인벤토리(23 타깃), 트레이스 계측 특성, 알려진 관측 공백 |
+| [의사결정 기록 (ADR)](docs/decisions/README.md) | OTel vs Brave, 단일 패스 baseline, LLM provider, 연동 디버깅, lag 메트릭, 측정 하네스 — 6건 |
+| [정상 상황 Findings](docs/findings/README.md) | 실전 트레이스·리뷰 모드·API 순회로 확보한 개선점 5건 + 결함 3군 (코드 위치·검증 방법 포함) |
+| [실측 샘플 리포트](docs/sample-report.md) · [리뷰 모드](docs/sample-review-report.md) | 실제 prod 트레이스 조사 결과 전문 (rca / review) |
+
 ## 로드맵
+
+각 단계의 왜와 진입 조건은 [전략 문서](docs/strategy.md)에 논증되어 있습니다.
 
 | 버전   | 내용                                                | 상태    |
 |--------|-----------------------------------------------------|---------|
