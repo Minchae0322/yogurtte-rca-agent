@@ -3,7 +3,7 @@
 - 심각도: **높음** | 상태: 확정 (트레이스 + 코드)
 - 위치: toy-chat `FcmPushNotificationProvider.sendToTokens` (34행~)
 
-## 관측 (트레이스 `6a5dc9c...`)
+## 관측 (트레이스 `6a5dc9c1990469248cfea377e1d7b4a0`)
 
 `push-dispatcher#dispatch` 996ms 중 **994ms가 어떤 자식 span으로도 설명되지 않는다**
 (유일한 자식 KEYS는 0.9ms). 이 트레이스에서 traceId 매칭 로그 0건, ERROR/WARN 0건 —

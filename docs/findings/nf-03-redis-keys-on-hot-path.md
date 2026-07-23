@@ -3,7 +3,7 @@
 - 심각도: **중간** (현재 저지연, 데이터 증가 시 위험) | 상태: 확정 (트레이스 + 코드)
 - 위치: toy-chat connection/redis 패키지
 
-## 관측 (트레이스 `6a5dc9c...`)
+## 관측 (트레이스 `6a5dc9c1990469248cfea377e1d7b4a0`)
 
 한 건의 알림 처리에서 `KEYS` 명령이 **2회** 관측됐다 (`redisKEYS 0` span, 739μs / 885μs).
 호출 경로: `PushDispatcher.dispatch` → `ConnectionService.getOnlineDeviceIds` →

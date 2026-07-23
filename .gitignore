@@ -13,3 +13,7 @@ build/
 .idea/
 *.iml
 .vscode/
+
+# write-flow 첨부 이미지 (README만 추적)
+sweep-assets/*
+!sweep-assets/README.md

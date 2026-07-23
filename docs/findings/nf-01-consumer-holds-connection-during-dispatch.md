@@ -3,7 +3,7 @@
 - 심각도: **높음** | 상태: 확정 (트레이스 + 코드)
 - 위치: toy-chat `UserNotificationService#processNotification` → `PushDispatcher.dispatch`
 
-## 관측 (트레이스 `6a5dc9c...`)
+## 관측 (트레이스 `6a5dc9c1990469248cfea377e1d7b4a0`)
 
 - chat의 `connection` span(HikariPool)이 **1,105ms** 지속: 이벤트 `acquired` @395.7ms →
   `commit` @1,497.1ms.

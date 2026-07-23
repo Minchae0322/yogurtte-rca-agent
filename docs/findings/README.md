@@ -20,7 +20,7 @@
 
 | 경로 | 도구 | 산출 |
 |---|---|---|
-| 실전 트레이스 정밀 분석 | 트레이스 `6a5dc9c1990469248cfea377e1d7b4a0` (댓글 작성→알림, 2 services / 30 spans / 1.26s) | NF-01~04의 타이밍 근거 |
+| 실전 트레이스 정밀 분석 | 트레이스 `6a5dc9c1990469248cfea377e1d7b4a0` — 2026-07-20 16:09:53 KST 시작, `content-service: http post /feeds/{feedId}/comments` (댓글 작성→알림, 2 services / 30 spans / 1.26s) | NF-01~04의 타이밍 근거 |
 | rca-agent 리뷰 모드 | `/investigate mode=review` ($1.23, out 12,100 tok) | 수동 분석 재현 + 신규 발견 (NF-04 갭·락, NF-06 가설 제기) |
 | 실서비스 API 순회 | `scripts/api-sweep.sh` (GET 전용 79회, 2026-07-24) | DF-01 결함 3군, NF-05 라우팅 이상, 지연 baseline |
 

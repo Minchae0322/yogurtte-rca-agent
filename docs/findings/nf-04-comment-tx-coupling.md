@@ -3,7 +3,7 @@
 - 심각도: **중간** | 상태: 확정 (트레이스 + 코드)
 - 위치: toy-content `FeedCommentService.createComment`
 
-## 관측 (트레이스 `6a5dc9c...`, `POST /feeds/{feedId}/comments` 129.8ms)
+## 관측 (트레이스 `6a5dc9c1990469248cfea377e1d7b4a0`, `POST /feeds/{feedId}/comments` 129.8ms)
 
 - `connection` span 116.6ms 동안 JDBC 쿼리 span 합계는 **~30ms** (query 9회, 각 2~5ms)
   — 나머지 **~85ms가 트랜잭션 안의 미계측 구간** (앱 로직·락 대기 추정).
