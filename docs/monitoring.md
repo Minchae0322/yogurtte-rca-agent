@@ -98,6 +98,14 @@ node-exporter는 호스트 CPU/메모리/디스크만 내보내므로, 미들웨
 3. **배포 버전 태깅 부재** — 트레이스에 `service.version`이 없어 "장애 시점에 어떤
    커밋이 돌고 있었나"를 pin할 수 없다. 코드 인지 RCA에서 로컬 HEAD와 prod 코드의
    불일치 리스크. → Phase 4c에서 `service.version=$GIT_SHA` 태깅.
+4. **MongoDB 클라이언트 미계측** — chat의 알림 저장(`UserNotificationRepository`)과
+   채팅 메시지 저장은 Mongo인데, 실전 트레이스 30 span 중 Mongo span이 0건이었다.
+   JDBC·Redis·Kafka와 달리 Mongo 드라이버는 `CommandListener`를 직접 등록해야 span이
+   생기는데 등록 코드가 없음을 확인했다(2026-07-25). CH-1(MongoDB 장애) 실험에서
+   "재시도→DLQ span 판독"이 불가능한 이유이며, Mongo 원인 장애에서 트레이스가
+   무증상이 되는 사각지대. Kafka observation 누락(ADR-001), FCM span 부재(한계 1번)와
+   같은 계열의 세 번째 실증 사례. → toy-chat에 `MongoTracingConfig`
+   (`MongoObservationCommandListener` 등록) 추가로 해소, 배포 후 트레이스에서 확인 예정.
 
 ## 부록 — rca-agent 자체 리소스 실측 (2026-07-21, M1 macOS/JDK 21)
 

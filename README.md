@@ -159,6 +159,7 @@ trace context가 전파됨을 확인했습니다.
 
 | 문서 | 내용 |
 |---|---|
+| **[📌 현황판 (STATUS)](docs/STATUS.md)** | **여기서 시작** — 지금 어디까지 왔나, 다음 할 일, 문서 지도, 활동 로그 |
 | [전략 로드맵](docs/strategy.md) | Phase별 계획과 각 단계의 진입 게이트·판단 기준 (chaos 평가셋 → 프롬프트 최적화 → 코드 인지 RCA) |
 | [관측성 아키텍처](docs/monitoring.md) | 수집 파이프라인 실측 인벤토리(23 타깃), 트레이스 계측 특성, 알려진 관측 공백 |
 | [의사결정 기록 (ADR)](docs/decisions/README.md) | OTel vs Brave, 단일 패스 baseline, LLM provider, 연동 디버깅, lag 메트릭, 측정 하네스 — 6건 |
