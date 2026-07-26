@@ -41,10 +41,11 @@
 | [AE-01](ae-01-rca-v0-ch1-blind-eval.md) | rca-agent v0 × CH-1 회차 1 — 위치 특정 성공, 원인 확정 실패(도구 결함 3건) | 도구 | 실행 기록 확정, §8 채점 대기 |
 | [AE-02](ae-02-rca-v0-ch1-round3-eval.md) | rca-agent v0 × CH-1 회차 3 — 원인 확정 성공(계측 보강 효과), 영향 판정 오판(NF-08) | 도구 | 실행 기록 확정, §8 채점 대기 |
 | [AE-03](ae-03-rca-v0-in2-blind-eval.md) | rca-agent v0 × IN-2 — 유실 판정 정답, 하위 원인 감별 실패(브로커 측 데이터 전무) | 도구 | 실행 기록 확정, §8 채점 대기 |
+| [AE-04](ae-04-rca-v0-ch2-blind-eval.md) | rca-agent v0 × CH-2 — 메트릭 고고학으로 본질 정답 + 4회 패턴 확정(-120s는 어셈블러 버그) | 도구 | 실행 기록 확정, §8 채점 대기 |
 
 ## 장애 주입 회차별 기록
 
-장애 상황, Loki·Tempo 실제 신호 발췌, 파악 원인 vs 실제 원인, 스크린샷용 traceId·쿼리를 문항별 디렉토리에 회차 단위로 기록한다: [`../ch-1/`](../ch-1/README.md) (Mongo 다운, 2회) · [`../in-2/`](../in-2/README.md) (Kafka 다운, 1회)
+장애 상황, Loki·Tempo 실제 신호 발췌, 파악 원인 vs 실제 원인, 스크린샷용 traceId·쿼리를 문항별 디렉토리에 회차 단위로 기록한다: [`../ch-1/`](../ch-1/README.md) (Mongo 다운, 2회) · [`../in-2/`](../in-2/README.md) (Kafka 다운, 1회) · [`../ch-2/`](../ch-2/README.md) (컨슈머 정지, 1회)
 
 ## 증거 원본
 
