@@ -40,10 +40,11 @@
 | [NF-08](nf-08-dlq-trace-discontinuity.md) | DLQ 경계에서 trace 단절 — RCA가 유실/복구 도착을 구분 불가 (오판 실증) | 중간 | 로그 확정, 전파 지점 가설 |
 | [AE-01](ae-01-rca-v0-ch1-blind-eval.md) | rca-agent v0 × CH-1 회차 1 — 위치 특정 성공, 원인 확정 실패(도구 결함 3건) | 도구 | 실행 기록 확정, §8 채점 대기 |
 | [AE-02](ae-02-rca-v0-ch1-round3-eval.md) | rca-agent v0 × CH-1 회차 3 — 원인 확정 성공(계측 보강 효과), 영향 판정 오판(NF-08) | 도구 | 실행 기록 확정, §8 채점 대기 |
+| [AE-03](ae-03-rca-v0-in2-blind-eval.md) | rca-agent v0 × IN-2 — 유실 판정 정답, 하위 원인 감별 실패(브로커 측 데이터 전무) | 도구 | 실행 기록 확정, §8 채점 대기 |
 
 ## 장애 주입 회차별 기록
 
-CH-1(Mongo 다운) 회차별 상세 — 장애 상황, Loki·Tempo 실제 신호 발췌, 파악 원인 vs 실제 원인, 스크린샷용 traceId·쿼리: [`../ch-1/`](../ch-1/README.md)
+장애 상황, Loki·Tempo 실제 신호 발췌, 파악 원인 vs 실제 원인, 스크린샷용 traceId·쿼리를 문항별 디렉토리에 회차 단위로 기록한다: [`../ch-1/`](../ch-1/README.md) (Mongo 다운, 2회) · [`../in-2/`](../in-2/README.md) (Kafka 다운, 1회)
 
 ## 증거 원본
 
