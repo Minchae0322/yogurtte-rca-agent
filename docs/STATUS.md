@@ -17,12 +17,12 @@
   실전 조사 1건 (dispatch 995ms 특정)
 - [ ] **Phase 2 — 평가 하네스** ← **지금 여기**
   - [x] 서버에 chaos 하네스 구축 (`~/chaos`, baseline→주입→증상→원복 + 블라인드 채점)
-  - [x] CH-1(MongoDB 장애) 1차 실행 — 증상 미발생. 원인 규명: 주입 16초 < 타임아웃 체인
-    + **컨슈머가 예외를 삼키고 ack** (근본 원인, 수정 배포됨)
-  - [ ] CH-1 재실행 (3분 주입, T1 후 2분 대기) — 이번엔 Mongo span + `[KAFKA-RETRY]` 로그
-    + DLQ 오프셋 3중 관측 예상
+  - [x] CH-1 재실행 완료 — 회차1(73s, 지연 흡수) / 회차3(4.5분, DLQ 복구). 블라인드 조사 [AE-01/02](findings/README.md)
+  - [x] CH-2(컨슈머 정지)·IN-2(Kafka 유실) 실행 + 조사 [AE-03/04]. **v0 baseline 4문항 확보**
+  - [ ] AU-2 재실험 (프로브 오염 — feed 500 버그로 무효) + AU-4(auth 다운+캐시 만료) 첫 회차
+  - [ ] **v0.1 도구 결함 수정 후 4개 traceId 재조사** (델타 측정) ← 다음 우선순위, 아래 ② 참조
   - [ ] N1 정답지로 리뷰 모드 재현율 측정 (정답지는 [findings/](findings/README.md) 확정 완료)
-  - [ ] C-트랙 나머지 시나리오 + baseline 결과표 (C 7종 + N 3종 × 3회)
+  - [ ] C-트랙 나머지(AU-1은 IN-3 부하와 묶음, AU-3·IN-1·IN-3·AP) + 3회 반복 baseline 결과표
 - [ ] **Phase 3 — 프롬프트·컨텍스트 최적화** (baseline 후)
 - [ ] **Phase 4 — 코드 인지 RCA** (게이트: (c)유형 실패 실측 — 이미 1건 확보)
 
@@ -30,12 +30,12 @@
 
 즉시 (다음 세션에서):
 
-1. **하트비트 필터 배포 확인** — `hello`/`INFO` 고아 트레이스가 새 배포 후 멈췄는지 Tempo 검색
-2. **댓글 1건 달고 Mongo span 부모 연결 검증** — `insert user_notifications`가 댓글
-   트레이스의 자식으로 붙는지 (contextProvider 검증). 앱에서 댓글 또는
-   `scripts/api-write-flow.sh` (새 토큰 필요)
-3. **CH-1 재실험** — 주입 ≥3분, T1은 주입 직후, 증상 채록은 T1 후 2분+
-4. **DF-01의 500 트레이스로 rca 모드 실전 분석** — 자연 발생 결함 (traceId는 Grafana에서)
+1. **v0.1 도구 결함 3종 수정** (4회 조사로 특정 완료) → 4개 traceId 재조사로 델타:
+   - Loki 셀렉터 `{app=~...}` → `{service_name=~"...-service"}` (4회 연속 로그 0건 원인)
+   - metric-queries 교체: spring lag → exporter `kafka_consumergroup_lag` + `kafka_brokers` + `mongodb_up` (부재 신호 활용)
+   - 어셈블러 -120s 시각 포맷 수정 (raw ns는 정확, 변환문만 window padding만큼 밀림)
+2. **AU-2 재실험 + AU-4 첫 회차** — auth 다운 필요(실사용자 영향), 저트래픽 시간대. AU-4는 캐시 TTL 10분+ 유지
+3. "수집 실패/누락"을 부재 신호로 승격하라는 프롬프트 문장 추가 (absent 메트릭·침묵 로그 활용)
 
 백로그 (전략 순서대로):
 
@@ -55,14 +55,16 @@
 | 전체 계획과 왜 이 순서인가 | [strategy.md](strategy.md) |
 | 관측 파이프라인 구성·한계 (실측) | [monitoring.md](monitoring.md) |
 | 왜 그렇게 결정했나 (수치 포함) | [decisions/](decisions/README.md) — ADR 6건 |
-| 찾아낸 문제들 (정답지 겸용) | [findings/](findings/README.md) — NF 6건 + DF 1건 |
-| 에이전트 리포트 실물 | [sample-report.md](sample-report.md) (rca) · [sample-review-report.md](sample-review-report.md) (review) |
+| 찾아낸 문제들 (정답지 겸용) | [findings/](findings/README.md) — NF 8건 + DF 1건 + AE 4건(블라인드 조사 평가) |
+| **장애별 회차 기록** (원인대조·스샷 traceId·리포트) | [ch-1/](ch-1/README.md) · [ch-2/](ch-2/README.md) · [in-2/](in-2/README.md) |
+| 에이전트 리포트 실물 | `reports/` (조사별 .md/.json) · [sample-report.md](sample-report.md) · [sample-review-report.md](sample-review-report.md) |
 | 실행 도구 | `scripts/api-sweep.sh` (읽기 순회) · `scripts/api-write-flow.sh` (업로드→피드→댓글) |
 | chaos 하네스 | 서버 `~/chaos` (이 레포 밖) — 시나리오·evidence·채점 |
 
 ## ④ 활동 로그 (최신이 위)
 
-- **2026-07-26**: 하트비트 span 필터 추가·푸시(`0ba282b`, Brave SpanHandler drop). Mongo
+- **2026-07-26 (오후)**: **블라인드 조사 4회 완주** — CH-1 회차1(지연 24.7s, AE-01)·회차3(DLQ 복구, AE-02)·CH-2(컨슈머 정지, AE-04)·IN-2(Kafka 유실, AE-03). 회차별 기록 [ch-1/](ch-1/README.md)·[ch-2/](ch-2/README.md)·[in-2/](in-2/README.md)(장애상황·Loki/Tempo 발췌·원인대조·스샷 traceId + 리포트 원문). 신규 findings: NF-07(지연↔유실 경계=드라이버 30s timeout), NF-08(DLQ trace 단절→영향 오판). **4회 관통 패턴 3건**: ① 영향 판정 정확도 = trace 연속성(끊기면 오판), ② -120s 시각 밀림은 어셈블러 버그로 확정(raw ns 병기로 입증), ③ 부재 신호(사라진 메트릭·침묵 로그) 활용 불가. AU-2 조사는 오염 — content 피드 500이 auth가 아니라 **`/feeds/scroll` size 미지정 NPE**(잠복 실버그, toy-content `1e7df3f`로 수정)였고 chaos.sh t2가 size 없이 호출해 CH-1~IN-2 내내 조용히 500 통과. AU-4(auth 다운+캐시 만료) 시나리오 신설.
+- **2026-07-26 (오전)**: 하트비트 span 필터 추가·푸시(`0ba282b`, Brave SpanHandler drop). Mongo
   계측 동작 실측 확인(`hello` span 배포 시점부터 생성 — 단 고아 트레이스 노이즈 발견이
   필터의 계기). 댓글 흐름 부모-연결 검증은 배포 후 댓글 부재로 대기. STATUS.md 신설.
 - **2026-07-25**: CH-1 1차 실행 분석 — 증상 0의 원인 규명(주입 16s < 타임아웃 체인, 그리고
