@@ -23,6 +23,7 @@
 | 실전 트레이스 정밀 분석 | 트레이스 `6a5dc9c1990469248cfea377e1d7b4a0` — 2026-07-20 16:09:53 KST 시작, `content-service: http post /feeds/{feedId}/comments` (댓글 작성→알림, 2 services / 30 spans / 1.26s) | NF-01~04의 타이밍 근거 |
 | rca-agent 리뷰 모드 | `/investigate mode=review` ($1.23, out 12,100 tok) | 수동 분석 재현 + 신규 발견 (NF-04 갭·락, NF-06 가설 제기) |
 | 실서비스 API 순회 | `scripts/api-sweep.sh` (GET 전용 79회, 2026-07-24) | DF-01 결함 3군, NF-05 라우팅 이상, 지연 baseline |
+| 장애 주입 블라인드 조사 | toy-content chaos CH-1(Mongo 73s 정지) → `/investigate` (2026-07-26, $1.08, in 44,798/out 9,162 tok, 135s) | NF-07 실측 확정, AE-01 도구 결함 3건 |
 
 ## Findings 인덱스
 
@@ -35,6 +36,14 @@
 | [NF-05](nf-05-gateway-routing-anomaly.md) | 같은 리소스가 두 게이트웨이 경로에서 다른 응답 | 중간 | 관측 확정, 원인 미해명 |
 | [NF-06](nf-06-shared-db-schema.md) | chat 서비스가 `content` DB 스키마 사용 (경계 공유 의심) | 중간 | 로컬 설정 확정, prod 미확정 |
 | [DF-01](df-01-sweep-500-defects.md) | 읽기 API 순회에서 발견된 500 고정 결함 3군 | 결함 | 2회 재현 |
+| [NF-07](nf-07-notification-delay-loss-boundary.md) | 알림 지연↔유실 경계(드라이버 대기 30s) 실측 — 예외 삼킴 수정으로 경계 밖도 DLQ 경유 도착 | 높음 | 확정·개선 검증 완료 (주입 ×2) |
+| [NF-08](nf-08-dlq-trace-discontinuity.md) | DLQ 경계에서 trace 단절 — RCA가 유실/복구 도착을 구분 불가 (오판 실증) | 중간 | 로그 확정, 전파 지점 가설 |
+| [AE-01](ae-01-rca-v0-ch1-blind-eval.md) | rca-agent v0 × CH-1 회차 1 — 위치 특정 성공, 원인 확정 실패(도구 결함 3건) | 도구 | 실행 기록 확정, §8 채점 대기 |
+| [AE-02](ae-02-rca-v0-ch1-round3-eval.md) | rca-agent v0 × CH-1 회차 3 — 원인 확정 성공(계측 보강 효과), 영향 판정 오판(NF-08) | 도구 | 실행 기록 확정, §8 채점 대기 |
+
+## 장애 주입 회차별 기록
+
+CH-1(Mongo 다운) 회차별 상세 — 장애 상황, Loki·Tempo 실제 신호 발췌, 파악 원인 vs 실제 원인, 스크린샷용 traceId·쿼리: [`../ch-1/`](../ch-1/README.md)
 
 ## 증거 원본
 
