@@ -91,7 +91,7 @@
 | 문항 | 만드는 장애 | 확인하려는 것 | 앵커 | 사용자 영향 | 지금 가능? |
 |---|---|---|---|---|---|
 | **AP-1** | 댓글 201자 → varchar(200) 위반 500 | 인프라 정상일 때 "왜 **이 요청만**" 수렴. rate 알람이 못 잡는 단발 오류 | **v2 박제 완료** (`38e01f0`) | **없음** (인프라 무접촉) | ✅ **즉시** |
-| **AP-3** | 중복 해시태그 → `uk_feed_hashtag` 유니크 위반 500 (구 이모지 charset 문항 **교체**, 2026-07-28) | 같은 API·같은 `DataIntegrityViolationException`을 **예외 원문**으로 가름 (길이 vs 유니크). AP-1과 쌍 | **v1 박제 완료** (동결) | 없음 (인프라 무접촉) | ⚠️ **주입 대기** — 서버 하네스 AP-3 로직을 교체본으로 갱신 후 실행 |
+| **AP-3** | 중복 해시태그 → `uk_feed_hashtag` 유니크 위반 500 (구 이모지 charset 문항 **교체**, 2026-07-28) | 같은 API·같은 `DataIntegrityViolationException`을 **예외 원문**으로 가름 (길이 vs 유니크). AP-1과 쌍 | **v1 박제 완료** (동결) | 없음 (인프라 무접촉) | ⚠️ **주입 대기** — chaos.sh 교체·구문검사 완료, 서버 `~/chaos` 동기화 후 `./chaos.sh AP-3 run` |
 | **AP-2** | 팔로우 목록 `size` 미기본값 → `size+1` 언박싱 NPE → 500 | read-path NPE를 **DB 오귀인 없이** 짚기 (DB span 부재를 근거로). following/followers 단일 근원 | draft (실측 후 박제) | 없음 | ⚠️ 앵커 실측 박제 필요. 구 "대용량 업로드"는 폐기·재설계 ([NF-12](findings/nf-12-fileservice-windows-path-separator-hardcoded.md)) |
 | **IN-1** | Redis 다운 | 3서비스의 **상이한 증상을 단일 근원으로 수렴** — 최고 난도 | v1 | 3서비스 영향 | ⚠️ 스케줄러 `@Observed` 전제 확인 필요 |
 | **AU-3** | JWT 시크릿 드리프트 | 401은 4xx라 **trace에 error가 안 남는다** — 메트릭+로그로만 도달 | v1 | **전 사용자 401** | ❌ **도구 수정 전 금지** (아래) |
@@ -199,6 +199,22 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — auth가 
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-07-28**: **AP-3 문항 교체 (이모지 charset → 중복 해시태그)**. 구 AP-3(4바이트 이모지)를
+  실행했으나 이모지 댓글이 **200**으로 통과 → **불성립**(테이블 utf8mb4). Tempo 실측으로 확인:
+  14:59~15:00 댓글 POST 3건(baseline-ascii/emoji/symptom-ascii) 전부 200·insert 깨끗·에러 트레이스
+  0건 · Loki charset 0건. 하네스 범위(요청 1건, 인프라·스키마 무접촉)로는 재현 불가한 degenerate
+  문항이라 **AP-1의 짝 역할을 실제 재현되는 결함으로 대체**. toy-content 코드 탐색으로 앱 계층 500
+  후보 3건 발굴(중복 해시태그 유니크 위반 / 상품 attachmentFileInfos NPE / 피드 null 해시태그 NPE),
+  코드 4곳 직접 확인 후 **#1 중복 해시태그** 선정 — AP-1과 같은 API·같은
+  `DataIntegrityViolationException`인데 지문이 `Duplicate entry ... uk_feed_hashtag`(유니크)로
+  `Data too long`(길이)과 갈린다. **앵커 v1 동결**(toy-content `scenarios/AP-3/answer.md`),
+  RUNBOOK §6 AP-3·요약표·FEED_ID 전제 교체, **`chaos.sh` 실행 로직도 교체**(`measure_AP_3`/
+  `inject_AP_3`/신규 `feed_create`: 업로드→카테고리→피드생성, 이모지 제거, 구문검사 통과),
+  `docs/ap-3/` 회차 폴더 신설.
+  **다음**: 서버 `~/chaos`(= `toy-content/docs/chaos/` 배포본)에 **동기화** → `./chaos.sh AP-3 run`
+  → 500 + `Duplicate entry ... uk_feed_hashtag` 확인 → traceId 확보 → rca-agent 조사 → §8 채점. 원인:
+  `FeedService.findOrCreateHashtag` 정규화(`trim().toLowerCase()`)로 `coffee`·`COFFEE`가 같은
+  Hashtag를 반환하는데 `createFeed`가 dedup 없이 두 `FeedHashtag`를 cascade insert.
 - **2026-07-28**: **AP-2 재설계** — 구 "대용량 업로드"는 폐기. 실 업로드가 toy-auth의
   presigned URL + S3 직접 방식이라 content 로컬 업로드 경로가 **비대표**였고, "대용량이 앱을
   통과하며 계층에서 막힌다"는 전제가 실 구조와 불일치. 대신 순회 자연발생 500(DF-01 #2)을

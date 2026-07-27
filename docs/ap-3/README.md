@@ -38,7 +38,7 @@ POST /api/content/feeds   (Authorization: Bearer <TOKEN>)
 ```
 
 - 주입은 라이브 게이트웨이(yogurtte.com)에 요청 = 외부 행위 + 토큰 필요라 **서버 chaos 하네스로 실행**한다(AP-3 이전 회차들과 동일).
-- 서버 `~/chaos/scripts`의 AP-3 주입 로직은 아직 구(舊) 이모지 댓글을 보낸다 — **RUNBOOK §6 AP-3(교체본) 기준으로 업데이트 후** 실행해야 한다.
+- `chaos.sh`의 AP-3 로직은 **중복-해시태그 피드 생성으로 교체 완료**(`measure_AP_3`/`inject_AP_3`/`feed_create` — 업로드→카테고리→피드생성). 서버 `~/chaos`는 `toy-content/docs/chaos/`의 배포본이므로 **동기화(git pull/rsync)만** 하면 `./chaos.sh AP-3 run`이 새 로직으로 돈다.
 - 성립 조건: 500이면 성립·채점 진행. 200이면 dedup이 이미 추가됐거나 제약 소멸 → 불성립 종료 후 그 사실 기록(구 AP-3와 같은 취급).
 
 ## 회차 인덱스
@@ -47,8 +47,9 @@ POST /api/content/feeds   (Authorization: Bearer <TOKEN>)
 |---|---|---|---|---|---|
 | — | (대기) | `hashtags:["coffee","COFFEE"]` 피드 생성 1건 | (주입 대기) | 대기 | — |
 
-> **현재 상태 (2026-07-28)**: 앵커 동결 완료(toy-content `scenarios/AP-3/answer.md` v1),
-> RUNBOOK §6 교체 완료. **주입 대기** — 서버 하네스 AP-3 로직을 교체본으로 갱신하고 실행하면
+> **현재 상태 (2026-07-28)**: 앵커 동결(toy-content `scenarios/AP-3/answer.md` v1),
+> RUNBOOK §6 + `chaos.sh`(measure/inject/feed_create) 교체 완료 — 구문 검사 통과.
+> **주입 대기** — 서버 `~/chaos`에 동기화 후 `./chaos.sh AP-3 run` 실행하면
 > traceId 확보 → rca-agent 조사 → §8 채점 순으로 진행한다.
 
 ## 채점 앵커 요약 (동결본 — 전문은 toy-content `scenarios/AP-3/answer.md`)
