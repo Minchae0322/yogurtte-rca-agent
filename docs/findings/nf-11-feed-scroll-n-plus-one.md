@@ -106,12 +106,16 @@ LAZY 접근 3곳(`getCategory`·`getHashtags`·`getProduct`)이다. 설정 한 �
 즉 회차 2는 **탐지 판정과 성능 개선을 동시에** 볼 수 있다. 다만 성능 델타를 인용할 때는
 "같은 문항 두 회차 사이에 N+1 수정이 들어갔다"를 함께 밝힌다.
 
-## 남은 것 — NF-10은 IN-3와 함께
+## 남은 것 — NF-10은 부하 테스트 트랙에서
 
 [NF-10](nf-10-content-db-connection-held-during-external-call.md)(DB 커넥션 점유 중 외부 HTTP)은
 구조 리팩터링이고 **AU-4로는 검증되지 않는다** — refused(23.5ms)가 timeout(3s)보다 빨라
-커넥션 점유가 오히려 짧아지기 때문이다. IN-3(커넥션 풀 고갈) 전후로 묶어
-`hikaricp_connections_pending` 곡선으로 검증한다.
+커넥션 점유가 오히려 짧아지기 때문이다. **content·chat·auth 통합 부하 테스트(AU-1 · IN-3)**
+전후로 묶어 `hikaricp_connections_pending` 곡선으로 검증한다 (STATUS ①-d).
+
+**이 수정(NF-11)이 그 트랙의 조건을 바꾼다.** N+1 몫(~33ms)이 이미 빠졌으므로, 부하 테스트
+때 관측되는 커넥션 점유는 **NF-10 단독 기여분에 더 가깝다.** 두 결함이 섞여 있던 상태보다
+귀속이 깨끗해진 셈이다.
 
 ## 참조
 

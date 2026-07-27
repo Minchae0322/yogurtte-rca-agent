@@ -129,16 +129,19 @@ fetch를 택했다. 빌드·테스트 통과. 상세는 [NF-11](../findings/nf-1
 **회차 2 대조 시 주의**: span 총수와 T2 절대값은 회차 1과 직접 비교하지 않는다.
 성능 델타를 인용할 때 "두 회차 사이에 N+1 수정이 들어갔다"를 함께 밝힌다.
 
-### NF-10 (DB 커넥션 점유 중 외부 HTTP) — **IN-3와 묶는다**
+### NF-10 (DB 커넥션 점유 중 외부 HTTP) — **부하 테스트 트랙으로**
 
 [NF-10](../findings/nf-10-content-db-connection-held-during-external-call.md)은 구조
 리팩터링이고 **AU-4로는 검증되지 않는다** — refused(23.5ms)가 timeout(3s)보다 빨라
-커넥션 점유가 오히려 짧아지기 때문이다.
+커넥션 점유가 오히려 짧아지기 때문이다. auth가 *느려질* 때 + **부하가 있을 때** 두 조건이
+다 필요하다.
+
+→ **content·chat·auth 통합 부하 테스트(AU-1 · IN-3)**에서 검증한다 (STATUS ①-d).
 
 ```
-① IN-3 주입 (NF-10 그대로) → 풀 고갈 곡선 실측
+① 부하 + AU-1/IN-3 주입 (NF-10 그대로) → hikaricp_connections_pending 곡선 실측
 ② NF-10 수정
-③ IN-3 재주입 → hikaricp_connections_pending 곡선 전후 대조
+③ 같은 조건 재주입 → 곡선 전후 대조
 ```
 
 이러면 "커넥션 밖으로 뺐다"가 아니라 **"고쳤더니 풀 고갈 임계점이 얼마나 밀렸다"**를
