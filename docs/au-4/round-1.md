@@ -52,10 +52,60 @@ symptom은 23.5ms만에 거절당했다. **지연 기반 알람으로는 원리�
 
 ### Tempo — 두 트레이스의 결정적 차이
 
+**정상 대조** (`6a67020d...`, 07:00:29Z — 캐시 미스 + auth 정상)
+
+![baseline 워터폴 — redisGET 4건(캐시 미스) → http get 112.55ms → auth-service /external/users 100.65ms 성공 → redisSET 4건(캐시 채움)](img.png)
+
+- `connection` **227.4ms** 안에서 `redisGET` **4건**(508·287·386·276µs) = **캐시 미스 4건**
+- → `http get` **112.55ms** → 자식으로 **`auth-service http get /external/users` 100.65ms 성공**
+  (내부: filterchain 1.17ms · secured request 97.66ms · filterchain after 240µs)
+- → **`redisSET` 4건**(1.79ms·619µs·1.29ms·1.62ms) = 받아온 사용자 정보를 **캐시에 채움**
+
+**장애 창** (`6a67077c...`, 07:23:40Z — 캐시 미스 + auth 다운)
+
+![symptom 워터폴 — redisGET 4건은 같은데 http get이 23.55ms 에러(붉은 ⊘)로 끝나고, auth 서버 span도 redisSET도 없다](img_1.png)
+
+- `connection` **121.94ms** 안에서 `redisGET` **4건**(525·326·248·279µs) — **baseline과 동일**
+- → `http get` **23.55ms**에 **붉은 에러 배지(⊘)** — `STATUS_CODE_ERROR`
+- → **`auth-service` 서버 span 없음** · **`redisSET` 없음**
+
 | | baseline (74 spans) | symptom (66 spans) |
 |---|---|---|
+| `redisGET` (캐시 조회) | 4건 — **미스** | 4건 — **미스** (동일) |
 | auth 호출 client span | `http get` **112.55ms** 정상 | `http get` **23.55ms** `STATUS_CODE_ERROR` |
-| auth 서버 span | `http get /external/users` **100.65ms** | **없음** |
+| auth 서버 span | `/external/users` **100.65ms** | **없음** |
+| `redisSET` (캐시 채움) | **4건** | **없음** |
+| `connection` 점유 | 227.4ms | 121.94ms |
+
+**span 차이 8개가 정확히 설명된다**: 74 − 66 = 8 = auth 서버측 4개(`/external/users` +
+filterchain before/after + secured request) + `redisSET` 4개.
+
+#### `redisSET` 부재가 추가 증거다 (스크린샷으로 새로 확인)
+
+에이전트는 후보 3(Redis negative caching — fallback 값이 캐시에 남아 복구 후에도 익명이
+잔존)을 내면서 **"이 트레이스에 Redis 쓰기 스팬이 없다"**고 스스로 반증했다.
+스크린샷이 그 이유까지 보여준다 — **auth 응답이 있어야만 `redisSET`이 나간다.**
+auth가 죽으면 채울 값이 없어 캐시 쓰기 자체가 일어나지 않는다.
+
+→ **fallback 익명 값은 캐시에 저장되지 않는다.** auth가 복구되면 다음 요청에서 바로 실명이
+돌아온다(캐시 오염 없음). 에이전트의 반증이 맞았고, 후보 3은 실제로 성립하지 않는다.
+
+#### N+1이 실물로 보인다 (별건)
+
+![symptom 트레이스 하단 — contentquery/result-set 쌍이 20회 넘게 반복된다](img_2.png)
+
+`contentquery` → `contentresult-set` 쌍이 계속 이어진다. 에이전트가 조치 11에서 지적한
+"`categories where category_id=?` 11회 + `tb_feed_hashtags where feed_id=?` 11회"의 실물이다.
+**이번 장애의 원인은 아니지만**, 이 반복이 전부 `connection` span 안에서 일어난다는 점이
+[NF-10](../findings/nf-10-content-db-connection-held-during-external-call.md)과 맞물린다 —
+커넥션 점유 시간이 피드 건수에 비례해 늘어난다.
+
+→ [NF-11](../findings/nf-11-feed-scroll-n-plus-one.md)로 등재하고 **2026-07-27 수정했다**
+(`default_batch_fetch_size: 100`). **장애 주입 테스트 중에 발견해 고친 결함**이며,
+회차 2에서 `contentquery` span이 23회 → 3회 이내로 주는지 검증한다.
+회차 2 대조 시 span 총수·응답 절대값은 이 수정 때문에 바뀌므로 직접 비교하지 않는다 —
+다만 AU-4의 핵심 판정(차이 8개, "장애 중에 오히려 빨라진다")은 양쪽에서 똑같이 줄어들어
+**그대로 유효하다**.
 
 symptom span의 error 원문:
 

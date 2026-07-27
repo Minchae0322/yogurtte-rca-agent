@@ -112,14 +112,37 @@ if (fallbackCount > 0) {
 
 ## 회차 2에 넣지 않는 것
 
-### NF-10 (DB 커넥션 점유 중 외부 HTTP) — **AU-1 준비물로 미룬다**
+### NF-11 (`/feeds/scroll` N+1) — **수정 완료 (2026-07-27), 회차 2에서 검증**
 
-[NF-10](../findings/nf-10-content-db-connection-held-during-external-call.md)은 구조 리팩터링이라
-diff가 크고, **AU-4로는 검증되지 않는다** — connection refused(23.5ms)가 timeout(3s)보다
-빨라서 커넥션 점유가 오히려 짧아지기 때문이다.
+> 처음엔 "회차 2에 넣으면 델타가 오염된다"고 판단해 미뤘으나, **재검토 결과 그 판단이
+> 과했다.** N+1 쿼리는 baseline·symptom 양쪽에서 똑같이 줄어들므로 AU-4의 핵심 판정
+> (차이 8개 = auth 서버 4 + `redisSET` 4, "장애 중에 오히려 빨라진다")은 **그대로 유지된다.**
+> 바뀌는 건 span 총수와 응답 절대값뿐이다.
+>
+> 그리고 **"장애 테스트 중 N+1을 발견해 고치고 재검증했다"는 그 자체가 개선 서사**다.
+> 완벽한 델타 귀속보다 한 사이클 완주가 먼저다.
 
-이 결함이 드러나는 건 auth가 *죽을* 때가 아니라 *느려질* 때다 → **AU-1(auth CPU 기아)**의
-사전 가설로 두고, AU-1 실행 후에 수정 여부를 판단한다.
+적용: `application.yml`에 `spring.jpa.properties.hibernate.default_batch_fetch_size: 100`.
+컬렉션 fetch join은 커서 페이징과 함께 쓰면 메모리 페이징(`HHH000104`)에 빠지므로 batch
+fetch를 택했다. 빌드·테스트 통과. 상세는 [NF-11](../findings/nf-11-feed-scroll-n-plus-one.md).
+
+**회차 2 대조 시 주의**: span 총수와 T2 절대값은 회차 1과 직접 비교하지 않는다.
+성능 델타를 인용할 때 "두 회차 사이에 N+1 수정이 들어갔다"를 함께 밝힌다.
+
+### NF-10 (DB 커넥션 점유 중 외부 HTTP) — **IN-3와 묶는다**
+
+[NF-10](../findings/nf-10-content-db-connection-held-during-external-call.md)은 구조
+리팩터링이고 **AU-4로는 검증되지 않는다** — refused(23.5ms)가 timeout(3s)보다 빨라
+커넥션 점유가 오히려 짧아지기 때문이다.
+
+```
+① IN-3 주입 (NF-10 그대로) → 풀 고갈 곡선 실측
+② NF-10 수정
+③ IN-3 재주입 → hikaricp_connections_pending 곡선 전후 대조
+```
+
+이러면 "커넥션 밖으로 뺐다"가 아니라 **"고쳤더니 풀 고갈 임계점이 얼마나 밀렸다"**를
+수치로 말할 수 있다.
 
 ### AU-4 앵커 v3 정정 — 회차 2 **주입 전**에 별도로
 

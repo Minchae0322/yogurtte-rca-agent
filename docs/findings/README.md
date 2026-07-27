@@ -40,6 +40,7 @@
 | [NF-08](nf-08-dlq-trace-discontinuity.md) | DLQ 경계에서 trace 단절 — RCA가 유실/복구 도착을 구분 불가 (오판 실증) | 중간 | 로그 확정, 전파 지점 가설 |
 | [NF-09](nf-09-user-fallback-no-traceid.md) | user fallback 실패 로그가 `traceId=NONE` — 로그는 있는데 조사에 연결 불가 + 집계 지표 부재 | 높음 | 확정 (로그 실측 + 코드 위치 + 상태코드) |
 | [NF-10](nf-10-content-db-connection-held-during-external-call.md) | content 읽기 경로가 DB 커넥션을 쥔 채 외부 HTTP 호출 (NF-01 계열) | 중간 | 확정 (트레이스 부모-자식 + 타이밍) |
+| [NF-11](nf-11-feed-scroll-n-plus-one.md) | `/feeds/scroll` N+1 — 피드 11건에 쿼리 23회. NF-10과 같은 커넥션 위에서 곱해진다 | 중간 | 확정 (워터폴 + **에이전트 2회 독립 지적**) |
 | [AE-01](ae-01-rca-v0-ch1-blind-eval.md) | rca-agent v0 × CH-1 회차 1 — 위치 특정 성공, 원인 확정 실패(도구 결함 3건) | 도구 | **§8 채점 불가**(앵커 부적합) |
 | [AE-02](ae-02-rca-v0-ch1-round2-eval.md) | rca-agent v0 × CH-1 회차 2 — 원인 확정 성공(계측 보강 효과), 영향 판정 오판(NF-08) | 도구 | **§8 채점 80/100** (N=1, 인용 불가) |
 | [AE-03](ae-03-rca-v0-in2-blind-eval.md) | rca-agent v0 × IN-2 — 유실 판정 정답, 하위 원인 감별 실패(브로커 측 데이터 전무) | 도구 | **§8 채점 80/100** (N=1, 인용 불가) |

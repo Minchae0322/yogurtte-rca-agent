@@ -25,7 +25,13 @@ http get /feeds/scroll                     .304218 ~ .430825   126.6ms  200 SUCC
 ```
 
 **외부 HTTP span의 부모가 JDBC `connection` span이다.** 커넥션 121.9ms 중 23.5ms가 외부 호출
-대기였다.
+대기였다. 워터폴 스크린샷: [au-4/round-1.md](../au-4/round-1.md) — `connection` 아래에
+`redisGET`·`http get`·`contentquery`가 전부 중첩돼 있는 것이 한눈에 보인다.
+
+**커넥션 점유는 피드 건수에 비례해 늘어난다.** 같은 트레이스 하단에 `contentquery` →
+`contentresult-set` 쌍이 20회 넘게 반복되는데(피드 11건 기준 `categories` 11회 +
+`tb_feed_hashtags` 11회 = N+1), 이것도 전부 같은 `connection` span 안이다. 페이지 크기가
+커지면 외부 호출 대기와 N+1이 **같은 커넥션 위에서 함께** 길어진다.
 
 **정상 시(baseline `6a67020d9d618589141817d961c25f9d`, 07:00:29Z)는 더 길다** —
 auth 호출 client span이 **112.55ms**, auth 서버 span `http get /external/users`가 100.65ms.
