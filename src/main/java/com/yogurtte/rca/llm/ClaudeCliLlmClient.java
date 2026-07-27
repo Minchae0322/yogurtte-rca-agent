@@ -1,9 +1,12 @@
 package com.yogurtte.rca.llm;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -28,12 +31,39 @@ public class ClaudeCliLlmClient implements LlmClient {
 
     private final String command;
     private final long timeoutSeconds;
+    private final File sandbox;
 
     public ClaudeCliLlmClient(LlmProperties properties) {
         var cli = properties.claudeCli();
         var command = cli == null ? null : cli.command();
         this.command = (command == null || command.isBlank()) ? "claude" : command;
         this.timeoutSeconds = cli == null ? 120 : cli.timeoutSeconds();
+        this.sandbox = createSandbox();
+    }
+
+    /**
+     * CLI를 레포 밖 빈 디렉터리에서 띄우기 위한 작업 공간.
+     *
+     * <p>ProcessBuilder는 JVM의 cwd(= 레포 루트)를 물려주는데, claude CLI는 cwd의 {@code CLAUDE.md}와
+     * {@code .claude/}를 컨텍스트로 자동 로드하고 그 아래 파일도 열 수 있다. 이 레포에는 문항별
+     * 정답 문서({@code docs/<문항>/round-N.md})와 채점 대장이 있으므로, 격리하지 않으면 피험자가
+     * 답안지를 든 채 시험을 보는 셈이 된다. 2026-07-27 AU-2 회차 1에서 실측 확인했다.
+     * 자세한 경위는 {@code docs/v0.1-plan.md} 0절.
+     *
+     * <p>실패하면 예외를 던진다. 조용히 레포 cwd로 떨어지면 오염을 눈치채지 못한 채 측정이
+     * 계속되는데, 그게 격리 실패보다 나쁘다.
+     */
+    private static File createSandbox() {
+        try {
+            var dir = Files.createTempDirectory("rca-cli-sandbox-");
+            dir.toFile().deleteOnExit();
+            log.info("claude CLI sandbox (레포 컨텍스트 격리): {}", dir);
+            return dir.toFile();
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "claude CLI 격리용 임시 디렉터리를 만들지 못했다 — 레포 cwd로 실행하면 "
+                            + "CLAUDE.md·docs가 컨텍스트로 새어 블라인드 조사가 무효가 된다", e);
+        }
     }
 
     @Override
@@ -43,7 +73,9 @@ public class ClaudeCliLlmClient implements LlmClient {
 
         Process process;
         try {
-            process = new ProcessBuilder(command, "-p", "--output-format", "json").start();
+            process = new ProcessBuilder(command, "-p", "--output-format", "json")
+                    .directory(sandbox)
+                    .start();
         } catch (Exception e) {
             throw new IllegalStateException(
                     "failed to start claude CLI '" + command + "': " + e.getMessage(), e);

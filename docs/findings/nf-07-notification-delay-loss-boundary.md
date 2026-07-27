@@ -13,7 +13,7 @@
 - 트레이스 `6a65bd43c41bfa6c5c18a89e1f855373`: `process-notification` 시작 후 첫 `user_notifications.insert`까지 **23.44초 무자식 공백** — 드라이버가 서버 셀렉션을 기다리는 동안 span 없는 블로킹. 공백의 끝(07:55:07)이 Mongo 복구(07:55:04) 직후.
 - 예외 없음 → 재시도·DLQ 미발동, `알림 처리 완료` 07:55:08. **다운 < 드라이버 대기면 장애가 지연으로만 나타난다.**
 
-## 실측 2 — 경계 바깥: 다운 4.5분 → DLQ 경유 3분 36초 지연 도착, 유실 0 (회차 3, 08:20~08:25Z)
+## 실측 2 — 경계 바깥: 다운 4.5분 → DLQ 경유 3분 36초 지연 도착, 유실 0 (회차 2, 08:20~08:25Z)
 
 트레이스 `6a65c38bea0e08d50df7b169594a2844` + Loki 로그로 재구성한 전체 체인:
 
@@ -44,4 +44,4 @@
 
 - [NF-01](nf-01-consumer-holds-connection-during-dispatch.md) — 소비 4회 실패 동안 매번 JDBC 커넥션을 잡고 30초 블로킹 (acquired→rollback ×4). 컨슈머 동시성이 높아지면 이 대기가 커넥션 풀을 갉아먹는다.
 - [NF-02](nf-02-fcm-call-no-timeout-no-span.md) — 동일한 "예외 삼킴" 패턴의 다른 인스턴스 (이쪽은 아직 미수정).
-- [AE-01](ae-01-rca-v0-ch1-blind-eval.md) / [AE-02](ae-02-rca-v0-ch1-round3-eval.md) — 두 회차를 입력으로 한 rca-agent 블라인드 조사 기록.
+- [AE-01](ae-01-rca-v0-ch1-blind-eval.md) / [AE-02](ae-02-rca-v0-ch1-round2-eval.md) — 두 회차를 입력으로 한 rca-agent 블라인드 조사 기록.

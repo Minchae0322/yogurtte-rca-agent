@@ -1,4 +1,4 @@
-# CH-1 회차 3 — 다운 4.5분: 경계 바깥, DLQ 경유 복구
+# CH-1 회차 2 — 다운 4.5분: 경계 바깥, DLQ 경유 복구
 
 ## 한눈 요약
 
@@ -8,13 +8,14 @@
 | **실제 영향** | 알림 3분 36초 지연 도착, 유실 0 (수정 전 코드였다면 유실) |
 | **에이전트 파악 원인** | "MongoDB 다운(mongod 미리스닝, Connection refused)" **확신도 높음 — 정답** |
 | **판정** | 원인 정답 / 영향 오판 1건 — "유실"로 판정했으나 실제는 DLQ 복구 도착 (DLQ trace 단절 + Loki 셀렉터 결함 탓) |
+| **§8 채점** | **80 / 100** (근본 20/40 · 근거 30/30 · 오귀인 20/20 · 조치 10/10) — 감점 전액이 유실 오판. 근거·판정은 [채점 대장](../scoring/README.md#ch-1-회차-2--80--100). **N=1이라 §8.1상 인용 불가** |
 | **토큰·비용·시간** | in 47,503 / out 6,756 tok · **$1.0200** · 101.8s |
-| **에이전트 보고서 전문** | [round-3-rca-report.md](round-3-rca-report.md) |
+| **에이전트 보고서 전문** | [round-2-rca-report.md](round-2-rca-report.md) |
 
 ## 장애 상황
 
 - 주입: `docker stop mongodb` — **08:20:33 ~ 08:25:04 UTC (4분 31초)** = KST 17:20:33 ~ 17:25:04
-- 트리거: 다운 상태에서 댓글 1건(T1, 08:21:31Z) — 이후 3.5분간 다운 유지 (회차 2가 무효가 된 지점을 교정: 대기는 트리거 **후**)
+- 트리거: 다운 상태에서 댓글 1건(T1, 08:21:31Z) — 이후 3.5분간 다운 유지 (무효 회차 B가 무효가 된 지점을 교정: 대기는 트리거 **후**)
 - 결말: 소비 4회 실패(각 30.0초) → **DLQ 발행** → 재처리 1차 실패(다운 중) → 1분 백오프 → **복구 3초 후 재처리 성공**. 총 **3분 36초 지연, 유실 0**. 예외 삼킴 수정(toy-chat `5eecb0a`)이 실전 장애에서 검증된 회차.
 
 ## 스크린샷용 traceId
@@ -30,11 +31,11 @@
 
 **Tempo — 장애 트레이스의 모양** (트레이스 `6a65c38b...`, KST 17:21:31 시작)
 
-![content POST 44.91ms와 publish 14.47ms는 정상, 첫 receive가 30.07초 에러로 시작된다](round3-trace-fail-first.png)
+![content POST 44.91ms와 publish 14.47ms는 정상, 첫 receive가 30.07초 에러로 시작된다](round2-trace-fail-first.png)
 
 - content POST **44.91ms** → `publish user.notifications` **14.47ms** 성공 — 업스트림 무결. 첫 `receive`가 에러 배지(⊘)를 달고 **30.07초**, 그 안의 `process-notification` 30s에는 자식 span이 **하나도 없다** (전부 서버 셀렉션 대기).
 
-![30초 에러 receive 4개가 계단식으로 이어지고 마지막에 publish user.notifications.dlq 687ms](round3-trace-retries-dlq.png)
+![30초 에러 receive 4개가 계단식으로 이어지고 마지막에 publish user.notifications.dlq 687ms](round2-trace-retries-dlq.png)
 
 - 소비 4회가 각각 **정확히 30.0초**(`serverSelectionTimeoutMS=30000` 기본값)로 계단을 그리며 실패: 17:22:01 / 17:22:32 / 17:23:03 / 17:23:34 KST. 매 시도마다 JDBC `connection` span도 30초씩 — 실패 4회 동안 MySQL 커넥션을 총 2분간 점유(NF-01)했고, 이벤트는 `acquired → rollback`.
 - span error 원문: `Timed out while waiting for a server ... MongoSocketOpenException ... Connection refused`
@@ -42,8 +43,8 @@
 
 **정상 대조** (트레이스 `6a65c351...`, 주입 2초 전 — 같은 경로의 평상시 모양)
 
-![같은 경로의 정상 처리 — receive 697.82ms에 전부 끝난다](round3-trace-baseline.png)
-![정상 처리 내부 — mongo insert 1.53ms, push-dispatcher 606ms](round3-trace-baseline-children.png)
+![같은 경로의 정상 처리 — receive 697.82ms에 전부 끝난다](round2-trace-baseline.png)
+![정상 처리 내부 — mongo insert 1.53ms, push-dispatcher 606ms](round2-trace-baseline-children.png)
 
 - 같은 경로가 receive **697.82ms**에 완료(장애 시도 1회의 1/43). 내부는 mongo `insert` 1.53ms, `push-dispatcher#dispatch` 606ms — 장애 트레이스에서 사라졌던 자식 span들이 전부 여기 있다.
 
@@ -76,4 +77,4 @@
 | **판정** | 원인 1줄은 정답, 영향 판정은 관측 구조의 한계로 오판. 회차 1과의 차이는 계측(`cdca2a5`·`5eecb0a`)이 만든 것 — 같은 모델이 trace가 자백하자 확정까지 갔다 |
 
 - RCA 리포트: [`reports/6a65c38b...-20260726T082912.md`](../../reports/6a65c38bea0e08d50df7b169594a2844-20260726T082912.md) — in 47,503 / out 6,756 tok · $1.0200 · 101.8s
-- 평가 상세: [AE-02](../findings/ae-02-rca-v0-ch1-round3-eval.md) · 시스템 발견: [NF-07](../findings/nf-07-notification-delay-loss-boundary.md) · [NF-08](../findings/nf-08-dlq-trace-discontinuity.md)
+- 평가 상세: [AE-02](../findings/ae-02-rca-v0-ch1-round2-eval.md) · 시스템 발견: [NF-07](../findings/nf-07-notification-delay-loss-boundary.md) · [NF-08](../findings/nf-08-dlq-trace-discontinuity.md)
