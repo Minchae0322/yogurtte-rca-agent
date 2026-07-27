@@ -41,12 +41,13 @@
 | [NF-09](nf-09-user-fallback-no-traceid.md) | user fallback 실패 로그가 `traceId=NONE` — 로그는 있는데 조사에 연결 불가 + 집계 지표 부재 | 높음 | 확정 (로그 실측 + 코드 위치 + 상태코드) |
 | [NF-10](nf-10-content-db-connection-held-during-external-call.md) | content 읽기 경로가 DB 커넥션을 쥔 채 외부 HTTP 호출 (NF-01 계열) | 중간 | 확정 (트레이스 부모-자식 + 타이밍) |
 | [NF-11](nf-11-feed-scroll-n-plus-one.md) | `/feeds/scroll` N+1 — 피드 11건에 쿼리 23회. NF-10과 같은 커넥션 위에서 곱해진다 | 중간 | 확정 (워터폴 + **에이전트 2회 독립 지적**) |
+| [NF-12](nf-12-fileservice-windows-path-separator-hardcoded.md) | 파일 업로드 경로에 Windows 구분자 `"\\"` 하드코딩 — Linux에서 전 업로드 500 (비대표 레거시 경로, 구 AP-2 게이트가 잡음) | 중간 | 확정 (코드 45행 + 재현 500) |
 | [AE-01](ae-01-rca-v0-ch1-blind-eval.md) | rca-agent v0 × CH-1 회차 1 — 위치 특정 성공, 원인 확정 실패(도구 결함 3건) | 도구 | **§8 채점 불가**(앵커 부적합) |
 | [AE-02](ae-02-rca-v0-ch1-round2-eval.md) | rca-agent v0 × CH-1 회차 2 — 원인 확정 성공(계측 보강 효과), 영향 판정 오판(NF-08) | 도구 | **§8 채점 80/100** (N=1, 인용 불가) |
 | [AE-03](ae-03-rca-v0-in2-blind-eval.md) | rca-agent v0 × IN-2 — 유실 판정 정답, 하위 원인 감별 실패(브로커 측 데이터 전무) | 도구 | **§8 채점 80/100** (N=1, 인용 불가) |
 | [AE-04](ae-04-rca-v0-ch2-blind-eval.md) | rca-agent v0 × CH-2 — 메트릭 고고학으로 본질 정답 (※ "-120s는 어셈블러 버그" 결론은 AE-05에서 정정됨) | 도구 | **§8 채점 불가**(앵커 부적합 — 근본원인·오귀인은 만점) |
 | [AE-05](ae-05-rca-v0-au2-blind-eval.md) | rca-agent v0 × AU-2 — **트레이스 무신호에서 메트릭 단절만으로 정답**, 복구 판정은 수집 창 밖이라 오판 | 도구 | **§8 채점 불가**(앵커 부적합 — 오귀인·조치는 만점) |
-| [AE-06](ae-06-rca-v0-au4-blind-eval.md) | rca-agent v0 × AU-4 — **앵커가 틀리고 에이전트가 맞았다**(3s timeout이 아니라 23.5ms RST). 원인을 직접/상위로 계층 분리 | 도구 | **§8 채점 불가**(앵커 사실 오류 — 채점된 3항목 **70/70 만점**) |
+| [AE-06](ae-06-rca-v0-au4-blind-eval.md) | rca-agent v0 × AU-4 파일럿 — **앵커가 틀리고 에이전트가 맞았다**(3s timeout이 아니라 23.5ms RST) → v3 앵커 도출 | 도구 | 파일럿 채점 불가(70/70) → **재실행 회차 1은 v3로 75/100** |
 
 ## 장애 주입 회차별 기록
 

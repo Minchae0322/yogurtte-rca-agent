@@ -30,6 +30,20 @@
 해당 ERROR 트레이스로 rca 모드를 돌려 진행한다 — 이 문서는 관측의 기록이고, 원인
 분석은 에이전트 평가를 겸한다.
 
+## 근인 확정 (2026-07-28) — 코드 추적
+
+#1·#2의 근본 원인을 코드에서 확정했다 (#3 file 왕복은 미완).
+
+- **#1 `GET /api/content/categories/popular`**: `CategoryController`의 `PopularSearch` 파라미터에
+  **`@Valid` 누락**(`CategoryController.java:42-49`). `type`/`startDate`/`endDate`는 `@NotNull`이지만
+  검증이 실행되지 않아 미지정 시 모두 null → `CategoryService.java:51`의 enum switch에서 NPE
+  (default 없음), 혹은 날짜만 빠지면 `CategoryCustomRepositoryImpl.java:223`의
+  `getStartDate().atStartOfDay()`에서 NPE → 500. 성격: **"필수 입력 누락 + @Valid 부재로 400이
+  500으로 새는" 검증 누락**. 조치: 컨트롤러에 `@Valid`.
+- **#2 `GET /api/auth/user/1/following`·`/followers`**: `FollowCondition`의 `size`(선택 파라미터)에
+  실제 기본값이 없어 미지정 시 null → `limit()`의 `size+1` 언박싱 NPE(쿼리 빌드 단계, **DB 미진입**).
+  → **[AP-2 문항으로 승격](../../../toy-content/docs/chaos/scenarios/AP-2/answer.md)**. 정답지·앵커는 거기.
+
 ## 후속
 
 - [ ] 각 결함의 ERROR 트레이스 traceId 확보 (Grafana Explore 또는 Tempo search)
