@@ -51,7 +51,7 @@ http post /battles/{battleId}/items/{itemId}/comments   85ms · 200 SUCCESS
 ③ **chat span 전무** = CH-1(소비측 30s 에러 span 4개 + DLQ)과의 결정적 차이 — "소비자가 애초에
 등장하지 않는 장애".
 
-![IN-2 장애 트레이스 — content-service 댓글 POST(85ms) 아래 notification-publish·publish user.notifications가 1분(=60초) 빨간 에러 스팬으로 뻗고 chat-service 스팬은 전무 (traceId 6a677e99…)](symptom-loss-trace.png)
+![IN-2 장애 트레이스 6a677e99 - 댓글 POST 85ms 아래 notification-publish와 publish user.notifications가 60초 빨간 에러 스팬으로 뻗고 chat-service 스팬은 전무](symptom-loss-trace.png)
 
 **정상 대조** (주입 전 게이트 댓글 `6a67764b`, 2-서비스 완전체) — 같은 요청이 정상일 때는
 발행이 수백 ms에 끝나고 **chat-service가 소비**한다. 장애 트레이스에서 "사라진 것"이 무엇인지
@@ -59,13 +59,13 @@ http post /battles/{battleId}/items/{itemId}/comments   85ms · 200 SUCCESS
 
 앞부분(진입·조회):
 
-![IN-2 정상 대조 트레이스 앞부분 — 댓글 POST 943ms, auth-service 사용자 조회(37ms)·redis GET·MySQL 조회가 모두 정상 (traceId 6a67764b…)](baseline-trace-1.png)
+![IN-2 정상 대조 트레이스 6a67764b 앞부분 - 댓글 POST 943ms, auth-service 사용자 조회 37ms, redis GET, MySQL 조회가 모두 정상](baseline-trace-1.png)
 
 뒷부분(발행→소비): `publish user.notifications`(369ms) 뒤에 **chat-service `receive` 1.19s →
 process-notification → mongo insert → push-dispatcher**까지 소비 체인이 붙어 있다 = 알림 도착.
 장애 트레이스에선 이 아래 절반이 통째로 없다.
 
-![IN-2 정상 대조 트레이스 뒷부분 — notification-publish→publish user.notifications 후 chat-service receive 1.19s·process-notification·mongo insert·push-dispatcher 소비 체인이 정상 존재 (traceId 6a67764b…)](baseline-trace-2.png)
+![IN-2 정상 대조 트레이스 6a67764b 뒷부분 - publish user.notifications 후 chat-service receive 1.19s, process-notification, mongo insert, push-dispatcher 소비 체인이 정상 존재](baseline-trace-2.png)
 
 ## 원인 대조
 
