@@ -45,12 +45,15 @@ POST /api/content/feeds   (Authorization: Bearer <TOKEN>)
 
 | 회차 | 일시(UTC) | 주입 | 결말 | RCA 조사 | 문서 |
 |---|---|---|---|---|---|
-| — | (대기) | `hashtags:["coffee","COFFEE"]` 피드 생성 1건 | (주입 대기) | 대기 | — |
+| 1 | 07-28 01:25:04 | `hashtags:["coffee","COFFEE"]` 피드 생성 1건 | HTTP 500 (`Duplicate entry '148-173'`), 앞뒤 정상 피드 생성 200 — 부분 장애 | O | [round-1.md](round-1.md) |
 
-> **현재 상태 (2026-07-28)**: 앵커 동결(toy-content `scenarios/AP-3/answer.md` v1),
-> RUNBOOK §6 + `chaos.sh`(measure/inject/feed_create) 교체 완료 — 구문 검사 통과.
-> **주입 대기** — 서버 `~/chaos`에 동기화 후 `./chaos.sh AP-3 run` 실행하면
-> traceId 확보 → rca-agent 조사 → §8 채점 순으로 진행한다.
+> **회차 1 결과 (2026-07-28)**: 문항 **성립**(500 재현). §8 채점 **100/100** — 최초의 만점이자
+> **앵커 부적합 0의 첫 회차**다. 상세는 [round-1.md](round-1.md) · [채점 대장](../scoring/README.md#ap-3-회차-1--100--100).
+>
+> ⚠️ **SoT 불일치**: 채점에 쓴 앵커는 아래 요약표(`536c007`, 채록 9시간 31분 전 커밋)다.
+> `toy-content/docs/chaos/scenarios/AP-3/answer.md`·RUNBOOK §6·`chaos.sh`의 중복-해시태그
+> 교체본은 **로컬 toy-content에 없고 서버 `~/chaos`에만 있다**. 선박제 요건은 충족하나
+> toy-content에 커밋해 기록을 일치시켜야 한다.
 
 ## 채점 앵커 요약 (동결본 — 전문은 toy-content `scenarios/AP-3/answer.md`)
 

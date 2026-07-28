@@ -13,7 +13,7 @@ final class NotifierText {
         var header = """
                 *RCA* `%s` (%s)
                 q: %s
-                provider: %s | tokens in/out: %d/%d%s | total: %dms
+                provider: %s (%s, turns %d) | tokens in/out: %d/%d%s | total: %dms
                 scope: %s
                 failures: %s
 
@@ -22,6 +22,8 @@ final class NotifierText {
                 report.mode(),
                 report.question(),
                 report.llmProvider(),
+                report.llmModel(),
+                report.llmTurns(),
                 report.inputTokens(),
                 report.outputTokens(),
                 cost,
@@ -42,10 +44,12 @@ final class NotifierText {
         if (c == null) {
             return "n/a";
         }
-        return "trace %d spans/%,dB · logs %,d+%,dB · metrics %d/%d · ctx %,dc(~%,d tok)".formatted(
+        return "trace %d spans/%,dB · logs %,d+%,dB · metrics %d/%d %,dB · ctx %,dc / %s".formatted(
                 c.traceSpans(), c.traceBytes(),
                 c.errorWarnLogBytes(), c.traceIdLogBytes(),
                 c.metricsCollected().size(), c.metricsCollected().size() + c.metricsMissing().size(),
-                c.contextChars(), c.estimatedContextTokens());
+                c.metricsBytes(),
+                c.contextChars(),
+                c.contextTokens() < 0 ? "tok n/a" : "%,d tok".formatted(c.contextTokens()));
     }
 }

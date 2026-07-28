@@ -16,12 +16,14 @@ import org.springframework.stereotype.Component;
 public class AnthropicLlmClient implements LlmClient {
 
     private final AnthropicChatModel chatModel;
+    private final String model;
 
     public AnthropicLlmClient(LlmProperties properties) {
         var anthropic = properties.anthropic();
         if (anthropic == null || anthropic.apiKey() == null || anthropic.apiKey().isBlank()) {
             throw new IllegalStateException("rca.llm.provider=anthropic requires ANTHROPIC_API_KEY");
         }
+        this.model = anthropic.model();
         this.chatModel = AnthropicChatModel.builder()
                 .anthropicApi(AnthropicApi.builder().apiKey(anthropic.apiKey()).build())
                 .defaultOptions(AnthropicChatOptions.builder()
@@ -38,10 +40,13 @@ public class AnthropicLlmClient implements LlmClient {
         var elapsed = System.currentTimeMillis() - started;
 
         var usage = response.getMetadata().getUsage();
-        return new LlmResult(
+        // Spring AI의 promptTokens는 캐시 분해를 노출하지 않는다 - claude-cli 경로의 inputTokens와
+        // 의미가 다르므로 provider를 섞어 토큰/비용을 비교하면 안 된다.
+        return LlmResult.withoutCacheBreakdown(
                 response.getResult().getOutput().getText(),
                 usage == null || usage.getPromptTokens() == null ? -1 : usage.getPromptTokens(),
                 usage == null || usage.getCompletionTokens() == null ? -1 : usage.getCompletionTokens(),
+                model,
                 elapsed,
                 -1.0); // API 응답은 비용을 직접 주지 않는다
     }

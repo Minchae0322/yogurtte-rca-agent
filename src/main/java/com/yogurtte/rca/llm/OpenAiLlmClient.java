@@ -16,12 +16,14 @@ import org.springframework.stereotype.Component;
 public class OpenAiLlmClient implements LlmClient {
 
     private final OpenAiChatModel chatModel;
+    private final String model;
 
     public OpenAiLlmClient(LlmProperties properties) {
         var openai = properties.openai();
         if (openai == null || openai.apiKey() == null || openai.apiKey().isBlank()) {
             throw new IllegalStateException("rca.llm.provider=openai requires OPENAI_API_KEY");
         }
+        this.model = openai.model();
         this.chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder().apiKey(openai.apiKey()).build())
                 .defaultOptions(OpenAiChatOptions.builder().model(openai.model()).build())
@@ -35,10 +37,11 @@ public class OpenAiLlmClient implements LlmClient {
         var elapsed = System.currentTimeMillis() - started;
 
         var usage = response.getMetadata().getUsage();
-        return new LlmResult(
+        return LlmResult.withoutCacheBreakdown(
                 response.getResult().getOutput().getText(),
                 usage == null || usage.getPromptTokens() == null ? -1 : usage.getPromptTokens(),
                 usage == null || usage.getCompletionTokens() == null ? -1 : usage.getCompletionTokens(),
+                model,
                 elapsed,
                 -1.0); // API 응답은 비용을 직접 주지 않는다
     }

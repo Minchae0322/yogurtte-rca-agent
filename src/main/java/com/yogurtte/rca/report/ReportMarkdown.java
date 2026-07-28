@@ -19,9 +19,21 @@ final class ReportMarkdown {
         sb.append("| 질문 | ").append(nz(report.question())).append(" |\n");
         sb.append("| 시각 | ").append(report.startedAt()).append(" |\n");
         sb.append("| provider | ").append(report.llmProvider()).append(" |\n");
+        sb.append("| model | `").append(nz(report.llmModel())).append("`");
+        if (report.llmTurns() >= 0) {
+            sb.append(" · turns ").append(report.llmTurns());
+            if (report.llmTurns() > 1) {
+                sb.append(" ⚠ 단일 패스 아님");
+            }
+        }
+        sb.append(" |\n");
         sb.append("| prompt | `").append(report.promptSource()).append("` |\n");
-        sb.append("| tokens | in ").append(report.inputTokens())
-                .append(" / out ").append(report.outputTokens());
+        sb.append("| tokens | in ").append(report.inputTokens());
+        if (report.cacheReadTokens() >= 0 || report.cacheCreationTokens() >= 0) {
+            sb.append(" (cacheRead %,d · cacheCreate %,d)"
+                    .formatted(report.cacheReadTokens(), report.cacheCreationTokens()));
+        }
+        sb.append(" / out ").append(report.outputTokens());
         if (report.costUsd() >= 0) {
             sb.append(" · cost $%.4f".formatted(report.costUsd()));
         }
@@ -43,13 +55,15 @@ final class ReportMarkdown {
                     .formatted(c.traceBytes(), c.traceSpans(), c.traceTrimmed() ? " (상위 span만)" : ""));
             sb.append("- **logs**: errwarn=%,dB · traceId=%,dB\n"
                     .formatted(c.errorWarnLogBytes(), c.traceIdLogBytes()));
-            sb.append("- **metrics**: ").append(c.metricsCollected().size()).append(" 수집");
+            sb.append("- **metrics**: %d 수집 / %,dB".formatted(c.metricsCollected().size(), c.metricsBytes()));
             if (!c.metricsMissing().isEmpty()) {
                 sb.append(", 누락 ").append(c.metricsMissing());
             }
             sb.append("\n");
-            sb.append("- **context**: %,d chars (~%,d tok 추정)\n\n"
-                    .formatted(c.contextChars(), c.estimatedContextTokens()));
+            sb.append("- **context**: %,d chars (+ 시스템 프롬프트 %,d chars)\n"
+                    .formatted(c.contextChars(), c.promptChars()));
+            sb.append("- **contextTokens**: %s  ← 개선 지표 (count_tokens 실측, CLI 오버헤드 제외)\n\n"
+                    .formatted(c.contextTokens() < 0 ? "측정 안 됨" : "%,d tok".formatted(c.contextTokens())));
         }
 
         if (!report.collectionFailures().isEmpty()) {

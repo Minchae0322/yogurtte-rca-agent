@@ -8,6 +8,7 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,16 +30,24 @@ public class ClaudeCliLlmClient implements LlmClient {
     private static final Logger log = LoggerFactory.getLogger(ClaudeCliLlmClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** {@code rca.llm.claude-cli.model}이 비었을 때 쓰는 값. 절대 CLI 기본값에 맡기지 않는다. */
+    private static final String DEFAULT_MODEL = "claude-opus-5";
+
     private final String command;
+    private final String model;
     private final long timeoutSeconds;
     private final File sandbox;
+    private final AtomicBoolean modelNotReportedWarned = new AtomicBoolean(false);
 
     public ClaudeCliLlmClient(LlmProperties properties) {
         var cli = properties.claudeCli();
         var command = cli == null ? null : cli.command();
+        var configuredModel = cli == null ? null : cli.model();
         this.command = (command == null || command.isBlank()) ? "claude" : command;
+        this.model = (configuredModel == null || configuredModel.isBlank()) ? DEFAULT_MODEL : configuredModel;
         this.timeoutSeconds = cli == null ? 120 : cli.timeoutSeconds();
         this.sandbox = createSandbox();
+        log.info("claude CLI model pinned: {}", this.model);
     }
 
     /**
@@ -73,7 +82,9 @@ public class ClaudeCliLlmClient implements LlmClient {
 
         Process process;
         try {
-            process = new ProcessBuilder(command, "-p", "--output-format", "json")
+            // --model을 반드시 넘긴다: 생략하면 그날의 CLI 기본 모델로 돌아 회차마다 다른 모델이
+            // 채점될 수 있고, 토크나이저도 달라져 토큰 비교까지 무너진다.
+            process = new ProcessBuilder(command, "-p", "--model", model, "--output-format", "json")
                     .directory(sandbox)
                     .start();
         } catch (Exception e) {
@@ -145,23 +156,54 @@ public class ClaudeCliLlmClient implements LlmClient {
 
             // 큰 컨텍스트는 프롬프트 캐시로 들어가 input_tokens가 아니라 cache_* 필드에 잡힌다.
             // 셋을 합쳐야 실제 입력 토큰이 나온다(안 그러면 in=2처럼 실제보다 훨씬 작게 보인다).
+            // 합산과 별개로 내역도 보존한다 - cache read는 신규 입력의 약 1/10 값이라, 합산만
+            // 남기면 비용 편차가 컨텍스트 크기 탓인지 캐시 히트율 탓인지 사후에 가릴 수 없다.
+            var cacheRead = usage.has("cache_read_input_tokens")
+                    ? usage.get("cache_read_input_tokens").asLong() : -1L;
+            var cacheCreation = usage.has("cache_creation_input_tokens")
+                    ? usage.get("cache_creation_input_tokens").asLong() : -1L;
             long inputTokens = -1L;
             if (usage.has("input_tokens")) {
                 inputTokens = usage.get("input_tokens").asLong()
-                        + usage.path("cache_read_input_tokens").asLong(0)
-                        + usage.path("cache_creation_input_tokens").asLong(0);
+                        + Math.max(cacheRead, 0)
+                        + Math.max(cacheCreation, 0);
             }
 
             // CLI는 이번 호출 비용을 달러로 알려준다. 없으면 -1.
             var costUsd = root.has("total_cost_usd") ? root.get("total_cost_usd").asDouble() : -1.0;
 
-            return new LlmResult(text, inputTokens, outputTokens, elapsed, costUsd);
+            // 턴 수: 1이 아니면 CLI가 자체 도구 루프를 돌았다는 뜻이고, 그러면 usage가 마지막
+            // 턴만 담고 비용은 전 턴 합계일 수 있다("단일 패스" 전제가 깨진 것). 반드시 기록한다.
+            var numTurns = root.has("num_turns") ? root.get("num_turns").asInt() : -1;
+
+            return new LlmResult(text, inputTokens, outputTokens, cacheRead, cacheCreation,
+                    reportedModel(root), numTurns, elapsed, costUsd);
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
             log.warn("could not parse claude CLI JSON output, using raw stdout: {}", e.getMessage());
-            return new LlmResult(stdout, -1, -1, elapsed, -1.0);
+            return new LlmResult(stdout, -1, -1, -1, -1, model, -1, elapsed, -1.0);
         }
+    }
+
+    /**
+     * 응답이 실제로 어떤 모델로 처리됐는지. CLI 출력 형태가 버전마다 달라 두 자리를 본 뒤,
+     * 없으면 우리가 {@code --model}로 지정한 값으로 떨어진다(지정이 거부되면 CLI가 실패하므로
+     * 그 경우 요청값 = 실제값으로 봐도 된다). 보고가 없으면 한 번 경고를 남긴다.
+     */
+    private String reportedModel(com.fasterxml.jackson.databind.JsonNode root) {
+        var direct = root.path("model").asText(null);
+        if (direct != null && !direct.isBlank()) {
+            return direct;
+        }
+        var modelUsage = root.path("modelUsage");
+        if (modelUsage.isObject() && modelUsage.fieldNames().hasNext()) {
+            return modelUsage.fieldNames().next();
+        }
+        if (modelNotReportedWarned.compareAndSet(false, true)) {
+            log.warn("claude CLI 응답에 모델 식별자가 없다 - 요청값 '{}'으로 기록한다", model);
+        }
+        return model;
     }
 
     @Override

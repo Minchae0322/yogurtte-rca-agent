@@ -28,7 +28,9 @@ import com.yogurtte.rca.client.TempoClient;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.Collector;
 import com.yogurtte.rca.llm.LlmClient;
+import com.yogurtte.rca.llm.LlmProperties;
 import com.yogurtte.rca.llm.LlmResult;
+import com.yogurtte.rca.llm.TokenCounter;
 import com.yogurtte.rca.notify.Notifier;
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportProperties;
@@ -49,7 +51,8 @@ class RcaServiceFlowTest {
         public LlmResult analyze(String systemPrompt, String context) {
             this.seenSystemPrompt = systemPrompt;
             this.seenContext = context;
-            return new LlmResult("원인 후보 1: Kafka consumer lag", 1234, 567, 42, 0.0123);
+            return new LlmResult("원인 후보 1: Kafka consumer lag", 1234, 567, 900, 300,
+                    "fake-model", 1, 42, 0.0123);
         }
 
         @Override
@@ -117,8 +120,10 @@ class RcaServiceFlowTest {
         notifier = new RecordingNotifier();
         // 외부 프롬프트 경로 미설정 -> classpath 기본 프롬프트를 쓴다.
         var promptLoader = new SystemPromptLoader(new PromptProperties(null));
+        // API 키 없는 LlmProperties -> TokenCounter가 비활성이라 contextTokens는 -1이 된다.
+        var tokenCounter = new TokenCounter(new LlmProperties("fake", null, null, null));
         service = new RcaService(collector, new ContextAssembler(collectProperties), promptLoader,
-                collectProperties, llmClient, notifier);
+                collectProperties, llmClient, tokenCounter, notifier);
     }
 
     @AfterEach
@@ -132,8 +137,13 @@ class RcaServiceFlowTest {
 
         assertThat(report.analysis()).isEqualTo("원인 후보 1: Kafka consumer lag");
         assertThat(report.llmProvider()).isEqualTo("fake");
+        assertThat(report.llmModel()).isEqualTo("fake-model");
+        assertThat(report.llmTurns()).isEqualTo(1);
         assertThat(report.inputTokens()).isEqualTo(1234);
         assertThat(report.outputTokens()).isEqualTo(567);
+        // 캐시 내역이 합산에 묻히지 않고 그대로 리포트에 실린다.
+        assertThat(report.cacheReadTokens()).isEqualTo(900);
+        assertThat(report.cacheCreationTokens()).isEqualTo(300);
         assertThat(report.timings().llmMs()).isEqualTo(42);
         assertThat(report.totalElapsedMs()).isGreaterThanOrEqualTo(0);
 
@@ -157,7 +167,10 @@ class RcaServiceFlowTest {
         assertThat(cov.metricsCollected()).containsExactly("hikaricp_connections_active");
         assertThat(cov.metricsMissing()).isEmpty();
         assertThat(cov.contextChars()).isEqualTo(report.contextChars());
-        assertThat(cov.estimatedContextTokens()).isEqualTo(report.contextChars() / 4L);
+        assertThat(cov.metricsBytes()).isGreaterThan(0);
+        assertThat(cov.promptChars()).isGreaterThan(0);
+        // API 키가 없으면 추정치를 지어내지 않고 "측정 안 됨"(-1)으로 남긴다.
+        assertThat(cov.contextTokens()).isEqualTo(-1L);
 
         assertThat(notifier.sent).hasSize(1);
         assertThat(notifier.sent.get(0)).isSameAs(report);

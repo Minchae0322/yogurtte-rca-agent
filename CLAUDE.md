@@ -92,6 +92,7 @@ api → service → collector(client) + analyzer → llm → notify → report
 |---|---|
 | **지금 어디까지 왔나** | [docs/STATUS.md](docs/STATUS.md) — 여기서 시작 |
 | **회차별 §8 점수와 판정 근거** | [docs/scoring/](docs/scoring/README.md) — 채점 대장 |
+| **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) — 토큰·비용 측정 기준 |
 | 전체 계획과 진입 게이트 | [docs/strategy.md](docs/strategy.md) |
 | 관측 파이프라인 구성·한계 | [docs/monitoring.md](docs/monitoring.md) |
 | 왜 그렇게 결정했나 | [docs/decisions/](docs/decisions/README.md) |

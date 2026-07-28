@@ -28,9 +28,9 @@ public class ConsoleNotifier implements Notifier {
                 traceId : {}
                 question: {}
                 mode    : {}
-                provider: {}
+                provider: {} (model={} turns={})
                 prompt  : {}
-                tokens  : in={} out={}{}
+                tokens  : in={} (cacheRead={} cacheCreate={}) out={}{}
                 elapsed : total={}ms (tempo={} loki={} mimir={} assemble={} llm={})
                 scope   :
                 {}
@@ -39,8 +39,10 @@ public class ConsoleNotifier implements Notifier {
                 {}
                 ====================================================
                 """,
-                report.traceId(), report.question(), report.mode(), report.llmProvider(), report.promptSource(),
-                report.inputTokens(), report.outputTokens(), costSuffix(report.costUsd()),
+                report.traceId(), report.question(), report.mode(), report.llmProvider(),
+                report.llmModel(), report.llmTurns(), report.promptSource(),
+                report.inputTokens(), report.cacheReadTokens(), report.cacheCreationTokens(),
+                report.outputTokens(), costSuffix(report.costUsd()),
                 report.totalElapsedMs(), report.timings().tempoMs(), report.timings().lokiMs(),
                 report.timings().mimirMs(), report.timings().assembleMs(), report.timings().llmMs(),
                 formatCoverage(report.coverage()),
@@ -64,7 +66,7 @@ public class ConsoleNotifier implements Notifier {
         if (c == null) {
             return "  (없음)";
         }
-        var metrics = "%d 수집".formatted(c.metricsCollected().size());
+        var metrics = "%d 수집 / %,dB".formatted(c.metricsCollected().size(), c.metricsBytes());
         if (!c.metricsMissing().isEmpty()) {
             metrics += ", 누락 " + c.metricsMissing();
         }
@@ -73,13 +75,16 @@ public class ConsoleNotifier implements Notifier {
                   trace  : %,dB / %d spans%s
                   logs   : errwarn=%,dB traceId=%,dB
                   metrics: %s
-                  context: %,d chars (~%,d tok 추정)"""
+                  context: %,d chars (+ prompt %,d chars)
+                  TOKENS : %s  <- 개선 지표 (count_tokens 실측, CLI 오버헤드 제외)"""
                 .formatted(
                         c.windowStart(), c.windowEnd(), c.windowSeconds(),
                         c.traceBytes(), c.traceSpans(), c.traceTrimmed() ? " (상위 span만)" : "",
                         c.errorWarnLogBytes(), c.traceIdLogBytes(),
                         metrics,
-                        c.contextChars(), c.estimatedContextTokens());
+                        c.contextChars(), c.promptChars(),
+                        c.contextTokens() < 0 ? "측정 안 됨 (ANTHROPIC_API_KEY 없음)"
+                                : "%,d tok".formatted(c.contextTokens()));
     }
 
     @Override

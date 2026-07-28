@@ -17,6 +17,9 @@ rca:
       model: ${RCA_OPENAI_MODEL:gpt-4o}
     claude-cli:
       command: ${CLAUDE_CLI_PATH:claude}
+      # 모델을 반드시 고정한다. 비우면 CLI가 그날 기본 모델로 돌아 회차마다 다른 모델이
+      # 채점될 수 있고, 토크나이저도 달라 토큰 비교가 무너진다. (docs/measurement.md)
+      model: ${RCA_CLAUDE_CLI_MODEL:claude-opus-5}
       timeout-seconds: ${CLAUDE_CLI_TIMEOUT_SECONDS:120}
 
   notify:
