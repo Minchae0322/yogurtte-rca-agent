@@ -35,11 +35,34 @@ public record CollectProperties(
      * 레벨 위치를 정규식으로 고정하면 ANSI 이스케이프 때문에 다시 깨진다.
      */
     public String errorWarnQuery() {
-        return "{%s=~\"%s\"} |~ \"ERROR|WARN\"".formatted(appLabel, apps);
+        return errorWarnQuery(List.of());
+    }
+
+    /** 탐색이 대상을 좁혀준 경우 그 서비스들만 본다. 비어 있으면 설정된 전체 앱. */
+    public String errorWarnQuery(List<String> services) {
+        return "{%s=~\"%s\"} |~ \"ERROR|WARN\"".formatted(appLabel, appsPattern(services));
     }
 
     /** 해당 traceId가 찍힌 모든 줄. {@code {service_name=~"..."} |= "<traceId>"} */
     public String traceIdQuery(String traceId) {
-        return "{%s=~\"%s\"} |= \"%s\"".formatted(appLabel, apps, traceId);
+        return traceIdQuery(traceId, List.of());
+    }
+
+    public String traceIdQuery(String traceId, List<String> services) {
+        return "{%s=~\"%s\"} |= \"%s\"".formatted(appLabel, appsPattern(services), traceId);
+    }
+
+    /**
+     * 셀렉터에 넣을 앱 정규식. 탐색이 준 서비스 목록이 있으면 그것으로 좁히되,
+     * <b>설정에 없는 값은 버린다</b> — LLM이 지어낸 이름이 셀렉터에 들어가면 매칭 스트림이
+     * 0개가 되어 조용히 빈 결과가 나온다(과거 조사 6회를 로그 0건으로 만든 것과 같은 실패).
+     */
+    public String appsPattern(List<String> services) {
+        if (services == null || services.isEmpty()) {
+            return apps;
+        }
+        var known = List.of(apps.split("\\|"));
+        var filtered = services.stream().filter(known::contains).distinct().toList();
+        return filtered.isEmpty() ? apps : String.join("|", filtered);
     }
 }

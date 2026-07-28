@@ -34,7 +34,20 @@ public class Collector {
         this.properties = properties;
     }
 
+    /** traceId 하나만 주는 기존 v0 진입점. 동작은 {@link #collect(Scope)}와 동일하다. */
     public CollectedData collect(String traceId) {
+        return collect(Scope.ofTrace(traceId));
+    }
+
+    /**
+     * 범위 하나를 깊게 수집한다.
+     *
+     * <p>traceId가 없는 범위도 정상 입력이다 — 컨슈머 전멸·파드 부재처럼 이상 트레이스가
+     * 생성되지 않는 장애가 실재하고(CH-2·AU-2), 그때는 트레이스 관련 조회 둘을 건너뛰고
+     * 로그·메트릭만으로 수집한다. 건너뛴 사실도 실패 목록에 남겨 모델이 공백을 알게 한다.
+     */
+    public CollectedData collect(Scope scope) {
+        var correlationId = scope.correlationId();
         var failures = new ArrayList<String>();
         var timings = new LinkedHashMap<String, Long>();
         var metrics = new LinkedHashMap<String, String>();
@@ -42,39 +55,42 @@ public class Collector {
         // --- Tempo ---
         String traceJson = null;
         var started = System.currentTimeMillis();
-        try {
-            traceJson = tempoClient.fetchTrace(traceId);
-        } catch (Exception e) {
-            failures.add("Tempo trace fetch failed: " + describe(e));
-            log.warn("tempo fetch failed for {}: {}", traceId, e.toString());
+        if (scope.hasTraceId()) {
+            try {
+                traceJson = tempoClient.fetchTrace(scope.traceId());
+            } catch (Exception e) {
+                failures.add("Tempo trace fetch failed: " + describe(e));
+                log.warn("tempo fetch failed for {}: {}", scope.traceId(), e.toString());
+            }
+        } else {
+            failures.add("이 조사에는 대표 traceId가 없다 — 탐색이 트레이스를 찾지 못했거나 "
+                    + "트레이스가 생성되지 않는 장애다. 트레이스 부재 자체를 근거로 쓸 것.");
         }
         timings.put("tempoMs", System.currentTimeMillis() - started);
 
-        // 트레이스가 없으면 시간창의 기준점이 없으므로 "now +/- padding"으로 대체한다.
-        var window = TimeWindow.fromTrace(traceJson, properties.windowPaddingSeconds());
-        if (window == null) {
-            window = TimeWindow.around(Instant.now(), properties.windowPaddingSeconds());
-            failures.add("Time window could not be derived from the trace; "
-                    + "using now +/- " + properties.windowPaddingSeconds() + "s instead.");
-        }
+        var window = resolveWindow(scope, traceJson, failures);
 
-        // --- Loki: 쿼리 2회 ---
+        // --- Loki: traceId가 있으면 2회, 없으면 1회 ---
         String errorWarnLogs = null;
         String traceIdLogs = null;
         started = System.currentTimeMillis();
         try {
-            errorWarnLogs = lokiClient.queryRange(traceId, "error-warn", properties.errorWarnQuery(),
+            errorWarnLogs = lokiClient.queryRange(correlationId, "error-warn",
+                    properties.errorWarnQuery(scope.services()),
                     window.start(), window.end(), properties.logLimit());
         } catch (Exception e) {
             failures.add("Loki ERROR/WARN log query failed: " + describe(e));
-            log.warn("loki error/warn query failed for {}: {}", traceId, e.toString());
+            log.warn("loki error/warn query failed for {}: {}", correlationId, e.toString());
         }
-        try {
-            traceIdLogs = lokiClient.queryRange(traceId, "trace-id", properties.traceIdQuery(traceId),
-                    window.start(), window.end(), properties.logLimit());
-        } catch (Exception e) {
-            failures.add("Loki traceId log query failed: " + describe(e));
-            log.warn("loki traceId query failed for {}: {}", traceId, e.toString());
+        if (scope.hasTraceId()) {
+            try {
+                traceIdLogs = lokiClient.queryRange(correlationId, "trace-id",
+                        properties.traceIdQuery(scope.traceId(), scope.services()),
+                        window.start(), window.end(), properties.logLimit());
+            } catch (Exception e) {
+                failures.add("Loki traceId log query failed: " + describe(e));
+                log.warn("loki traceId query failed for {}: {}", correlationId, e.toString());
+            }
         }
         timings.put("lokiMs", System.currentTimeMillis() - started);
 
@@ -82,7 +98,7 @@ public class Collector {
         started = System.currentTimeMillis();
         for (var query : properties.metricQueries()) {
             try {
-                var body = mimirClient.queryRange(traceId, query, window.start(), window.end(),
+                var body = mimirClient.queryRange(correlationId, query, window.start(), window.end(),
                         properties.metricStep());
                 if (hasSeries(body)) {
                     metrics.put(query, body);
@@ -92,13 +108,30 @@ public class Collector {
                 }
             } catch (Exception e) {
                 failures.add("Metric '" + query + "' query failed: " + describe(e));
-                log.warn("mimir query '{}' failed for {}: {}", query, traceId, e.toString());
+                log.warn("mimir query '{}' failed for {}: {}", query, correlationId, e.toString());
             }
         }
         timings.put("mimirMs", System.currentTimeMillis() - started);
 
-        return new CollectedData(traceId, traceJson, window, errorWarnLogs, traceIdLogs,
+        return new CollectedData(scope.traceId(), traceJson, window, errorWarnLogs, traceIdLogs,
                 metrics, failures, timings);
+    }
+
+    /**
+     * 조회 시간창은 셋 중 하나로 정해진다: ① 탐색이 준 창 ② 트레이스에서 파생 ③ now ± padding.
+     * ①이 있으면 트레이스보다 우선한다 — 탐색이 좁혀준 구간이 그 자체로 판단의 산물이기 때문이다.
+     */
+    private TimeWindow resolveWindow(Scope scope, String traceJson, ArrayList<String> failures) {
+        if (scope.window() != null) {
+            return scope.window();
+        }
+        var fromTrace = TimeWindow.fromTrace(traceJson, properties.windowPaddingSeconds());
+        if (fromTrace != null) {
+            return fromTrace;
+        }
+        failures.add("Time window could not be derived from the trace; "
+                + "using now +/- " + properties.windowPaddingSeconds() + "s instead.");
+        return TimeWindow.around(Instant.now(), properties.windowPaddingSeconds());
     }
 
     /** Prometheus는 매칭된 것이 없으면 "result" 배열을 비워서 응답한다. */

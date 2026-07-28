@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -33,9 +34,13 @@ public class ClaudeCliLlmClient implements LlmClient {
     /** {@code rca.llm.claude-cli.model}이 비었을 때 쓰는 값. 절대 CLI 기본값에 맡기지 않는다. */
     private static final String DEFAULT_MODEL = "claude-opus-5";
 
+    /** 오버헤드 프로브에 쓰는 최소 프롬프트. 페이로드 몫이 오차에 묻힐 만큼 작아야 한다. */
+    private static final String OVERHEAD_PROBE = ".";
+
     private final String command;
     private final String model;
     private final long timeoutSeconds;
+    private final boolean probeOverhead;
     private final File sandbox;
     private final AtomicBoolean modelNotReportedWarned = new AtomicBoolean(false);
 
@@ -46,8 +51,38 @@ public class ClaudeCliLlmClient implements LlmClient {
         this.command = (command == null || command.isBlank()) ? "claude" : command;
         this.model = (configuredModel == null || configuredModel.isBlank()) ? DEFAULT_MODEL : configuredModel;
         this.timeoutSeconds = cli == null ? 120 : cli.timeoutSeconds();
+        this.probeOverhead = cli == null || cli.probeOverhead();
         this.sandbox = createSandbox();
-        log.info("claude CLI model pinned: {}", this.model);
+        log.info("claude CLI model pinned: {} · overhead probe: {}", this.model, this.probeOverhead ? "on" : "off");
+    }
+
+    /**
+     * 1자 프롬프트를 <b>본 호출과 같은 조건</b>(같은 명령·모델·샌드박스)으로 한 번 던져
+     * 이 회차의 고정 오버헤드를 실측한다.
+     *
+     * <p>측정된 값에는 프롬프트 자체(약 6 tok — {@code "."} + 구분자)가 포함되므로 오버헤드를
+     * 그만큼 <b>과대</b>평가한다. 실측 편차(±320, 1.5%)의 2% 수준이라 보정하지 않는다.
+     *
+     * <p>실패해도 조사를 중단시키지 않는다 — -1로 기록하고, 그러면 그 회차는 다른 날 상수에
+     * 기댄 추정으로 돌아간다(그 사실이 리포트에 드러난다).
+     */
+    @Override
+    public long overheadTokens() {
+        if (!probeOverhead) {
+            return -1L;
+        }
+        try {
+            var probe = analyze(OVERHEAD_PROBE, "");
+            if (probe.numTurns() > 1) {
+                log.warn("오버헤드 프로브가 {}턴을 돌았다 — usage가 턴 누적이라 값을 쓸 수 없다", probe.numTurns());
+                return -1L;
+            }
+            log.info("CLI 고정 오버헤드 실측: {} tok (이 회차 기준)", probe.inputTokens());
+            return probe.inputTokens();
+        } catch (Exception e) {
+            log.warn("오버헤드 프로브 실패 — contextTokens는 추정으로 남는다: {}", e.toString());
+            return -1L;
+        }
     }
 
     /**
@@ -187,9 +222,17 @@ public class ClaudeCliLlmClient implements LlmClient {
     }
 
     /**
-     * 응답이 실제로 어떤 모델로 처리됐는지. CLI 출력 형태가 버전마다 달라 두 자리를 본 뒤,
-     * 없으면 우리가 {@code --model}로 지정한 값으로 떨어진다(지정이 거부되면 CLI가 실패하므로
-     * 그 경우 요청값 = 실제값으로 봐도 된다). 보고가 없으면 한 번 경고를 남긴다.
+     * 응답이 실제로 어떤 모델로 처리됐는지.
+     *
+     * <p><b>{@code modelUsage}에는 모델이 여러 개 들어온다.</b> CLI가 본답변과 별개로 보조
+     * 작업에 작은 모델을 함께 쓰기 때문이다. 첫 키를 그냥 집으면 <b>요청하지도 않은 모델이
+     * 리포트에 기록된다</b> — AP-1 회차 2가 실제로 {@code claude-opus-5}로 돌았는데
+     * {@code claude-haiku-4-5}로 기록됐고, 하마터면 "모델 고정이 깨졌다"는 오진으로
+     * 회차를 폐기할 뻔했다. 그래서 <b>요청한 모델이 목록에 있으면 그것을 정답으로</b> 삼고,
+     * 없을 때만 실제 대체가 일어난 것으로 보고 경고한다.
+     *
+     * <p>토큰·비용은 이 메서드와 무관하다 — 최상위 {@code usage}가 요청 모델의 실측이고,
+     * {@code total_cost_usd}만 보조 모델 몫을 포함한다(실측상 본답변의 0.1% 미만).
      */
     private String reportedModel(com.fasterxml.jackson.databind.JsonNode root) {
         var direct = root.path("model").asText(null);
@@ -198,7 +241,19 @@ public class ClaudeCliLlmClient implements LlmClient {
         }
         var modelUsage = root.path("modelUsage");
         if (modelUsage.isObject() && modelUsage.fieldNames().hasNext()) {
-            return modelUsage.fieldNames().next();
+            var used = new ArrayList<String>();
+            modelUsage.fieldNames().forEachRemaining(used::add);
+            var matched = used.stream().filter(name -> name.startsWith(model)).findFirst();
+            if (matched.isPresent()) {
+                if (used.size() > 1) {
+                    log.debug("claude CLI가 보조 모델을 함께 사용했다: {} (본답변 {})", used, matched.get());
+                }
+                return matched.get();
+            }
+            // 요청한 모델이 아예 없다 = 진짜 대체가 일어났다. 이건 회차를 무효로 볼 사유다.
+            log.warn("요청 모델 '{}'이 응답의 modelUsage에 없다 — 실제 사용 {}. "
+                    + "회차 간 점수·토큰 비교가 성립하지 않으니 이 회차는 별도 구성으로 기록할 것", model, used);
+            return used.get(0);
         }
         if (modelNotReportedWarned.compareAndSet(false, true)) {
             log.warn("claude CLI 응답에 모델 식별자가 없다 - 요청값 '{}'으로 기록한다", model);

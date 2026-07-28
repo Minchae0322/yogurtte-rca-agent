@@ -21,6 +21,11 @@ rca:
       # 채점될 수 있고, 토크나이저도 달라 토큰 비교가 무너진다. (docs/measurement.md)
       model: ${RCA_CLAUDE_CLI_MODEL:claude-opus-5}
       timeout-seconds: ${CLAUDE_CLI_TIMEOUT_SECONDS:120}
+      # 조사마다 1자 프롬프트를 한 번 던져 그 회차의 CLI 고정 오버헤드를 실측한다.
+      # 끄면 contextTokens가 '다른 날 상수'를 뺀 추정으로 돌아가는데, 그 상수는 하루 만에
+      # 26,626 → 21,247로 20% 움직인 적이 있어 소급 추정이 성립하지 않는다.
+      # 비용 약 $0.02·1초. (docs/round-1-input-tokens.md §2.1)
+      probe-overhead: ${RCA_CLI_PROBE_OVERHEAD:true}
 
   notify:
     channel: ${RCA_NOTIFIER:console}           # console | slack | discord
@@ -74,6 +79,30 @@ rca:
     # 사라진다. 5회 전부 "no series"였고, 정작 필요한 CH-2에서 구조적으로 무용이다 (AE-04).
     max-trace-bytes: ${RCA_MAX_TRACE_BYTES:102400}
     top-spans: ${RCA_TOP_SPANS:30}
+
+  # 1단계 스윕(SURVEY). collect와 쿼리 종류가 다르다 — 창이 몇 시간짜리라 원본을 그대로 받으면
+  # 컨텍스트가 터진다. 전부 집계 쿼리이므로 창이 넓어져도 응답 크기가 스텝 수로만 결정된다.
+  survey:
+    # "어젯밤"이 언제인지가 여기 달렸다. 서비스 사용자 기준 표준시로 둔다.
+    zone: ${RCA_SURVEY_ZONE:Asia/Seoul}
+    default-lookback-hours: ${RCA_SURVEY_LOOKBACK_HOURS:24}
+    max-window-hours: ${RCA_SURVEY_MAX_WINDOW_HOURS:48}
+    step: ${RCA_SURVEY_STEP:5m}
+    # TraceQL. ${} 플레이스홀더를 쓰지 않는다 — 중괄호가 플레이스홀더 문법과 겹친다.
+    # 덮어쓰려면 환경변수 RCA_SURVEY_TRACE_QUERY를 쓰면 된다 (relaxed binding이 알아서 매핑한다).
+    trace-query: '{ status = error }'
+    trace-limit: ${RCA_SURVEY_TRACE_LIMIT:20}
+    # 서비스별 ERROR/WARN 발생률. 라인 필터를 쓰는 이유는 collect의 errorWarnQuery와 같다 —
+    # 평문 Logback이라 logfmt 파서가 level 필드를 만들지 못한다.
+    log-query: 'sum by (service_name) (count_over_time({service_name=~"%s"} |~ "ERROR|WARN" [5m]))'
+    # 부재가 곧 신호인 것들을 우선한다. up이 0으로 꺾이는 것이 트레이스 무신호 장애(AU-2)에서
+    # 유일한 도달 경로였고, 에러 트레이스 검색만으로는 정의된 12문항 중 6문항을 못 찾는다.
+    metric-queries:
+      - "up"
+      - "mongodb_up"
+      - "kafka_brokers"
+      - "kafka_consumergroup_lag"
+      - "websocket_active_users"
 
   # 시스템 프롬프트: 이 경로에 파일이 있으면 그것을, 없으면 classpath:prompts/system-prompt.md를 쓴다.
   # 외부 파일은 조사할 때마다 다시 읽으므로 재시작 없이 수정할 수 있다.

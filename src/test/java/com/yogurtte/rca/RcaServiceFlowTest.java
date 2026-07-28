@@ -18,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.yogurtte.rca.analyzer.ContextAssembler;
+import com.yogurtte.rca.analyzer.EvidenceExtractor;
 import com.yogurtte.rca.analyzer.PromptProperties;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.client.GrafanaProperties;
@@ -122,7 +123,7 @@ class RcaServiceFlowTest {
         var promptLoader = new SystemPromptLoader(new PromptProperties(null));
         // API 키 없는 LlmProperties -> TokenCounter가 비활성이라 contextTokens는 -1이 된다.
         var tokenCounter = new TokenCounter(new LlmProperties("fake", null, null, null));
-        service = new RcaService(collector, new ContextAssembler(collectProperties), promptLoader,
+        service = new RcaService(collector, new ContextAssembler(collectProperties), new EvidenceExtractor(), promptLoader,
                 collectProperties, llmClient, tokenCounter, notifier);
     }
 

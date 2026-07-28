@@ -36,7 +36,47 @@ public record RcaReport(
         Timings timings,
         int contextChars,
         Coverage coverage,
+        Triage triage,
+        Evidence evidence,
         List<String> collectionFailures) {
+
+    /**
+     * 1~2단계(스윕·선정)의 기록. traceId로 바로 들어온 조사는 {@code null}이다.
+     *
+     * <p><b>분석 점수와 분리해서 남긴다.</b> 한 점수에 합치면 결과가 나빴을 때 *못 찾은 것*인지
+     * *찾고도 못 푼 것*인지 알 수 없어 무엇을 고칠지 정할 수 없다. 탐색이 틀렸을 때도 분석은
+     * "에이전트가 실제로 고른 범위"로 채점되어야 하므로, 여기에 그 선택의 근거를 통째로 남긴다.
+     *
+     * @param timeExpression   자연어 시간 표현을 어떻게 창으로 바꿨는지 (결정적 파싱의 근거)
+     * @param traceCandidates  스윕이 찾은 트레이스 전부. 고른 것 말고 <b>무엇이 더 있었는지</b>가
+     *                         회고에서 "다른 걸 골랐어야 했나"를 판단하는 근거가 된다.
+     * @param planParsed       LLM이 낸 계획을 실제로 읽어냈는지. false면 스윕 창을 그대로 쓴 것이다.
+     * @param analysis         탐색 단계 LLM 응답 원문
+     */
+    public record Triage(
+            String timeExpression,
+            Instant surveyStart,
+            Instant surveyEnd,
+            Instant chosenStart,
+            Instant chosenEnd,
+            List<String> services,
+            String traceId,
+            List<Evidence.TraceHit> traceCandidates,
+            String reason,
+            List<String> evidence,
+            boolean planParsed,
+            List<String> notes,
+            String promptSource,
+            String analysis,
+            long inputTokens,
+            long outputTokens,
+            double costUsd,
+            int contextChars,
+            int promptChars,
+            long surveyMs,
+            long llmMs,
+            List<String> surveyFailures) {
+    }
 
     /**
      * 이번 조사가 실제로 "읽은 범위". 품질/토큰 개선을 측정하려면 모델이 무엇을 얼마나 봤는지가
@@ -47,9 +87,13 @@ public record RcaReport(
      * @param metricsCollected 시리즈가 잡힌 메트릭 쿼리
      * @param metricsMissing   비었거나 실패해 빠진 메트릭 쿼리
      * @param promptChars      시스템 프롬프트 길이. contextChars에 포함되지 않으므로 따로 센다.
-     * @param contextTokens    <b>개선 지표.</b> 시스템 프롬프트 + 컨텍스트의 실측 토큰 수
-     *                         ({@code /v1/messages/count_tokens}). CLI 오버헤드·캐시 상태·턴 수를
-     *                         타지 않아 회차 간 비교가 성립하는 유일한 입력 수치다. 못 재면 -1.
+     * @param contextTokens    시스템 프롬프트 + 컨텍스트의 실측 토큰 수
+     *                         ({@code /v1/messages/count_tokens}). 못 재면 -1 —
+     *                         <b>구독 CLI 경로에서는 API 키가 없어 항상 -1이다.</b>
+     * @param overheadTokens   <b>이 회차의</b> provider 고정 오버헤드 실측(1자 프롬프트 프로브). 못 재면 -1.
+     *                         이 값이 있으면 {@code inputTokens − overheadTokens}가 개선 지표가 되고,
+     *                         <b>다른 날 상수에 기대지 않는 유일한 경로</b>다 — 오버헤드는 하루 만에
+     *                         20% 움직인 적이 있어 문서에 박아둔 값을 소급해 빼면 틀린다.
      */
     public record Coverage(
             Instant windowStart,
@@ -65,6 +109,7 @@ public record RcaReport(
             List<String> metricsMissing,
             int promptChars,
             int contextChars,
-            long contextTokens) {
+            long contextTokens,
+            long overheadTokens) {
     }
 }

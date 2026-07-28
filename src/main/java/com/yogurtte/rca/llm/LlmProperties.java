@@ -21,6 +21,12 @@ public record LlmProperties(
      * 회차마다 다른 모델이 채점될 수 있고, 그러면 §8 점수의 회차 간 비교가 성립하지 않는다.
      * 토크나이저도 모델마다 달라 토큰 수 비교까지 함께 무너진다.
      */
-    public record ClaudeCli(String command, String model, long timeoutSeconds) {
+    /**
+     * @param probeOverhead 조사마다 1자 프롬프트를 한 번 던져 <b>그 회차의 CLI 고정 오버헤드</b>를
+     *                      실측할지. 끄면 {@code contextTokens}가 다른 날 상수에 기대는 추정으로
+     *                      돌아간다(그리고 그 상수는 하루에 20% 움직인 적이 있다).
+     *                      비용은 조사당 약 $0.02·1초.
+     */
+    public record ClaudeCli(String command, String model, long timeoutSeconds, boolean probeOverhead) {
     }
 }

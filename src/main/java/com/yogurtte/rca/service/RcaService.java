@@ -11,10 +11,12 @@ import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import com.yogurtte.rca.analyzer.ContextAssembler;
+import com.yogurtte.rca.analyzer.EvidenceExtractor;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.CollectedData;
 import com.yogurtte.rca.collector.Collector;
+import com.yogurtte.rca.collector.Scope;
 import com.yogurtte.rca.collector.TraceSpans;
 import com.yogurtte.rca.llm.LlmClient;
 import com.yogurtte.rca.llm.TokenCounter;
@@ -30,17 +32,19 @@ public class RcaService {
 
     private final Collector collector;
     private final ContextAssembler assembler;
+    private final EvidenceExtractor evidenceExtractor;
     private final SystemPromptLoader promptLoader;
     private final CollectProperties collectProperties;
     private final LlmClient llmClient;
     private final TokenCounter tokenCounter;
     private final Notifier notifier;
 
-    public RcaService(Collector collector, ContextAssembler assembler, SystemPromptLoader promptLoader,
-                      CollectProperties collectProperties, LlmClient llmClient, TokenCounter tokenCounter,
-                      Notifier notifier) {
+    public RcaService(Collector collector, ContextAssembler assembler, EvidenceExtractor evidenceExtractor,
+                      SystemPromptLoader promptLoader, CollectProperties collectProperties,
+                      LlmClient llmClient, TokenCounter tokenCounter, Notifier notifier) {
         this.collector = collector;
         this.assembler = assembler;
+        this.evidenceExtractor = evidenceExtractor;
         this.promptLoader = promptLoader;
         this.collectProperties = collectProperties;
         this.llmClient = llmClient;
@@ -53,22 +57,34 @@ public class RcaService {
         return investigate(traceId, question, "rca");
     }
 
+    /** traceId로 바로 들어오는 기존 v0 진입점. 탐색 단계를 거치지 않으므로 triage 기록이 없다. */
     public RcaReport investigate(String traceId, String question, String mode) {
+        return investigate(Scope.ofTrace(traceId), question, mode, null);
+    }
+
+    /**
+     * 범위 하나를 깊게 조사한다. 탐색을 거쳐 들어왔으면 그 선택의 기록({@code triage})이 함께 실린다.
+     *
+     * <p>traceId가 없는 범위도 정상 입력이다 — 이 경로가 traceId를 요구하면 이상 트레이스가
+     * 생성되지 않는 장애에서 파이프라인이 끊긴다.
+     */
+    public RcaReport investigate(Scope scope, String question, String mode, RcaReport.Triage triage) {
         var normalizedMode = (mode == null || mode.isBlank()) ? "rca" : mode;
-        MDC.put("traceId", traceId);
+        MDC.put("traceId", scope.correlationId());
         try {
-            return run(traceId, question, normalizedMode);
+            return run(scope, question, normalizedMode, triage);
         } finally {
             MDC.remove("traceId");
         }
     }
 
-    private RcaReport run(String traceId, String question, String mode) {
+    private RcaReport run(Scope scope, String question, String mode, RcaReport.Triage triage) {
         var startedAt = Instant.now();
         var overallStart = System.currentTimeMillis();
-        log.info("investigating mode={} question={}", mode, question);
+        log.info("investigating mode={} traceId={} services={} question={}",
+                mode, scope.traceId(), scope.services(), question);
 
-        var data = collector.collect(traceId);
+        var data = collector.collect(scope);
 
         var assembleStart = System.currentTimeMillis();
         var context = assembler.assemble(data, question);
@@ -91,6 +107,10 @@ public class RcaService {
         // 개선 지표: CLI 오버헤드가 섞인 llmResult.inputTokens()가 아니라, 내가 만든 입력만 직접 잰다.
         var contextTokens = tokenCounter.count(llmResult.model(), prompt.text(), context);
 
+        // 오버헤드는 상수가 아니다(하루 만에 20% 이동 실측) — 문서에 박힌 값을 소급해 빼면 틀린다.
+        // 본 호출 직후 같은 조건으로 재서, contextTokens 계산이 이 회차 안에서 닫히게 한다.
+        var overheadTokens = llmClient.overheadTokens();
+
         var timings = new Timings(
                 data.stepMillis().getOrDefault("tempoMs", 0L),
                 data.stepMillis().getOrDefault("lokiMs", 0L),
@@ -99,7 +119,7 @@ public class RcaService {
                 llmResult.elapsedMs());
 
         var report = new RcaReport(
-                traceId,
+                data.traceId(),
                 question,
                 mode,
                 startedAt,
@@ -116,7 +136,9 @@ public class RcaService {
                 System.currentTimeMillis() - overallStart,
                 timings,
                 context.length(),
-                coverage(data, context, prompt.text(), contextTokens),
+                coverage(data, context, prompt.text(), contextTokens, overheadTokens),
+                triage,
+                evidenceExtractor.extract(data),
                 data.failures());
 
         notifier.send(report);
@@ -124,7 +146,8 @@ public class RcaService {
     }
 
     /** 이번 조사가 실제로 읽은 데이터 범위를 집계한다. */
-    private RcaReport.Coverage coverage(CollectedData data, String context, String systemPrompt, long contextTokens) {
+    private RcaReport.Coverage coverage(CollectedData data, String context, String systemPrompt,
+                                        long contextTokens, long overheadTokens) {
         var window = data.window();
         var spans = TraceSpans.parse(data.traceJson()).size();
         var traceBytes = utf8Bytes(data.traceJson());
@@ -149,7 +172,8 @@ public class RcaService {
                 missing,
                 systemPrompt == null ? 0 : systemPrompt.length(),
                 context.length(),
-                contextTokens);
+                contextTokens,
+                overheadTokens);
     }
 
     private static int utf8Bytes(String s) {

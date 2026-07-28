@@ -29,7 +29,8 @@ public class SystemPromptLoader {
     /** 모드 -> classpath 기본 리소스. */
     private static final Map<String, String> DEFAULT_RESOURCES = Map.of(
             "rca", "prompts/system-prompt.md",
-            "review", "prompts/review-prompt.md");
+            "review", "prompts/review-prompt.md",
+            "triage", "prompts/triage-prompt.md");
 
     /** 프롬프트 본문과 그 출처(외부 파일 경로 또는 classpath). */
     public record Loaded(String text, String source) {
@@ -44,6 +45,7 @@ public class SystemPromptLoader {
                 : Path.of(properties.path());
         externalPaths.put("rca", rcaPath);
         externalPaths.put("review", rcaPath == null ? null : rcaPath.resolveSibling("review-prompt.md"));
+        externalPaths.put("triage", rcaPath == null ? null : rcaPath.resolveSibling("triage-prompt.md"));
 
         DEFAULT_RESOURCES.forEach((mode, resource) -> {
             try (var in = getClass().getClassLoader().getResourceAsStream(resource)) {
