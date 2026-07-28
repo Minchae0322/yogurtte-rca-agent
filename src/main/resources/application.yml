@@ -45,17 +45,33 @@ rca:
 
   collect:
     window-padding-seconds: ${RCA_WINDOW_PADDING_SECONDS:120}
-    apps: ${RCA_APPS:content|auth|chat}
-    app-label: ${RCA_APP_LABEL:app}
-    level-label: ${RCA_LEVEL_LABEL:level}
+    # Loki 셀렉터 — Alloy가 실제로 붙이는 라벨/값이어야 한다 (2026-07-27 실측).
+    # 구 기본값 `app` / `content|auth|chat`은 존재하지 않는 라벨이라 조사 6회가 로그 0건이었다.
+    # 회차 2부터 적용 — 회차 1은 이 결함을 안은 채로 baseline이 됐다 (docs/round-2/).
+    apps: ${RCA_APPS:content-service|auth-service|chat-service}
+    app-label: ${RCA_APP_LABEL:service_name}
     log-limit: ${RCA_LOG_LIMIT:1000}
     metric-step: ${RCA_METRIC_STEP:15s}
     # env로 빼지 않는다: PromQL 목록은 env var 하나에 담기 어렵다. 배포별로 yml에서 덮어쓸 것.
+    #
+    # 회차 2부터 확충 (B-3). 회차 1은 앞의 3개 + 앱 측 kafka lag 뿐이었고, 그래서
+    # "인프라가 살아 있나"를 볼 수단이 0개였다 — 앵커가 요구한 신호가 수집 목록에 없어
+    # 채점 불가가 난 회차가 여럿이다 (CH-2 등). 각 줄에 어느 문항이 걸려 있는지 적어둔다.
     metric-queries:
       - "hikaricp_connections_active"
       - "hikaricp_connections_pending"
       - "rate(jvm_gc_pause_seconds_sum[5m])"
-      - "kafka_consumer_fetch_manager_records_lag"
+      - "up"                             # 프로세스 생사 — AU-2/AU-4 (파드 부재 확정)
+      - "mongodb_up"                     # CH-1 (DLQ 이후 복구 근거) · CH-3
+      - "kafka_brokers"                  # IN-2 (브로커 다운 ↔ 토픽 부재 감별)
+      - "kafka_consumergroup_lag"        # CH-2 — exporter 집계라 컨슈머가 죽어도 남는다
+      - "websocket_active_users"         # CH-2 (소비 정지의 사용자 측 발현)
+      # AU-3 — 401은 4xx라 span에 error 태그가 안 붙는다. 인증 실패의 '범위'를 아는 유일한 지표.
+      # lookback을 [1m]으로 잡는다: 수집 창이 트레이스 ±120초(≈4분)라 [5m]이면 lookback이 창보다
+      # 길어져 인접 스텝이 95% 겹치고 값이 평평해진다 — "급증"이 안 보인다. (B-4로 창을 넓히면 재검토)
+      - 'sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))'
+    # 뺀 것: kafka_consumer_fetch_manager_records_lag — 앱 메트릭이라 컨슈머가 죽으면 함께
+    # 사라진다. 5회 전부 "no series"였고, 정작 필요한 CH-2에서 구조적으로 무용이다 (AE-04).
     max-trace-bytes: ${RCA_MAX_TRACE_BYTES:102400}
     top-spans: ${RCA_TOP_SPANS:30}
 

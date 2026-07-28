@@ -60,5 +60,5 @@
 | **에이전트 파악 원인** | ① "process-notification 내부 미계측 블로킹 구간"(위치 특정, 확신도 높음) ② "첫 Mongo 작업 직전 대기 — 커넥션/서버 셀렉션 지연 **가설**"(확신도 낮음) — **정답 방향이지만 확정 실패** |
 | **판정** | 위치 특정·오귀인 배제(lag 1.45ms, Hikari pending 0, GC 정량 반증)는 정확. 원인 확정을 못 한 이유는 모델이 아니라 데이터: 공백 구간에 span·로그·드라이버 메트릭이 전무했고, 에이전트의 Loki 셀렉터 결함으로 로그 0건 조사 |
 
-- RCA 리포트: [`reports/6a65bd43...-20260726T080237.md`](../../reports/6a65bd43c41bfa6c5c18a89e1f855373-20260726T080237.md) — in 44,798 / out 9,162 tok · $1.0845 · 135.4s
+- RCA 리포트: [round-1-rca-report.md](round-1-rca-report.md) (원본 `reports/6a65bd43…-20260726T080237.md`는 gitignore) — in 44,798 / out 9,162 tok · $1.0845 · 135.4s
 - 평가 상세: [AE-01](../findings/ae-01-rca-v0-ch1-blind-eval.md) · 시스템 발견: [NF-07](../findings/nf-07-notification-delay-loss-boundary.md)

@@ -65,14 +65,14 @@
 성공하고, 그 앞에 **redisGET 4건**(작성자 4명 캐시 읽기) → auth 조회 → redisSET(캐시 쓰기)
 흐름이 보인다.
 
-![baseline 워터폴 — external/users 100.65ms 성공, redisGET 4 + redisSET](img.png)
+![baseline 워터폴 — external/users 100.65ms 성공, redisGET 4 + redisSET](round1-trace-baseline.png)
 
 **symptom (auth 다운)**: 같은 위치의 `http get`이 **23.55ms에 ERROR(빨간 마커) = Connection
 refused**. 그 앞의 **redisGET 4건**이 캐시 미스(TTL 만료)로 auth 벌크 조회를 유발했다는
 증거다 — 폐기 장황본은 이 "redisGET 4 = 작성자 4명" 대응으로 캐시 만료를 특정했고, 이번
 간결본은 이 그림 속 증거를 활용하지 못해 근본원인 20점에 그쳤다(채점 근거 참조).
 
-![symptom 워터폴 — external/users가 23.55ms ERROR(refused), 앞에 redisGET 4건](img_1.png)
+![symptom 워터폴 — external/users가 23.55ms ERROR(refused), 앞에 redisGET 4건](round1-trace-symptom.png)
 
 ## 도구 관찰 (v0 조건 일관성)
 

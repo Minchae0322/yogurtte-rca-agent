@@ -33,13 +33,13 @@
 - chat `receive`가 **09:53:31.503에야 시작** — 발행에서 **241.4초 뒤**. 그 사이 트레이스는 텅 빈 구간 (CH-1 회차 1의 23초 공백과 같은 문법, 다른 위치 — 그쪽은 소비 "안"의 공백, 이쪽은 발행과 소비 "사이"의 공백)
 - 소비 후 처리는 전부 정상: Mongo insert·설정 조회·dispatch 520ms, 에러 0 — 백로그 소비가 원 트레이스에 이어 붙어 "늦은 결말"까지 한 트레이스에 남았다
 
-![장애 트레이스 워터폴 — POST·publish는 즉시 성공(52ms), chat receive는 4분 뒤 맨 오른쪽에](img.png)
+![장애 트레이스 워터폴 — POST·publish는 즉시 성공(52ms), chat receive는 4분 뒤 맨 오른쪽에](round1-trace-failure.png)
 
 발행과 소비 "사이"의 4분 공백이 한 트레이스에 그대로 담겼다. 아래는 늦게 시작된 소비의
 내부 — 처리 자체는 전부 정상이고, **Mongo `insert`/`find` span**(07-25 배포한 계측)이
 실전 장애 채록에서 처음으로 찍혔다:
 
-![복구 후 소비 내부 — mongo insert/find, web-socket-sender, dispatch 520ms 전부 정상](img_1.png)
+![복구 후 소비 내부 — mongo insert/find, web-socket-sender, dispatch 520ms 전부 정상](round1-trace-recovered.png)
 
 **Mimir — 이 문항의 주인공 메트릭** (쿼리: `kafka_consumergroup_lag{consumergroup="notification-processors"}` · KST 18:43~18:56)
 

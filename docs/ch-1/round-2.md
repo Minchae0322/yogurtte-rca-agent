@@ -76,5 +76,5 @@
 | **오판 1건** | 영향을 "미발송(**유실**)"으로 판정 + "DLQ 재처리 컨슈머가 없다면 수동 재발행 필요" — 실제로는 재처리 리스너가 이미 성공. 에이전트가 볼 수 있는 마지막 데이터가 "DLQ 발행"이었기 때문(trace 단절 + 자체 Loki 셀렉터 결함) |
 | **판정** | 원인 1줄은 정답, 영향 판정은 관측 구조의 한계로 오판. 회차 1과의 차이는 계측(`cdca2a5`·`5eecb0a`)이 만든 것 — 같은 모델이 trace가 자백하자 확정까지 갔다 |
 
-- RCA 리포트: [`reports/6a65c38b...-20260726T082912.md`](../../reports/6a65c38bea0e08d50df7b169594a2844-20260726T082912.md) — in 47,503 / out 6,756 tok · $1.0200 · 101.8s
+- RCA 리포트: [round-2-rca-report.md](round-2-rca-report.md) (원본 `reports/6a65c38b…-20260726T082912.md`는 gitignore) — in 47,503 / out 6,756 tok · $1.0200 · 101.8s
 - 평가 상세: [AE-02](../findings/ae-02-rca-v0-ch1-round2-eval.md) · 시스템 발견: [NF-07](../findings/nf-07-notification-delay-loss-boundary.md) · [NF-08](../findings/nf-08-dlq-trace-discontinuity.md)

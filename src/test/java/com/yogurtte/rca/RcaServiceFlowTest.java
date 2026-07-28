@@ -107,7 +107,7 @@ class RcaServiceFlowTest {
         var reportProperties = new ReportProperties(tempDir.toString());
         var rawStore = new RawResponseStore(reportProperties);
 
-        var collectProperties = new CollectProperties(120, "content|auth|chat", "app", "level",
+        var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", List.of("hikaricp_connections_active"), 102400, 30);
 
         var collector = new Collector(
@@ -191,7 +191,7 @@ class RcaServiceFlowTest {
                   "scopeSpans":[{"spans":[%s]}]}]}
                 """.formatted(spans);
 
-        var properties = new CollectProperties(120, "content|auth|chat", "app", "level",
+        var properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", List.of(), 100, 30);  // 100 바이트 한도로 트리밍을 강제한다
         var data = new com.yogurtte.rca.collector.CollectedData(
                 "trace-2", bigTrace, null, null, null, null, List.of(), null);

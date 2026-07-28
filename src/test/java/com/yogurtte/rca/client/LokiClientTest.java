@@ -58,14 +58,23 @@ class LokiClientTest {
                 .withQueryParam("limit", equalTo("1000")));
     }
 
+    /**
+     * 이 단언은 조사 6회가 로그 0건이던 두 결함을 막는 자리다.
+     * <ul>
+     *   <li>셀렉터: 라벨명은 {@code service_name}, 값은 {@code *-service}.
+     *       {@code app} 라벨은 Loki에 존재하지 않는다.</li>
+     *   <li>파싱: 라인 필터({@code |~})를 쓴다. 평문 Logback이라 {@code | logfmt}로는
+     *       {@code level} 필드가 안 생겨 뒤의 필터가 전부 걸러냈다.</li>
+     * </ul>
+     */
     @Test
     void buildsTheTwoConfiguredLogQueries() {
-        var properties = new CollectProperties(120, "content|auth|chat", "app", "level",
+        var properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", java.util.List.of(), 102400, 30);
 
         assertThat(properties.errorWarnQuery())
-                .isEqualTo("{app=~\"content|auth|chat\"} | logfmt | level=~\"ERROR|WARN\"");
+                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |~ \"ERROR|WARN\"");
         assertThat(properties.traceIdQuery("abc123"))
-                .isEqualTo("{app=~\"content|auth|chat\"} |= \"abc123\"");
+                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |= \"abc123\"");
     }
 }

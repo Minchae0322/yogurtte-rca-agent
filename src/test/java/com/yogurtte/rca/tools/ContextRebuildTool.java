@@ -59,8 +59,10 @@ class ContextRebuildTool {
         Files.createDirectories(OUT);
         var systemPrompt = Files.readString(Path.of("prompts", "system-prompt.md"), StandardCharsets.UTF_8);
 
+        // 셀렉터 값은 재구성에 영향이 없다(어셈블은 이미 받은 JSON을 붙일 뿐).
+        // 조사 당시 설정과 같아야 하는 것은 maxTraceBytes·topSpans뿐이다.
         var assembler = new ContextAssembler(new CollectProperties(
-                120, "content|auth|chat", "app", "level", 1000, "15s",
+                120, "content-service|auth-service|chat-service", "service_name", 1000, "15s",
                 List.of(), MAX_TRACE_BYTES, TOP_SPANS));
 
         var reports = new ArrayList<Path>();

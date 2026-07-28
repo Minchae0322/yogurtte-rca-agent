@@ -59,7 +59,7 @@ http post /feeds/{feedId}/comments   238ms [루트 ERROR]
 ② `notification-publish` 부재 = 실패 시 알림 부작용 없음까지 한 트레이스로 판정,
 ③ 루트만 ERROR + 직후 요청 200 = 부분 장애.
 
-![AP-1 에러 트레이스 워터폴 — INSERT query 61.57ms에 error 마크, 앞단 조회는 정상 (traceId 6a67678730d34d2319861c21cf6a84b4)](img.png)
+![AP-1 에러 트레이스 워터폴 — INSERT query 61.57ms에 error 마크, 앞단 조회는 정상 (traceId 6a67678730d34d2319861c21cf6a84b4)](round1-trace-insert-error.png)
 
 ## 앵커 노트 (채점 시 참고 — §8.2에 따라 이번 회차 앵커는 그대로 적용)
 

@@ -19,7 +19,11 @@ LLM이 원인을 랭킹하는 v0 baseline이며, **성능을 측정하는 것 �
   "채점 불가"로 기록한 뒤 결함으로 남긴다.
 - **N=1은 인용하지 않는다.** 문항당 최소 2회, 점수는 평균 ± 최대편차로 기록한다.
   편차 ±10 초과면 문항 불안정으로 보고 인용을 보류한다.
-- 루브릭: 근본 원인 40 · 근거 시그널 경로 30 · 오귀인 없음 20 · 조치 타당성 10.
+- 루브릭 v1: 근본 원인 40 · 근거 시그널 경로 30 · 오귀인 없음 20 · 조치 타당성 10.
+- **루브릭 v3가 제정됐다 (2026-07-28 · 회차 2부터 v1과 병행)** —
+  원인 적중 40 · 근거 25 · **탐색 15(신설)** · **영향 판정 10(근본 40에서 분리)** ·
+  오귀인 5 · 조치 5. 원칙은 **"어떻게든 원인을 맞히는 것이 첫째, 경로는 묻지 않는다."**
+  [scoring/rubric-v3.md](docs/scoring/rubric-v3.md). **회차 2 주입 전 앵커 재배치가 선행**돼야 한다.
 
 ### 블라인드를 깨지 말 것
 
@@ -81,10 +85,15 @@ api → service → collector(client) + analyzer → llm → notify → report
 `application` 라벨은 **Loki에 존재하지 않는다** (Micrometer common tag는 메트릭 전용).
 근거: toy-content `docs/observability/observability.md` 2026-07-25 절.
 
-미해결 결함: `CollectProperties.errorWarnQuery()`의 `| logfmt | level=~"ERROR|WARN"`는
-평문 Logback 로그(`logging.pattern.level`)에서 `level` 필드를 만들지 못한다 — 셀렉터를
-고쳐도 이 쿼리는 빈 결과다. `traceIdQuery`는 라인 필터라 셀렉터 수정만으로 동작한다.
-**두 쿼리의 처방이 다르다.**
+**해소됨 (2026-07-28 · 회차 2부터 적용).** 조사 6회가 로그 0건이던 원인은 **독립된 두 결함**이었다.
+
+1. **셀렉터** — `{app=~"content|auth|chat"}`. `app` 라벨은 Loki에 없고 값도 `-service` 접미가
+   빠져 매칭 스트림이 0개였다. 기본값을 `service_name` / `*-service`로 바로잡았다.
+2. **파싱** — `errorWarnQuery`의 `| logfmt | level=~`는 평문 Logback에서 `level` 필드를 만들지
+   못해, **셀렉터를 고쳐도 이 쿼리만** 빈 결과였다. 라인 필터 `|~ "ERROR|WARN"`로 교체.
+
+**회차 1은 이 결함을 안은 채 baseline이 됐고 점수는 그대로 둔다** — 델타 예측과 대조군 설계는
+[docs/round-2/](docs/round-2/README.md) B-1·B-2.
 
 ## 문서
 
@@ -92,6 +101,9 @@ api → service → collector(client) + analyzer → llm → notify → report
 |---|---|
 | **지금 어디까지 왔나** | [docs/STATUS.md](docs/STATUS.md) — 여기서 시작 |
 | **회차별 §8 점수와 판정 근거** | [docs/scoring/](docs/scoring/README.md) — 채점 대장 |
+| **장애별 항목 점수 / 앵커 요건** | [scoring/summary.md](docs/scoring/summary.md) · [scoring/anchors.md](docs/scoring/anchors.md) |
+| **채점 항목을 어떻게 정했나** | [scoring/rubric-v3.md](docs/scoring/rubric-v3.md) — 탐색부터 원인 분석까지 |
+| **대외용 종합 보고서** | [scoring/report.md](docs/scoring/report.md) — 장애 상황 + 채점 항목 + 결과 |
 | **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) — 토큰·비용 측정 기준 |
 | 전체 계획과 진입 게이트 | [docs/strategy.md](docs/strategy.md) |
 | 관측 파이프라인 구성·한계 | [docs/monitoring.md](docs/monitoring.md) |
