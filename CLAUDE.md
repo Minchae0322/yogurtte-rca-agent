@@ -87,6 +87,26 @@ LLM이 원인을 랭킹하는 v0 baseline이며, **성능을 측정하는 것 �
 > 실제로 발생), **요청한 모델이 목록에 있으면 그것이 본답변 모델**이다. 목록에 아예 없을
 > 때만 진짜 대체이고, 그때는 회차를 별도 구성으로 기록한다.
 
+### 개선 사항은 **그것을 적용할 회차 폴더**에 모은다
+
+조사에서 결함을 찾았으면 수정안은 **[`docs/round-N/README.md`](docs/round-3/README.md)** 에 쓴다.
+`round-N/`은 **회차 N에 적용할 변경 대기열**이고, 그 내용은 **회차 N−1 조사에서 나온 것**이다
+(예: 회차 2 조사에서 나온 결함 → `docs/round-3/`).
+
+| 어디에 | 무엇을 |
+|---|---|
+| `docs/round-N/README.md` | **SoT.** 수정안 전문 · 변경군 분류 · 실행 순서 · 예측 표 · 체크리스트 |
+| `docs/<문항>/round-N.md` | 그 회차가 **발견한 사실**과 "다음 회차로 넘기는 것" **목록만** |
+| `docs/STATUS.md` | **요약 3줄 + 링크.** 표를 옮겨 적지 않는다 |
+
+- **같은 표를 두 곳에 두지 않는다** — AP-2·AP-3에서 SoT가 갈라진 전례가 있다.
+- **결함은 발견 즉시 고치지 않는다.** 회차 N을 baseline으로 고정해야 전후 델타가 성립한다
+  (RUNBOOK §6: *"채록·채점 전에 결함을 고치지 말 것 — 고치면 문항이 소멸한다"*).
+- **변경군을 섞지 말 것.** A(앱 계측) · B(조사 도구) · C(프롬프트)를 한 회차에 같이 넣으면
+  점수가 올라도 무엇 때문인지 증명할 수 없다. 대기열 문서에 변경군을 반드시 표기한다.
+- **수정안에는 "이 신호가 실제로 도달하는가"를 확인한 결과를 함께 적는다** — 확인 없이 세운
+  인과 예측이 AP-1·AP-2에서 연속으로 반증됐다.
+
 ### 블라인드를 깨지 말 것
 
 **에이전트는 피험자다.** 리포트 생성 경로(`RcaService` → `ReportStore`)에 앵커·정답지를
@@ -169,11 +189,12 @@ api → service → collector(client) + analyzer → llm → notify → report
 | **채점 항목을 어떻게 정했나** | [scoring/rubric-v3.md](docs/scoring/rubric-v3.md) — 탐색부터 원인 분석까지 |
 | **대외용 종합 보고서** | [scoring/report.md](docs/scoring/report.md) — 장애 상황 + 채점 항목 + 결과 |
 | **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) — 토큰·비용 측정 기준 |
+| **다음 회차에 뭘 고칠 건가** | [docs/round-3/](docs/round-3/README.md) — 변경 대기열 (회차별 `round-N/`) |
 | 전체 계획과 진입 게이트 | [docs/strategy.md](docs/strategy.md) |
 | 관측 파이프라인 구성·한계 | [docs/monitoring.md](docs/monitoring.md) |
 | 왜 그렇게 결정했나 | [docs/decisions/](docs/decisions/README.md) |
 | 찾아낸 문제들 (정답지 겸용) | [docs/findings/](docs/findings/README.md) |
-| 장애별 회차 기록 | [docs/ch-1/](docs/ch-1/README.md) · [docs/in-2/](docs/in-2/README.md) · [docs/au-2/](docs/au-2/README.md) |
+| 장애별 회차 기록 | [docs/ch-1/](docs/ch-1/README.md) · [docs/in-2/](docs/in-2/README.md) · [docs/au-2/](docs/au-2/README.md) · [docs/ap-3/](docs/ap-3/README.md) |
 
 문서 작성 원칙: **결론만이 아니라 판단 과정과 실측 수치를 남긴다.** 추측은 "가설"로 명시하고
 확인 방법을 붙인다. 근거 없는 항목은 쓰지 않는다.
