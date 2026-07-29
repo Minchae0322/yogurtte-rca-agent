@@ -1,22 +1,22 @@
-# RCA Report — `6a65bd43c41bfa6c5c18a89e1f855373`
+# RCA Report — `6a65c38bea0e08d50df7b169594a2844`
 
 | 항목 | 값 |
 |---|---|
 | 모드 | rca |
-| 질문 | 왜 알림이 늦었어? |
-| 시각 | 2026-07-26T08:00:22.441950Z |
+| 질문 | 왜 알림이 안 왔어? |
+| 시각 | 2026-07-26T08:27:30.588759Z |
 | provider | claude-cli |
 | prompt | `./prompts/system-prompt.md` |
-| tokens | in 44798 / out 9162 · cost $1.0845 |
-| elapsed | total 135443ms (tempo 563 · loki 190 · mimir 290 · assemble 2 · llm 134383) |
+| tokens | in 47503 / out 6756 · cost $1.0200 |
+| elapsed | total 101766ms (tempo 490 · loki 180 · mimir 269 · assemble 0 · llm 100822) |
 
 ## 수집 범위 (Coverage)
 
-- **window**: 2026-07-26T07:52:43.565322Z ~ 2026-07-26T07:57:08.353020Z (264s)
-- **trace**: 25,768B / 29 spans
-- **logs**: errwarn=3,957B · traceId=3,957B
+- **window**: 2026-07-26T08:19:31.366694Z ~ 2026-07-26T08:25:35.398590Z (364s)
+- **trace**: 31,044B / 28 spans
+- **logs**: errwarn=3,956B · traceId=3,956B
 - **metrics**: 3 수집, 누락 [kafka_consumer_fetch_manager_records_lag]
-- **context**: 43,387 chars (~10,846 tok 추정)
+- **context**: 49,404 chars (~12,351 tok 추정)
 
 ## 수집 실패/누락
 
@@ -26,46 +26,52 @@
 
 ## 1. 원인 후보 랭킹 (최대 3개)
 
-1. **chat-service `processNotification` 내부의 미계측(un-instrumented) 블로킹 구간** — 전체 지연 24.7초 중 23.4초가 이 구간에서 발생. 위치는 확정이나, 그 안에서 무엇을 했는지는 **데이터 부족**.
-2. **첫 MongoDB 작업 직전의 대기 (Mongo 커넥션 확보/서버 셀렉션 지연 가설)** — 미계측 구간이 정확히 "첫 Mongo insert 직전"에서 끝난다는 위치 정황에 근거.
-3. **chat pod 자체의 리소스 정체(GC/CPU 스톨)** — 메트릭 스크레이프 공백과 GC 상승이 정황 근거이나 설명력 부족.
+1. **MongoDB 인스턴스(172.31.46.124:27017) 다운 — mongod 프로세스가 리스닝하지 않아 Connection refused, chat-service가 알림 저장/발송 처리에 4회 실패 후 메시지를 DLQ로 보내 알림 유실**
+2. **네트워크 정책/방화벽이 27017 포트만 차단 (REJECT)** — 1번과 증상은 동일하나 원인 계층이 다름
+3. **chat-service의 MongoDB 접속 설정 오류 (잘못된 엔드포인트/포트)** — 데이터 부족으로 배제 불가한 수준
+
+Kafka 자체 장애는 후보에서 제외한다. 발행(`publish user.notifications`, 08:21:31.410Z, 14ms 성공)과 소비(offset 910, partition 3을 4회 정상 수신) 모두 트레이스에 남아 있어 파이프라인 전달은 정상이었다.
 
 ## 2. 후보별 근거
 
-### 후보 1: `processNotification` 내부 미계측 블로킹 구간
+### 후보 1: MongoDB 다운 (mongod 프로세스 미가동/미리스닝)
 
-- 근거:
-  - 업스트림은 전부 빠름: content의 `http post /battles/{battleId}/items/{itemId}/comments` 전체 72.7ms(07:52:43.565→.638), `publish user.notifications` 18ms.
-  - Kafka 구간도 빠름: publish 종료 07:52:43.654027 → chat의 `receive` 시작 07:52:43.655475, **핸드오프 1.45ms**. 브로커 체류/컨슈머 랙에 의한 지연이 아님.
-  - chat의 `receive` span 총 24.70초(07:52:43.655 → 07:53:08.353). 그 안에서 `user-notification-service#process-notification`이 07:52:43.661654에 시작했는데, **첫 자식 span인 `insert toychat`(`user_notifications.insert`)이 07:53:07.105914에야 시작 — 23.44초 공백**. 공백 구간에 자식 span이 하나도 없다.
-  - 공백 이후의 작업은 전부 정상 속도: Mongo insert 21ms, `user_sync_status.find` 71ms, `user_notification_settings.find` 20ms, Redis `KEYS` ~1ms, `push-dispatcher#dispatch` 0.92초.
-  - JDBC 대기도 아님: chat `connection` span에서 `acquired` 이벤트가 시작 1.7ms 후 발생, `hikaricp_connections_pending`은 전 서비스 전 구간 0.
-- 확신도: **높음** (지연이 이 구간에서 발생했다는 위치 특정에 한함. 구간 내부에서 수행된 작업의 정체는 데이터 부족 — 트레이스에 span 없음, Loki 로그 0건).
-- 반증 데이터: 없음.
+- **근거:**
+  - chat-service의 `receive`(user.notifications, offset 910, partition 3) 및 `user-notification-service#process-notification` span 4개 모두 `STATUS_CODE_ERROR`이며 error 속성 원문:
+    > `Timed out while waiting for a server that matches WritableServerSelector. Client view of cluster state is {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoSocketOpenException: Exception opening socket}, ... caused by {java.net.ConnectException: Connection refused}}]`
+  - `Connection refused`는 타임아웃이 아니라 대상 포트가 닫혀 있어 즉시 거절(RST)됐다는 뜻 → 호스트는 살아 있고 27017에서 리스닝하는 프로세스가 없음을 시사.
+  - 타임라인: 소비 시도 4회가 각각 정확히 **약 30.0초** 소요(08:21:31.425→08:22:01.498, 08:22:02.646→08:22:32.663, 08:22:33.667→08:23:03.681, 08:23:04.687→08:23:34.699). 30초는 MongoDB 드라이버 기본 `serverSelectionTimeoutMS=30000`과 일치 — 매 시도마다 서버 선택에 끝까지 실패했다는 의미.
+  - 4회 실패 직후 `publish user.notifications.dlq` span(08:23:34.711→08:23:35.398)이 존재 → 재시도 소진 후 DLQ로 이동, **알림은 지연이 아니라 미발송(유실) 상태**.
+  - 각 시도마다 JDBC `connection` span의 이벤트가 `acquired` → `rollback`으로 끝남 → Mongo 실패로 처리 트랜잭션 전체가 롤백됨.
+  - 같은 호스트 172.31.46.124의 Redis(6379)는 content-service의 `GET` span(08:21:31.381, 0.5ms, 성공)으로 정상 응답 → **호스트/네트워크 전체 장애가 아니라 27017 포트(mongod)만의 문제**임을 뒷받침.
+- **확신도: 높음** — 단, Loki 로그가 0건(ERROR/WARN, traceId 매칭 모두 빈 결과)이고 `kafka_consumer_fetch_manager_records_lag` 메트릭도 수집 실패라 애플리케이션 로그 차원의 교차 검증은 못 했다. 트레이스의 예외 원문이 4회 반복으로 일관되어 이 공백을 감안해도 높음을 유지한다.
+- **반증 데이터: 없음.**
 
-### 후보 2: 첫 Mongo 작업 직전 대기 — 커넥션/서버 셀렉션 지연 가설
+### 후보 2: 27017 포트에 대한 네트워크 차단 (Security Group / NetworkPolicy의 REJECT)
 
-- 근거:
-  - 23.44초 공백이 트레이스 내 **최초의 MongoDB 명령 직전**에서 끝난다. Mongo 드라이버의 커넥션 체크아웃/서버 셀렉션 대기는 명령 span(`insert`) 시작 전에 일어나므로 span에 잡히지 않는 위치와 일치한다.
-  - 다만 이는 위치 정황일 뿐이며 직접 증거(드라이버 풀 메트릭, 타임아웃 로그)는 없음 — **데이터 부족**. Mongo 커넥션풀 메트릭과 chat 로그가 추가로 필요.
-- 확신도: **낮음**.
-- 반증 데이터: 공백 직후의 Mongo 작업들이 21~71ms로 즉시 정상 수행됨(서버 자체가 느렸다면 명령 span도 길었을 가능성이 높음). Loki ERROR/WARN 0건이라 타임아웃/재연결 로그 흔적도 없음(단, traceId 매칭 로그도 0건이라 로그 파이프라인 자체가 비어 있어 반증력은 제한적).
+- **근거:** 관측된 증상(`ConnectException: Connection refused`)은 방화벽이 DROP이 아닌 REJECT로 응답할 때도 동일하게 나타난다. 트레이스만으로는 "프로세스 부재"와 "REJECT 규칙"을 구분할 수 없다.
+- **확신도: 낮음**
+- **반증 데이터:** 동일 호스트 172.31.46.124의 6379(Redis)는 클러스터 내 파드(content-service, 10.42.1.27)에서 정상 접근됨. 포트 단위 차단이 아니고서는 성립하지 않으며, 그런 규칙 변경이 있었다는 근거는 데이터에 없다. 또한 일반적인 SG/DROP 차단이라면 refused가 아닌 connect timeout으로 나타났을 가능성이 높다.
 
-### 후보 3: chat pod 리소스 정체 (GC/CPU 스톨)
+### 후보 3: chat-service의 MongoDB 접속 설정 오류
 
-- 근거:
-  - `hikaricp_connections_active`/`pending`의 chat-service(pod `chat-service-857c54dd97-zcsh7`) 샘플이 07:52:58(1785052498) 이후 07:54:13(1785052573)까지 **4회 연속(약 60~75초) 누락** — 같은 시간대 auth/content pod는 15초 간격으로 연속 수집됨. 스크레이프 무응답은 pod 정체의 정황.
-  - `rate(jvm_gc_pause_seconds_sum[5m])`에서 chat의 minor GC(`gc="Copy"`, `cause="Allocation Failure"`)가 07:52:33경 0.00014→0.0015로, 07:54:13경 0.0028로 상승. 수집기가 Copy/MarkSweepCompact(Serial 계열)인 점은 작은 힙 환경을 시사.
-- 확신도: **낮음**.
-- 반증 데이터: GC pause 총량이 최대 0.0028s/s ≈ 5분당 0.85초 수준으로 23초 공백을 설명하기엔 두 자릿수 부족. major GC(`MarkSweepCompact`)는 전 구간 0. 또한 공백 전후의 span들(JDBC acquire 1.7ms, Mongo/Redis ms 단위)이 정상 속도로 실행되어 장시간 전면 스톨과 배치됨. 스크레이프 공백(07:53:13~)도 지연 구간(07:52:43~07:53:07)보다 뒤에 시작.
-
-**배제된 후보**: Kafka 컨슈머 랙(핸드오프 1.45ms로 반증), HikariCP 풀 고갈(pending 전 구간 0, acquire 1.7ms). 단, `kafka_consumer_fetch_manager_records_lag` 수집 실패로 랙 배제는 트레이스 단건 근거에만 의존함.
+- **근거:** 드라이버가 바라보는 주소가 172.31.46.124:27017 단일 노드라는 사실만 트레이스에 있고, 이 주소가 "현재 올바른" MongoDB 엔드포인트인지 판단할 데이터가 없다(Mongo 서버 측 메트릭/로그 부재). Mongo가 다른 주소로 이전/재배포되었는데 chat 설정이 구버전일 가능성을 배제할 수 없다. **데이터 부족** — Mongo 서버 자체의 가동 상태 데이터(프로세스 상태, mongod 로그, 서버 측 메트릭)가 필요하다.
+- **확신도: 낮음**
+- **반증 데이터: 없음** (구분에 필요한 데이터 자체가 없음).
 
 ## 3. 권장 다음 조치
 
-1. **코드 확인(최우선)**: `com.example.toychat.app.userNotification.service.UserNotificationService#processNotification`에서 첫 `user_notifications` insert **이전에** 실행되는 로직 확인 — 외부 API 호출, 재시도 루프, 락 대기, sleep, 동기 초기화 등. 해당 구간에 span/타이머 계측 추가.
-2. **로그 파이프라인 점검**: Loki에서 ERROR/WARN도, traceId 매칭 로그도 0건. chat-service 로그가 수집되고 있는지, 로그에 traceId가 주입되는지 확인 후 07:52:43~07:53:10 구간 raw 로그 재조회.
-3. **Mongo 드라이버 지표 수집**: `mongodb_driver_pool_*` (checkout 대기, 커넥션 수) 메트릭과 드라이버 로그로 후보 2 검증. `serverSelectionTimeoutMS`/커넥션풀 설정 확인.
-4. **pod 리소스 확인**: 해당 시각 chat pod의 `container_cpu_cfs_throttled_seconds_total`, 메모리 사용량, K8s 이벤트 조회. 07:53:13~07:54:13 스크레이프 공백의 원인 규명.
-5. **랙 메트릭 재수집**: `kafka_consumer_fetch_manager_records_lag`가 빈 시리즈였으므로 실제 메트릭명(예: `kafka_consumer_fetch_manager_records_lag_max` 또는 exporter 라벨) 확인 후 재조회.
-6. **재현성 확인**: 같은 컨슈머 그룹(`notification-processors`)의 다른 트레이스에서 동일한 "processNotification 시작 ~ 첫 Mongo op" 공백이 반복되는지 비교 — 상시 문제인지 단발성인지 판별.
+**즉시 확인 (원인 확정)**
+1. 172.31.46.124 호스트 접속 후 mongod 상태 확인: `systemctl status mongod`(또는 컨테이너면 `docker ps`/`kubectl get pods`), `ss -lntp | grep 27017`, mongod 로그에서 08:21 이전의 종료/크래시/OOM 흔적 확인.
+2. mongod가 떠 있다면 `bindIp` 설정과 호스트 방화벽/SG의 27017 인바운드 규칙 확인 (후보 2·3 판별).
+3. Tempo에서 같은 시간대 chat-service의 다른 에러 트레이스를 조회해 장애 시작 시점(첫 Mongo 실패 발생 시각)과 영향 범위를 특정.
+
+**복구 및 유실 데이터 처리**
+4. mongod 복구 후 `user.notifications.dlq` 토픽에 쌓인 메시지(이 건은 partition 3, offset 910에서 유래)를 재처리해 미발송 알림을 발송. DLQ 재처리 컨슈머가 없다면 수동 재발행 필요.
+5. DLQ 적체량을 확인해 이 트레이스 외 유실 건수를 산정.
+
+**관측성 공백 보수 (이번 조사에서 확인된 결함)**
+6. Loki에 chat-service ERROR 로그가 한 줄도 없음 — Mongo 예외가 4회 발생했는데 로그 0건은 수집 파이프라인(Alloy) 문제이거나 로그 레이블 불일치. 로그 수집 경로 점검.
+7. `kafka_consumer_fetch_manager_records_lag` 메트릭 시리즈 부재 — 컨슈머 lag 계측 활성화.
+8. chat-service의 Hikari 메트릭 시리즈가 08:21:46(1785054106) 이후 끊김(다른 서비스는 08:25:31까지 존재) — chat-service 파드의 메트릭 스크레이프 상태 점검.
+9. 재발 대비 알림 추가: DLQ publish rate > 0 알람, MongoDB 27017 헬스체크(blackbox exporter 등) 알람.

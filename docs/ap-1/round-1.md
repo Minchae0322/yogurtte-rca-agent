@@ -80,4 +80,4 @@ http post /feeds/{feedId}/comments   238ms [루트 ERROR]
 - CLI 샌드박스 격리 활성 (레포 컨텍스트 차단) 상태에서 조사됨
 
 - 평가 상세(채점 후 작성): AE-05 예정 · 대비: 같은 500이라도 인프라 원인인
-  [CH-1 round-2](../ch-1/round-2.md)와 "앱 결함" 원인인 이 문항의 신호 차이
+  [CH-1 round-1](../ch-1/round-1.md)와 "앱 결함" 원인인 이 문항의 신호 차이

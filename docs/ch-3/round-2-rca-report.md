@@ -3,43 +3,41 @@
 | 항목 | 값 |
 |---|---|
 | 모드 | rca |
-| 질문 | 최근 1시간 안에 댓글 알림이 안 왔다는 제보가 있어요. 확인해줘 |
-| 시각 | 2026-07-29T05:40:08.922328500Z |
+| 질문 | 최근 1시간 안에 앱이 잠깐 버벅였다는 얘기가 있어요. 뭔가 있었는지 봐줘 |
+| 시각 | 2026-07-29T05:50:58.615230500Z |
 | provider | claude-cli |
 | model | `claude-opus-5` · turns 1 |
 | prompt | `.\prompts\system-prompt.md` |
-| tokens | in 173427 (cacheRead 23,453 · cacheCreate 149,972) / out 12270 · cost $1.9355 |
-| elapsed | total 182962ms (tempo 473 · loki 620 · mimir 1222 · assemble 2 · llm 175458) |
+| tokens | in 173434 (cacheRead 23,453 · cacheCreate 149,979) / out 13948 · cost $1.9775 |
+| elapsed | total 206951ms (tempo 470 · loki 307 · mimir 663 · assemble 2 · llm 200409) |
 
 ## 탐색 (Triage)
 
 | 항목 | 값 |
 |---|---|
 | 시간창 해석 | 상대 표현 '최근 1시간' |
-| 스윕 창 | 2026-07-29T04:39:13.949335500Z ~ 2026-07-29T05:39:13.949335500Z |
+| 스윕 창 | 2026-07-29T04:50:09.648205100Z ~ 2026-07-29T05:50:09.648205100Z |
 | 좁힌 창 | 2026-07-29T04:57:00Z ~ 2026-07-29T05:22:00Z |
 | 대상 | chat-service, content-service |
 | traceId | 6a6988a1539ec8bf5f46e52f9b611344 |
 | 트레이스 후보 | 4건 |
 | 계획 파싱 | 성공 |
 | prompt | `.\prompts\triage-prompt.md` |
-| tokens | in 49795 / out 3746 · cost $0.4141 |
-| chars | 컨텍스트 41,868 + 프롬프트 1,231 = **43,099** |
-| elapsed | survey 2060ms · llm 52860ms |
+| tokens | in 49820 / out 3344 · cost $0.3771 |
+| chars | 컨텍스트 41,901 + 프롬프트 1,231 = **43,132** |
+| elapsed | survey 1054ms · llm 47913ms |
 
-**선정 이유**: 제보된 '댓글 알림 미수신'과 시각·경로가 정확히 일치하는 유일한 구간으로, chat-service 파드가 04:59~05:19 부재한 사이 user.notifications lag가 쌓이고 댓글 POST 트레이스가 30초 타임아웃으로 실패했으므로 그 앞뒤 여유를 둔 04:57~05:22를 발행측(content)과 소비측(chat) 양쪽으로 파고들 범위로 잡았다.
+**선정 이유**: mongodb_up 하락(05:00:09)·chat-service 에러 급증(05:05 피크 54건)·chat-service 파드 up 시계열 단절(05:05:09~05:15:09)·30초 타임아웃 트레이스(05:00~05:03)·notification 컨슈머 lag 적체(05:10~05:15)가 모두 같은 10분 구간에 겹치고 05:20에 일제히 정상 복귀하므로, 앞뒤 여유를 둔 04:57~05:22 구간의 chat-service(및 그 호출자인 content-service)를 깊게 봐야 한다.
 
 **근거**
 
-- up{job="chat-service", pod="chat-service-857c54dd97-s5fbl", instance="10.42.1.31:8090"} 시계열이 04:59:13 이후 소실, 대체 파드 -w7bf7(10.42.1.39)는 05:19:13에 첫 등장 — 약 20분간 chat-service 인스턴스 부재 (동일 ReplicaSet 857c54dd97 = 배포가 아닌 파드 교체/재기동)
-- websocket_active_users 시계열도 동일하게 04:59:13~05:19:13 구간이 통째로 비어 있음 (양쪽 파드 모두 값 0이라 수치 자체보다 '계열 단절'이 신호)
-- kafka_consumergroup_lag{consumergroup="notification-processors", topic="user.notifications", partition="3"}: 05:09:13에 19, 05:14:13에 25로 증가 후 05:19:13에 0 복귀 — 전 구간 0인 다른 모든 파티션과 대조. 이벤트는 발행됐으나 소비되지 않았음
-- kafka_consumergroup_lag{consumergroup="notification-recovery", topic="user.notifications.dlq", partition="0"}가 05:04:13에 1 — 알림 메시지 1건이 DLQ로 유입
-- Loki ERROR/WARN(chat-service): 05:00:00 버킷 18건, 05:05:00 버킷 54건으로 급증 후 05:15:00 2건, 05:25:00 1건으로 소멸 — 파드 소실 직전/직후에 집중
-- Tempo 6a6988a1539ec8bf5f46e52f9b611344: content-service root `http post /battles/{battleId}/items/{itemId}/comments`, 05:00:15.235 시작, 30.015s/30.002s/30.016s 타임아웃 스팬, serviceStats chat-service spanCount 17 / errorCount 8 — 댓글 생성→알림 경로가 실제로 끊긴 대표 트레이스
-- chat-service root `connection` 트레이스 2건(05:01:17, 05:02:47)이 각각 30.0s 타임아웃 — 클라이언트 연결 자체가 성립하지 않음
-- mongodb_up이 04:59:13 단일 포인트에서 0 (05:04:13 복구) — chat-service 소실 시각과 인접, 선행 트리거 후보
-- kafka_brokers는 전 구간 1, auth-service/content-service의 up은 전 구간 1 — Kafka 브로커와 발행측(content)은 정상, 소비측(chat)만 이상
+- chat-service 파드 chat-service-857c54dd97-s5fbl의 up 시계열이 05:05:09 샘플을 마지막으로 소멸(05:00:09 샘플도 결측), 대체 파드 w7bf7의 up은 05:15:09에야 최초 등장 — 05:05~05:15 약 10분간 chat-service 스크레이프 대상 부재 (파드 재기동/교체 정황)
+- Loki ERROR/WARN 발생률: chat-service 05:00:00 버킷 18건 → 05:05:00 버킷 54건(구간 최대), 05:15:00에 2건으로 급감. 동일 구간 auth-service는 0건
+- mongodb_up이 05:00:09 샘플에서 1 → 0으로 하락 후 05:05:09에 1로 복구 (조회 1시간 중 유일한 0)
+- Tempo: content-service 'http post /battles/{battleId}/items/{itemId}/comments' 트레이스(6a6988a1539ec8bf5f46e52f9b611344)가 05:00:15 시작, 하위 스팬 3개가 각각 30.015s / 30.002s / 30.016s로 타임아웃, serviceStats에서 chat-service 17스팬 중 8개 error, content-service 15스팬은 error 0 — 실패 지점이 chat-service 쪽에 몰림
+- Tempo: chat-service rootTraceName='connection' 트레이스 2건이 05:01:17(30086ms), 05:02:47(30008ms)에 각각 30초 타임아웃 에러로 종료
+- kafka_consumergroup_lag: consumergroup=notification-processors, topic=user.notifications, partition=3 이 05:00:09에 1 → 05:10:09에 24, 05:15:09에 25로 적체 후 05:20:09에 0으로 해소. 다른 파티션·컨슈머그룹은 전 구간 0 (-1은 미할당 마커)
+- kafka_brokers=1, up{job=kafka|redis|auth-service|content-service} 전 구간 1로 유지 — 브로커·auth·content 프로세스 자체는 무중단, 이상은 chat-service에 국한
 
 **스윕이 찾은 트레이스** (고른 것은 6a6988a1539ec8bf5f46e52f9b611344)
 
@@ -54,7 +52,7 @@
 
 - **window**: 2026-07-29T04:57:00Z ~ 2026-07-29T05:22:00Z (1500s)
 - **trace**: 29,684B / 28 spans
-- **logs**: errwarn=45,754B · traceId=23,526B
+- **logs**: errwarn=45,751B · traceId=23,524B
 - **metrics**: 8 수집 / 164,667B, 누락 [sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))]
 - **context**: 263,787 chars (+ 시스템 프롬프트 597 chars)
 
@@ -62,9 +60,9 @@
 
 | 단계 | 총 in | chars | 컨텍스트 토큰 |
 |---|---:|---:|---:|
-| 탐색 | 49,795 | 43,099 | 23,219 |
-| 분석 | 173,427 | 264,384 | 146,851 |
-| **합계** | **223,222** | | **170,070** |
+| 탐색 | 49,820 | 43,132 | 23,244 |
+| 분석 | 173,434 | 264,384 | 146,858 |
+| **합계** | **223,254** | | **170,102** |
 
 - **overheadTokens 26,576 tok — 이 회차에 실측**(1자 프롬프트 프로브, 같은 명령·모델·샌드박스).
   호출마다 한 번씩 얹히므로 단계별로 뺀다. **다른 날 상수를 쓰지 않았다 = `█ 실측`.**
@@ -77,74 +75,97 @@
 
 ---
 
+조사 결과 요약: 이 traceId에서 **사용자 요청(댓글 작성) 자체는 200/57ms로 정상 성공**했고, 깨진 것은 그 뒤의 **알림 발송 파이프라인**입니다. 원인은 MongoDB 인스턴스 다운입니다.
+
+관측 타임라인 (KST, = UTC+9):
+
+| 시각 | 관측값 |
+|---|---|
+| 13:58:12~13:58:45 | Mongo 연결 거부 시작. `mongodb_up` 1→0 (13:58:30=1, 13:58:45=0) |
+| 13:59:13 | content-service `POST /api/battles/22/items/125/comments` → 200, 57ms / Kafka `user.notifications` p3 offset=963 발행 성공 |
+| 13:59:13~14:01:16 | chat-service consumer 4회 실패 (각 ~30.0초) |
+| 14:01:16 | `user.notifications.dlq` 발행 (partition=0 offset=12) |
+| 14:01:47, 14:03:17 | DLQ 재처리도 실패 |
+| 14:03:30~14:03:45 | `mongodb_up` 0→1 복구 (다운 ~4분 45초) |
+| ~14:04:30 | `notification-recovery` DLQ lag 1→0 (DLQ 메시지 소진) |
+| 14:06:00 | 파드 `chat-service-857c54dd97-s5fbl` 메트릭 시계열 종료 |
+| 14:06~14:15 | `user.notifications` p3 lag 2→25 누적 (컨슈머 부재) |
+| 14:13:18 | 신규 파드 `chat-service-857c54dd97-w7bf7` 기동 로그 |
+| 14:15:30 | p3 lag 25→0 소진 |
+
 ## 1. 원인 후보 랭킹 (최대 3개)
 
-1. **MongoDB(172.31.46.124:27017) 다운으로 chat-service의 알림 저장(user_notifications insert) 실패 → 재시도 4회 소진 → DLQ 이관** — 이번 traceId의 직접 원인
-2. **chat-service 컨슈머 파드 교체(s5fbl → w7bf7)로 14:06~14:15 구간 소비 중단** — 같은 시간대 다른 댓글 알림 25건 지연 (별개 구간의 2차 영향)
-3. **DLQ 재처리 이후 사용자 단말까지의 실제 발송 여부 미확인** — 데이터 부족
-
-전제: 댓글 자체는 정상 처리됨. content-service `http post /battles/{battleId}/items/{itemId}/comments` = `status: 200`, 57ms, `commentId: 136`, Kafka 발행도 성공(`[Kafka] 알림 발행 성공: userId=7, type=BATTLE_ITEM_COMMENT, partition=3, offset=963`). 즉 **댓글은 저장됐고 알림 소비 단계만 실패**했다.
+1. **MongoDB(172.31.46.124:27017) 프로세스 다운 (13:58:45~14:03:30)** — 알림 처리 실패의 직접 원인
+2. **chat-service 파드 소실/교체(14:06~14:15)로 인한 컨슈머 공백** — 후반부 알림 지연(25건)의 원인. 파드가 왜 사라졌는지는 데이터 부족
+3. **30초 서버선택 타임아웃 × 4회 재시도 + 단일 리스너 스레드 설정에 의한 장애 증폭** — 근본 원인이 아닌 기여 요인
 
 ## 2. 후보별 근거
 
-### 후보 1 — MongoDB 다운 (13:58:45~14:03:30 KST / 04:58:45~05:03:30 UTC)
-
+### 후보 1. MongoDB 인스턴스 다운
 - **근거**
-  - `mongodb_up`이 1785301125(13:58:45)에 `1→0`, 1785301425(14:03:45)에 `0→1`. 같은 구간 `up{job="mongodb"}`는 계속 1 → 익스포터는 살아 있고 **mongod 프로세스만 죽은 상태**.
-  - 실패 원인 문자열이 타임아웃이 아니라 **포트 거부**: `com.mongodb.MongoSocketOpenException ... AnnotatedConnectException: Connection refused: /172.31.46.124:27017`.
-  - 트레이스: `user.notifications receive`(CONSUMER) 스팬 4개가 모두 `STATUS_CODE_ERROR`, 각각 약 30초(예: 1785301215235167000→1785301245250267000 = 30.015s). 하위 `user-notification-service#process-notification`(`UserNotificationService.processNotification`) 동일 에러.
-  - 로그 재시도 4회 전부 동일 원인, 약 31초 간격: `[KAFKA-RETRY] user-notification 처리 실패 1회차` 13:59:43 → `2회차` 14:00:14 → `3회차` 14:00:45 → `4회차` 14:01:16 (`topic=user.notifications partition=3 offset=963`).
-  - `[KAFKA-DLQ] 발행: user.notifications -> user.notifications.dlq (partition=3 offset=963)` 14:01:16.272, 이어서 `재시도 소진 - recoverer 처리 완료` 14:01:17.595.
-  - `org.mongodb.driver.cluster : Waiting for server ... Remaining time: 29999 ms. Selector: WritableServerSelector` → 서버선택 타임아웃 30초 설정. 30s × 4회 ≈ 2분간 partition 3 소비 정지(`kafka_consumergroup_lag{consumergroup="notification-processors",partition="3"}`가 13:59:30~14:01:15 동안 1).
-  - 헬스체크도 동일 구간 10초 주기로 실패: `MongoReactiveHealthIndicator : Mongo health check failed` + `(mongo) took 30004ms to respond` (13:58:42 ~ 14:03:18, 마지막 두 건은 24893ms/14847ms로 회복 추세).
-- **확신도: 높음**
+  - `mongodb_up`: 13:58:30 `1` → 13:58:45 `0`, 14:03:30까지 `0` 유지, 14:03:45 `1` 복귀. 총 약 4분 45초.
+  - 예외 원문(트레이스 `receive`, `user-notification-service#process-notification` span의 `error` 속성, 그리고 Loki 로그 동일 문자열): `com.mongodb.MongoTimeoutException: Timed out while waiting for a server that matches WritableServerSelector ... {com.mongodb.MongoSocketOpenException: Exception opening socket}, caused by {io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /172.31.46.124:27017}, caused by {java.net.ConnectException: Connection refused}`
+  - `Connection refused`(RST)는 호스트 도달 불가가 아니라 **27017 리스너 부재**를 의미. 실제로 같은 호스트의 `up{job="redis"}`, `up{job="kafka"}`, `up{job="node-infra"}`, `up{job="mongodb"}`(exporter)는 전 구간 `1` → 호스트·네트워크는 정상, **mongod 프로세스만 죽음**.
+  - 부수 증상: `MongoReactiveHealthIndicator : Mongo health check failed`가 13:58:42부터 10초 간격 반복, `Health contributor ... (mongo) took 30004ms to respond`로 `/actuator/health`가 매번 30초 소요. 복구 직후 14:03:18에 `24893ms`, `14847ms`로 감소하며 정상화.
+  - 정확한 시작 시점은 13:58:12(30초 걸린 첫 health check의 시작 추정)~13:58:45(첫 `mongodb_up=0` 스크레이프) 사이.
+- **확신도**: 높음
 - **반증 데이터**
-  - 첫 헬스체크 WARN이 13:58:42에 "took 30004ms"이므로 앱 측 스톨은 **13:58:12경**부터인데, `mongodb_up`은 1785301110(13:58:30)까지 1이었다 → 익스포터 감지 시점과 앱 체감 시점이 최대 30초 어긋난다(장애 시작이 더 이를 수 있음).
-  - Mongo 장애 창(≈5분)만으로는 **14:06~14:15의 lag 25 누적을 설명하지 못한다** → 단일 원인이 아님(후보 2 필요).
-  - 그 외 인접 원인은 모두 배제됨: `kafka_brokers=1`·`up{job="kafka"}=1` 내내 정상, `hikaricp_connections_pending=0`(전 서비스, 전 구간), chat-service GC 정지시간 rate ≈ 0.0001s/s 수준, auth-service `up=1`·GC 정상.
+  - 사용자 요청 경로는 무손상: content-service span `http post /battles/{battleId}/items/{itemId}/comments` = `status 200`, `outcome SUCCESS`, 57ms. `[HTTP] POST /api/battles/22/items/125/comments 200 - 57ms`. → 체감 "버벅임"이 **API 응답 지연**이었다면 이 후보로 설명되지 않음.
+  - 시간 범위 불일치: Mongo는 14:03:45에 복구됐는데 `user.notifications` p3 lag는 14:06~14:11에 오히려 0→25로 증가. **후반부 지연은 Mongo 다운으로 설명 불가** (→ 후보 2).
+  - `up{job="mongodb"}`(exporter)와 동일 호스트 Redis는 계속 `1` → "인프라 서버 전체 장애" 가설은 반증됨.
 
-### 후보 2 — chat-service 컨슈머 파드 교체로 14:06~14:15 소비 중단
-
+### 후보 2. chat-service 파드 소실/교체에 따른 컨슈머 공백
 - **근거**
-  - `up{pod="chat-service-857c54dd97-s5fbl"}` 샘플이 1785301560(**14:06:00**)에서 끊기고, 신규 파드 `chat-service-857c54dd97-w7bf7`(10.42.1.39)는 1785302100(**14:15:00**)부터 등장. 신규 파드 기동 로그: 14:13:18.845 `[main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default`.
-  - 그 공백 동안 `kafka_consumergroup_lag{consumergroup="notification-processors", topic="user.notifications", partition="3"}`가 14:06:00 `2` → 14:06:30 `5` → 14:11:00 `25`로 증가 후 14:15:15까지 `25` 유지, 14:15:30에 `0`으로 급감 → **약 9분간 컨슈머 부재, 알림 25건 지연**.
-  - 재기동 유발 요인으로 의심되는 관측값: 액추에이터 헬스가 mongo 기여자 때문에 30초씩 블로킹(`took 30004ms/30001ms` 반복, 13:58:42~14:03:18) → probe 타임아웃 가능성.
-- **확신도: 중간** (파드 교체·소비 중단은 데이터로 확정, **교체 사유는 미확인**)
+  - 파드 `chat-service-857c54dd97-s5fbl`(10.42.1.31)의 `up`/`hikaricp_*`/`websocket_active_users` 시계열이 **14:06:00 샘플을 끝으로 완전히 소멸**.
+  - 신규 파드 `chat-service-857c54dd97-w7bf7`(10.42.1.39) 로그 첫 등장 14:13:18 (`JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default`), `up` 첫 샘플 14:15:00.
+  - 그 공백과 정확히 겹쳐 `kafka_consumergroup_lag{consumergroup="notification-processors", topic="user.notifications", partition="3"}`가 14:06:00 `2` → 14:11:00 `25`로 증가, 14:15:15까지 `25` 유지, 14:15:30 `0`으로 급감(신규 파드가 일괄 소비).
+  - ReplicaSet 해시가 `857c54dd97`로 **동일** → 이미지/설정 롤아웃이 아니라 파드 레벨 재기동(축출·프로브 실패·노드 스케줄링 등).
+  - 정황상 유력한 트리거: `/actuator/health`가 mongo 인디케이터 때문에 30초씩 걸림 → liveness probe 타임아웃 시 kubelet이 컨테이너를 죽임. 다만 아래와 같이 직접 증거는 없음.
+- **확신도**: 중간 (컨슈머 공백이라는 *현상*은 확신도 높음 / 파드가 사라진 *원인*은 **데이터 부족**)
 - **반증 데이터**
-  - 같은 파드가 13:59:00~14:04:15에도 메트릭 샘플이 결측이었지만 그 시간 로그는 계속 남아 있다(14:03:17 DLQ 재시도) → **메트릭 공백 = 파드 부재가 아님**. 14:06 이후 공백도 스크레이프 실패일 가능성이 남는다(단, lag 25 누적은 컨슈머 부재를 강하게 시사).
-  - 파드 재시작/probe 실패를 직접 증명하는 데이터(kube_pod_container_status_restarts_total, K8s Event, lastState.terminated)는 이번 수집분에 **없음 → 데이터 부족**.
+  - `kube_pod_container_status_restarts_total`, `last_terminated_reason`, OOM/노드 리소스 지표를 **수집하지 못함**. `up`이 `0`으로 기록된 게 아니라 시계열 자체가 사라진 것이라, 순수 스크레이프 유실 가능성을 완전히 배제할 수 없음(13:59:15~14:03:45 구간에도 동일한 샘플 공백이 있고 그때는 파드가 살아 있었음 — 로그가 계속 나옴).
+  - 노드 장애 반증: `up{job="integrations/node_exporter"}`, cadvisor/kubelet 모두 전 구간 `1`.
+  - 프로브 가설의 반증: 파드 소멸 추정 시점(14:06 이후)에는 Mongo가 이미 복구(14:03:45)되어 health check가 정상화된 뒤였음 → 30초 health 지연이 직접 트리거였다고 보기엔 3분 이상의 시차가 있음.
 
-### 후보 3 — 재처리 후 실제 사용자 도달 여부 미확인
-
+### 후보 3. 재시도·타임아웃 설정에 의한 장애 증폭
 - **근거**
-  - DLQ 재처리도 Mongo 복구 전까지 실패: `[Kafka] DLQ 알림 재처리 실패 (1분 후 재시도): userId=7, type=BATTLE_ITEM_COMMENT` 14:01:47, 14:03:17 / `[KAFKA-RETRY] user-notification-dlq 처리 실패 1·2회차: topic=user.notifications.dlq partition=0 offset=12`.
-  - `websocket_active_users`가 두 파드 모두 전 구간 `0` → 해당 시점 실시간 소켓 수신 대상이 없었음. FCM 등 외부 발송 성공/실패를 나타내는 로그·메트릭은 수집분에 전혀 없음.
-  - 저장 성공을 직접 확인할 로그도 없음(수집 쿼리가 ERROR/WARN 위주라 성공 INFO 부재가 실패를 뜻하지 않음).
-- **확신도: 낮음 (데이터 부족)**
+  - `receive`(SPAN_KIND_CONSUMER) span 4개가 각각 30.108s / 30.015s / 30.015s / 30.016s 소요(startTime/endTime 기준), 동일 메시지 `partition=3 offset=963`을 13:59:13~14:01:16 동안 **123초간 점유**.
+  - 로그: `[KAFKA-RETRY] user-notification 처리 실패 1회차 … 4회차`, 이어 `[KAFKA-DLQ] 발행: user.notifications -> user.notifications.dlq (partition=3 offset=963)`, `[KAFKA-RETRY] user-notification 재시도 소진 - recoverer 처리 완료`.
+  - `Waiting for server to become available for operation with ID 121236. Remaining time: 29999 ms` → serverSelectionTimeout이 30초로 설정되어 있고, 다운된 서버에 대해 매 시도마다 30초를 소진.
+  - 리스너 스레드는 `[ntainer#5-1-C-1]` 단일 → 파티션 3에서 head-of-line blocking. 실제로 p3 lag가 13:59:30~14:01:15에 `1`로 고착.
+  - 부가 리스크: 각 실패 시도마다 JDBC `connection` span(`HikariPool-1`, `com.mysql.cj.jdbc.Driver`, datasource `content`)이 `acquired`→30초 후 `rollback`으로 **MySQL 커넥션을 30초간 점유**. Mongo 호출이 RDB 트랜잭션 경계 안에 있음.
+- **확신도**: 중간 (설정값과 지속시간은 확정적이나, 이것이 사용자 체감에 기여했는지는 미확인)
 - **반증 데이터**
-  - `kafka_consumergroup_lag{consumergroup="notification-recovery", topic="user.notifications.dlq", partition="0"}`이 14:01:30~14:04:15 동안 `1`이었다가 **14:04:30에 `0`** (Mongo 복구 14:03:45 직후), 그리고 14:03:17 이후 DLQ 실패 로그가 더 없음 → **3번째 DLQ 재시도(≈14:04:17)에서 성공했을 가능성이 높다**. 즉 "영구 유실"은 현재 데이터로는 오히려 근거가 약하다.
+  - 자원 고갈은 발생하지 않음: `hikaricp_connections_pending`이 chat/content/auth 전 파드에서 전 구간 `0`, `hikaricp_connections_active` 최대 `1`. `rate(jvm_gc_pause_seconds_sum[5m])`도 chat-service 약 `1.5e-4`, major GC(`MarkSweepCompact`)는 `0`. → 커넥션/스레드 고갈로 인한 **전역 지연 증거 없음**. 증폭 효과는 알림 파이프라인 내부에 국한됨.
 
-### 수집 실패로 인한 한계
-
-`sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))`가 no series로 누락됐다. 다만 이번 트레이스에서 content-service는 200/57ms이고 `security filterchain`(JwtAuthenticationFilter 포함) 통과, `userId=1`로 인증 컨텍스트가 정상이므로 **auth 관련 원인은 데이터상 근거 없음**. 이 공백 때문에 "인증 문제 아님"을 단정하지는 않되, 후보로 올리지도 않는다.
+### 데이터 부족 (결론 확신도를 낮추는 공백)
+- **사용자 체감 "버벅임"을 직접 확인할 지표가 없음**: `http_server_requests_seconds_*`(latency/error rate)를 수집하지 못했고, 확보된 유일한 사용자 요청은 200/57ms 정상. 즉 **"앱이 버벅였다"는 증상과 이 트레이스의 인과는 관측 데이터로 확정할 수 없음**. 가장 정합적인 해석은 "API 느림"이 아니라 **알림 미수신/지연**(1차: 13:59~14:04 userId=7 1건, 2차: 14:06~14:15 25건).
+- 수집 실패: `sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))` no series → 인증 관련 가설은 검증 불가(다만 auth-service의 `up`/hikari/GC는 전 구간 정상이고 401 관련 로그도 없음).
+- 미수집: 파드 재시작 횟수·종료 사유·OOM, 컨테이너 CPU/메모리, MongoDB 서버 자체 로그, chat-service replica 수, liveness/readiness probe 설정.
+- 관측 결함: 신규 파드에서 `PrometheusMeterRegistry : The meter (MeterId{name='spring.kafka.listener' …}) registration has failed: Prometheus requires that all meters with the same name have the same set of tag keys` → **Kafka 리스너 메트릭이 유실 중**이라 컨슈머 처리 지연을 메트릭으로 볼 수 없음.
 
 ## 3. 권장 다음 조치
 
-**즉시 확인 (사용자 영향 판정)**
-1. Mongo `user_notifications` 컬렉션에서 해당 알림 존재 확인: `userId=7`, `type=BATTLE_ITEM_COMMENT`, `referenceId`=commentId 136, `createdAt` 13:59~14:06 범위. 없으면 offset 963 건은 유실 확정.
-2. 14:06~14:15 지연분 25건(partition 3, offset 964~988 추정) 처리 결과 확인 — 신규 파드 w7bf7가 14:15:30에 소진했는지, 실패분이 DLQ로 갔는지 (`user.notifications.dlq` 오프셋 증가 여부).
-3. 발송 채널(FCM/푸시) 성공 로그·메트릭 확인. 현재 관측 데이터에 **발송 단계 지표가 전무**하므로, 저장 성공만으로 "알림 전달 완료"를 판단할 수 없음.
+**즉시 확인 (근본 원인 확정)**
+1. `172.31.46.124` 호스트에서 13:56~14:05 구간 mongod 종료 사유 확인: `journalctl -u mongod --since "2026-07-29 13:55" --until "2026-07-29 14:10"`, `/var/log/mongodb/mongod.log`, `dmesg -T | grep -i oom`. (재시작이었는지, OOM Kill이었는지, 디스크 풀이었는지)
+2. `kubectl get events --field-selector involvedObject.name=chat-service-857c54dd97-s5fbl` 및 `kubectl describe pod chat-service-857c54dd97-w7bf7` → 이전 파드의 `lastState.terminated.reason`(OOMKilled / Error / Completed)과 종료 시각 확인. 14:06~14:13 공백의 원인 규명.
+3. chat-service의 liveness/readiness probe 타임아웃·failureThreshold 값과 `/actuator/health` 응답 시간(장애 시 30초) 비교.
 
-**원인 규명 (추가 수집)**
-4. infra-server의 mongod 13:58~14:04 로그, `dmesg`(OOM Kill), systemd 재시작 이력 → 다운 원인 확정.
-5. K8s 이벤트 및 `kube_pod_container_status_restarts_total`, `kube_pod_status_ready`, 파드 `lastState.terminated.reason`(14:00~14:16) → chat-service 파드 교체가 probe 실패/OOM/배포 중 무엇인지 확정.
-6. content-service 401 메트릭이 왜 no series인지 확인(메트릭명·레이블 `application` vs `service` 불일치 가능성) — 관측 공백 자체를 해소.
+**데이터 정합성 확인 (실제 사용자 영향 범위)**
+4. `user_notifications` 컬렉션에서 `userId=7, type=BATTLE_ITEM_COMMENT, referenceId=commentId 136` 문서 존재 여부 확인. DLQ lag는 14:04:30에 0이 됐지만 **성공 로그가 없어 최종 전달 여부 미확인**.
+5. 14:06~14:15 사이 p3에 적체된 25건이 14:15:30에 전부 정상 처리됐는지(중복 발송 포함) 확인.
+6. 사용자 제보 시각을 재확인 — 13:59~14:04(알림 실패)인지 14:06~14:15(알림 지연)인지에 따라 대응 우선순위가 갈림.
 
-**재발 방지 (설정 검토)**
-7. 액추에이터 헬스에서 mongo 기여자를 liveness에서 분리하거나 타임아웃 단축. 현재 `(mongo) took 30004ms` → Mongo 다운이 곧 파드 재시작으로 번지는 구조로 보인다(후보 1이 후보 2를 유발했을 가능성).
-8. Mongo `serverSelectionTimeout` 30초(`Remaining time: 29999 ms`) 단축 + Kafka 리스너 재시도 백오프 재조정. 현재 30s × 4회 ≈ 2분간 partition 3 head-of-line blocking이 발생한다.
-9. 컨슈머 스팬 구조 점검: `receive` 하위에 `connection`(`jdbc.datasource.driver=com.mysql.cj.jdbc.Driver`, `jdbc.datasource.name=content`, `HikariPool-1`) 스팬이 30초간 열린 뒤 `rollback` 이벤트로 종료된다. **MySQL 트랜잭션을 연 채로 Mongo I/O를 기다리는 구조**이며, chat-service의 데이터소스 이름이 `content`인 점도 설정 확인이 필요하다(현재 `hikaricp_connections_pending=0`이라 실제 고갈은 없었으나 부하 시 위험).
-10. 알림 파이프라인 알림(alert) 추가: `mongodb_up == 0`, `kafka_consumergroup_lag{consumergroup="notification-processors"} > N (5분 지속)`, `user.notifications.dlq` 유입 발생.
+**재발 방지 (설정)**
+7. mongo serverSelectionTimeout 30초 → 3~5초로 축소하고 재시도 백오프를 지수형으로 조정. 현재는 실패 1건이 리스너 스레드를 123초 점유.
+8. liveness health group에서 mongo 인디케이터 제외(readiness에만 반영) → 인프라 다운이 파드 재기동으로 번지는 경로 차단.
+9. Mongo 저장을 MySQL 트랜잭션 경계 밖으로 분리 (현재 `connection` span이 `acquired`→30초→`rollback`으로 커넥션 점유).
+10. chat-service replica 수 확인 후 컨슈머 이중화 — 현재 파드 1개 소실로 알림 소비가 9분간 완전 중단됨.
+
+**관측 보강**
+11. `spring.kafka.listener` 미터 태그 충돌 수정(`KafkaConsumerConfig`/ObservationRegistry 설정) — 현재 리스너 메트릭 유실 중.
+12. 알람 신설: `mongodb_up == 0` (1분), `kafka_consumergroup_lag{topic="user.notifications"} > 0` (5분 지속), `absent(up{job="chat-service"})`.
+13. `http_server_requests_seconds_*`를 content/chat/auth 전부에서 수집하도록 스크레이프 설정 점검 — 이번 분석에서 사용자 체감 지연을 검증할 수 없었던 핵심 공백.
 
 ---
 

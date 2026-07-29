@@ -82,4 +82,4 @@ process-notification → mongo insert → push-dispatcher**까지 소비 체인�
 - **CLI 샌드박스 격리 활성** — `rca-cli-sandbox-*` 임시 cwd에서 실행 확인(구 회차와의 결정적 차이)
 - Loki 0건 조사 지속(ERROR/WARN·traceId 매칭 모두 `totalEntriesReturned:0`) — 에이전트가 "로그 교차검증 불가"로 확신도 하향 명시
 - `-120s 시각 밀림`은 이번 리포트 분석 본문엔 없음(에이전트가 raw ns/실제 시각 15:51:53으로 인용). 수집 창 자체는 window padding으로 15:49:53Z 시작(트리거 −120s)
-- 대비쌍: 같은 "알림 안 와요"라도 소비측 원인인 CH-1 [round-2](../ch-1/round-2.md) — 재시도·DLQ가 받아주느냐(CH-1) 아무도 못 받느냐(IN-2)의 차이
+- 대비쌍: 같은 "알림 안 와요"라도 소비측 원인인 CH-1 [round-1](../ch-1/round-1.md) — 재시도·DLQ가 받아주느냐(CH-1) 아무도 못 받느냐(IN-2)의 차이
