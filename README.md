@@ -235,7 +235,7 @@ docker compose up --build  # 컨테이너엔 claude CLI가 없음 → RCA_LLM_PR
 | 문서 | 내용 |
 |---|---|
 | **[📖 종합 문서](docs/README.md)** | **여기서 시작** — 이 문서 하나로 전체 파악. 정의·측정 체계·결과·문서 지도 |
-| **[🧭 기술 의사결정](docs/portfolio.md)** | 판단 과정을 남길 만한 것 8건 (OTel vs Brave · 단일 패스 · 평가 체계 · 측정 지표 재정의 …) |
+| **[🧭 기술 의사결정](docs/portfolio.md)** | 판단 과정을 남길 만한 것 13건 (탐색 채널 감사 · 감점 원인 귀속 · N≥2 규칙 · OTel vs Brave · 단일 패스 …) |
 | **[📊 평가 보고서](docs/scoring/report.md)** | 장애 12종의 상황·함정·채점 요건·결과를 한 문서로 |
 | [📌 현황판 (STATUS)](docs/STATUS.md) | 지금 어디까지 왔나, 다음 할 일, 활동 로그 |
 | [아키텍처 상세](docs/architecture.md) | 소스별 실제 쿼리 · 컨텍스트 구성 · 리포트 구조 · 알려진 공백 |

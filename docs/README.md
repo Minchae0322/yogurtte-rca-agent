@@ -220,7 +220,7 @@ AU-2는 트레이스 완전 무신호에서 메트릭 단절만으로 정답 도
 |---|---|
 | **지금 뭘 할 차례인가** | [STATUS.md](STATUS.md) — 체크박스 · 다음 할 일 큐 · 활동 로그 |
 | **장애별 상황과 채점 결과 전부** | [scoring/report.md](scoring/report.md) — 대외용 종합 보고서 |
-| **포트폴리오에 쓸 서술** | [portfolio.md](portfolio.md) — 기술 의사결정 8건 |
+| **포트폴리오에 쓸 서술** | [portfolio.md](portfolio.md) — 기술 의사결정 13건 |
 | **전체 계획과 왜 이 순서인가** | [strategy.md](strategy.md) — Phase별 진입 게이트 |
 
 ### 측정·평가
