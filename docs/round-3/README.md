@@ -190,7 +190,7 @@ N≥2를 강제**하는 규칙으로 바꿨습니다. 현재 4문항에서 N=2�
 |---|---|---|---|
 | **B-9** | Trace | **창 기준 N건 수집** | traceId 선정 여부와 무관하게 좁힌 창 안의 후보를 N건까지. **서비스 기준이 아니라 창 기준** — 정답 서비스로 정확히 좁힌 문항에서도 다른 서비스 트레이스가 필요했다 |
 | **B-15** | Trace | 깨진 행 방어 | `startTimeUnixNano == 0`이거나 `durationMs`가 창 길이를 넘는 행은 신뢰하지 않는다. **B-9보다 먼저** — 후보를 N건 모으면 정렬 기준이 필요해지고 그때 이 행이 1위가 된다 |
-| **B-11** | Log | 예외 본문 도달 | **적용 완료** — 스택 식별 패턴을 라인 필터에 추가. **traceId 단위 전량 조회로는 안 된다**(스택 줄에 traceId가 안 붙는다 · 실측). 전문 [log-stacktrace.md](log-stacktrace.md) |
+| **B-11** | Log | 예외 본문 도달 | **적용 완료** — 스택 식별 패턴을 라인 필터에 추가. **traceId 단위 전량 조회로는 안 된다**(스택 줄에 traceId가 안 붙는다 · 실측). 전문 [evidence-pipeline-improvements.md](evidence-pipeline-improvements.md) |
 | **B-16** | Log | 도착·성공 신호 수집 | **원인이 필터가 아니었다** — DLQ 리스너 팩토리에 `setObservationEnabled(true)` 가 빠져 `traceId=NONE` 이었다(기본값 `false`). 앱 설정 한 줄로 고쳤고 라인 필터 확장은 **보류**. 전문 [dlq-traceid.md](dlq-traceid.md) |
 | **B-13** | Metric | `401 rate` 쿼리 교정 | `count by (status, uri) (...)`로 **실제 라벨과 status 값을 먼저 확인**한 뒤 확정. 대상 서비스도 함께 바로잡는다 |
 | **B-14** | Metric | 감별 메트릭 확충 | **보류** — B-9 델타를 먼저 깨끗하게 재야 한다. 수집 목록을 함께 늘리면 점수 변화의 귀속이 흐려진다 |
@@ -963,7 +963,7 @@ AU-2는 탐색 스코프(`auth-service`)가 정답이라 **창 기준**이어야
 | **B-15** | 9 | `startTimeUnixNano == 0`이거나 `durationMs`가 창 길이를 넘는 행은 값을 신뢰하지 않고 표기만 하거나 딥 페치로 보정 | **B-9보다 먼저** — 후보를 N건 모으면 정렬 기준이 필요해지고 그때 이 행이 항상 1위가 된다 |
 | **B-10** | 5 | `(timestamp, line)` 기준으로 접는다 | **두 채널은 유지하고 합칠 때만 dedup** — 채널별 도달 여부는 진단 정보다 |
 | **B-12** | 6 | `Triage.reason`·`evidence`를 어셈블 컨텍스트에 넣는다 | — |
-| **B-11** | 3 | **스택 식별 패턴을 라인 필터에 추가** — `ERROR\|WARN\|Exception\|Caused by\|\.java:[0-9]+\)` | **적용 완료 2026-07-30** · 전문 [log-stacktrace.md](log-stacktrace.md) |
+| **B-11** | 3 | **스택 식별 패턴을 라인 필터에 추가** — `ERROR\|WARN\|Exception\|Caused by\|\.java:[0-9]+\)` | **적용 완료 2026-07-30** · 전문 [evidence-pipeline-improvements.md](evidence-pipeline-improvements.md) |
 | **B-13** | 7 | `count by (status, uri) (http_server_requests_seconds_count{...})`로 실제 라벨과 status 값을 먼저 확인한 뒤 확정 | **대상 서비스도 함께 바로잡는다** |
 
 ### B-16. 도착·성공 신호를 수집한다 (결함 11)
@@ -1248,7 +1248,7 @@ AU-2 회차 2에서 복구 오판이 재발하지 않은 것은 **운이다** �
 >
 > | | 무엇 |
 > |---|---|
-> | [service-graph.md](service-graph.md) | **서술 버전** — 문제와 바꿀 것 세 줄, 함정 둘 |
+> | [evidence-pipeline-improvements.md](evidence-pipeline-improvements.md) | **서술 버전** — 로그 스택(B-11)과 함께 묶인 서사. *"새 데이터를 추가한 게 아니라 있던 것을 전달한다"* |
 > | [service-graph-spec.md](service-graph-spec.md) | **구현 스펙** — 실측 태그 키 · 판별 순서 전문 · 코드 위치 · 검증 조건 ①~⑤ · 반증 조건 |
 
 `TraceSpans`가 `parentSpanId`를 읽지 않아 **트레이스를 갖고도 누가 누구를 불렀는지 모른다.**
@@ -1680,7 +1680,7 @@ rubric §3의 B는 이미 이 문제를 피해 갔는데(*"정상 구간 대조 
 - [ ] **B-12** 어셈블 컨텍스트에 탐색 선정 이유 동봉
 - [ ] **B-17** 스윕 트레이스 지연 채널 — CH-3를 여는 두 조건 중 하나
 - [ ] **B-18** 스윕 메트릭 딥 보존(`min_over_time`) — **B-17과 따로 넣어 기여도를 가른다**
-- [x] **B-11** Loki 예외 본문 도달 — **적용 완료 2026-07-30** ([log-stacktrace.md](log-stacktrace.md)).
+- [x] **B-11** Loki 예외 본문 도달 — **적용 완료 2026-07-30** ([evidence-pipeline-improvements.md](evidence-pipeline-improvements.md)).
       **B-16과 함께 설계하지 않는다** — 처방이 다르다(도착 로그는 예외도 스택도 없다)
 - [x] **B-16** 도착·성공 신호 수집 — **원인이 필터가 아니었다.** DLQ 리스너 팩토리의
       `setObservationEnabled(true)` 누락으로 `traceId=NONE` 이었다. **앱 설정 한 줄 수정 완료**
@@ -1709,7 +1709,7 @@ rubric §3의 B는 이미 이 문제를 피해 갔는데(*"정상 구간 대조 
 - [ ] **B-23** 검증 패스 — 싸다. B-22보다 먼저
 - [ ] **B-21** 질문 기반 재랭킹 — 어휘 사전을 코드에 박지 않는다(블라인드). 매칭은 LLM에
 - [ ] **B-22** Top-2 조건부 수집 — **마지막.** 비용 최대 2배($2.35 → ~$4.7)라 조건부 필수
-- [ ] **B-28** 트레이스에서 호출 그래프 추출 ([서술](service-graph.md) · [스펙](service-graph-spec.md)) —
+- [ ] **B-28** 트레이스에서 호출 그래프 추출 ([서술](evidence-pipeline-improvements.md) · [스펙](service-graph-spec.md)) —
       **검증(①~⑤)은 저장된 원본으로 지금 가능**하고 구현도 `B-9` 없이 된다.
       단 **IN-1은 `B-9` 이후**(한 트레이스는 그 요청 경로만 보여준다).
       **프롬프트의 토폴로지 문장 제거를 같은 회차에** 넣는다

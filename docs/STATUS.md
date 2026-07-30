@@ -509,7 +509,7 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
   → 분석 단계 라인 필터에 `Exception|Caused by|\.java:[0-9]+\)` 추가.
   **스윕 집계 쿼리는 의도적으로 그대로** — 거기 넣으면 발생률이 수십 배 부풀어 버킷 비교가 깨진다.
   양은 **예외 건수에 비례**하므로 INFO 전량(1시간 2,300줄 중 ERROR/WARN 8줄 = 약 287배)과 다르다.
-  [log-stacktrace.md](round-3/log-stacktrace.md)
+  [evidence-pipeline-improvements.md](round-3/evidence-pipeline-improvements.md)
 
   **`B-16` — 원인이 필터가 아니었다.** `toy-chat` 리스너 팩토리 **6개 중 5개**에
   `setObservationEnabled(true)` 가 있고 `notificationDlqListenerFactory` 하나만 빠져 있었다
