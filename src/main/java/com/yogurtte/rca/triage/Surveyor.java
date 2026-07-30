@@ -49,20 +49,34 @@ public class Surveyor {
         var timings = new LinkedHashMap<String, Long>();
         var metrics = new LinkedHashMap<String, String>();
 
-        // --- Tempo: 창 안의 에러 트레이스 검색 ---
+        // --- Tempo: 에러 채널과 지연 채널을 따로 던진다 ---
+        // 단일 쿼리로 합치면 후보 목록에서 "어느 채널로 도달했는지"가 사라진다. 200 성공 + 지연
+        // 장애에서는 그 사실 자체가 장애 성격이다 — CH-3는 에러 검색이 0건이었다.
         String traceSearch = null;
+        String slowTraceSearch = null;
         var started = System.currentTimeMillis();
         try {
             traceSearch = tempoClient.search(correlationId, surveyProperties.traceQuery(),
                     window.start(), window.end(), surveyProperties.traceLimit());
             if (isEmptyTraceSearch(traceSearch)) {
-                failures.add("Tempo 검색 '" + surveyProperties.traceQuery()
-                        + "'이 이 창에서 0건이다. 트레이스가 생성되지 않는 장애(컨슈머 전멸·파드 부재)일 수 있으니 "
-                        + "이 사실 자체를 근거로 쓸 것.");
+                failures.add("Tempo 에러 검색 '" + surveyProperties.traceQuery()
+                        + "'이 이 창에서 0건이다. 트레이스가 생성되지 않는 장애(컨슈머 전멸·파드 부재)이거나 "
+                        + "에러가 아닌 형태의 장애(200 성공 + 지연)일 수 있으니 이 사실 자체를 근거로 쓸 것.");
             }
         } catch (Exception e) {
-            failures.add("Tempo 검색 실패: " + describe(e));
-            log.warn("tempo search failed for {}: {}", correlationId, e.toString());
+            failures.add("Tempo 에러 검색 실패: " + describe(e));
+            log.warn("tempo error search failed for {}: {}", correlationId, e.toString());
+        }
+        try {
+            slowTraceSearch = tempoClient.search(correlationId + "-slow", surveyProperties.slowTraceQueryFor(),
+                    window.start(), window.end(), surveyProperties.traceLimit());
+            if (isEmptyTraceSearch(slowTraceSearch)) {
+                failures.add("Tempo 지연 검색 '" + surveyProperties.slowTraceQueryFor()
+                        + "'이 이 창에서 0건이다. 임계값보다 느린 요청이 없었다는 뜻이다.");
+            }
+        } catch (Exception e) {
+            failures.add("Tempo 지연 검색 실패: " + describe(e));
+            log.warn("tempo slow search failed for {}: {}", correlationId, e.toString());
         }
         timings.put("tempoMs", System.currentTimeMillis() - started);
 
@@ -97,11 +111,12 @@ public class Surveyor {
         }
         timings.put("mimirMs", System.currentTimeMillis() - started);
 
-        log.info("survey done: window={}~{} traceSearch={} logRates={} metrics={}/{} failures={}",
-                window.start(), window.end(), traceSearch != null, logRates != null,
+        log.info("survey done: window={}~{} error={} slow={} logRates={} metrics={}/{} failures={}",
+                window.start(), window.end(), traceSearch != null, slowTraceSearch != null, logRates != null,
                 metrics.size(), surveyProperties.metricQueries().size(), failures.size());
 
-        return new SurveyResult(window, timeExpression, traceSearch, logRates, metrics, failures, timings);
+        return new SurveyResult(window, timeExpression, traceSearch, slowTraceSearch,
+                logRates, metrics, failures, timings);
     }
 
     /** Tempo는 매칭이 없으면 {@code {}} 또는 빈 traces 배열을 준다. */

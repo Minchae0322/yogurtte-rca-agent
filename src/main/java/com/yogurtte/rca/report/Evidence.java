@@ -31,8 +31,33 @@ public record Evidence(
         metrics = metrics == null ? List.of() : List.copyOf(metrics);
     }
 
-    /** 탐색 단계 Tempo 검색이 찾은 트레이스. */
-    public record TraceHit(String traceId, String rootServiceName, String rootTraceName, long durationMs) {
+    /**
+     * 탐색 단계 Tempo 검색이 찾은 트레이스.
+     *
+     * @param channel 어느 채널로 도달했는지. {@code error} 또는 {@code slow}.
+     *                <b>이것 자체가 장애 성격이다</b> — "에러로는 안 잡히는데 지연으로 잡혔다"가
+     *                200 성공 + 지연 장애(CH-3)의 지문이다. 그래서 두 채널을 단일 쿼리로 합치지 않는다.
+     * @param startedAt 트레이스 시작 시각. Tempo가 {@code startTimeUnixNano == 0}을 내려주는
+     *                  경우가 있어 {@code null}일 수 있다.
+     * @param trusted 값을 믿을 수 있는지. Tempo {@code /api/search}가 {@code durationMs} 33일짜리
+     *                행이나 시작 시각 0인 행을 그대로 내려준 사례가 있다(CH-2 실측). 후보를 여러 건
+     *                모아 정렬하면 <b>그 행이 항상 1위</b>가 되므로 표기해 두고 정렬에서 뺀다.
+     */
+    public record TraceHit(
+            String traceId,
+            String rootServiceName,
+            String rootTraceName,
+            long durationMs,
+            String channel,
+            Instant startedAt,
+            boolean trusted) {
+
+        public static final String CHANNEL_ERROR = "error";
+        public static final String CHANNEL_SLOW = "slow";
+
+        public TraceHit {
+            channel = (channel == null || channel.isBlank()) ? CHANNEL_ERROR : channel;
+        }
     }
 
     public record SpanRecord(String service, String name, double durationMs, Instant startedAt) {

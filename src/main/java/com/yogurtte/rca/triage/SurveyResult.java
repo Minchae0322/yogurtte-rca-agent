@@ -1,5 +1,7 @@
 package com.yogurtte.rca.triage;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +28,7 @@ public record SurveyResult(
         TimeWindow window,
         String timeExpression,
         String traceSearchJson,
+        String slowTraceSearchJson,
         String logRatesJson,
         Map<String, String> metricsJson,
         List<String> failures,
@@ -50,23 +53,67 @@ public record SurveyResult(
      * 했나"를 판단하려면 그때 무엇이 보였는지가 있어야 한다.
      */
     public List<Evidence.TraceHit> traceHits() {
-        if (traceSearchJson == null || traceSearchJson.isBlank()) {
-            return List.of();
+        var hits = new ArrayList<Evidence.TraceHit>();
+        parseHits(traceSearchJson, Evidence.TraceHit.CHANNEL_ERROR, hits);
+        parseHits(slowTraceSearchJson, Evidence.TraceHit.CHANNEL_SLOW, hits);
+        return dedupeKeepingFirstChannel(hits);
+    }
+
+    /** 에러 채널이 먼저 담기므로, 같은 traceId가 양쪽에 있으면 <b>에러 쪽 기록을 남긴다.</b> */
+    private static List<Evidence.TraceHit> dedupeKeepingFirstChannel(List<Evidence.TraceHit> hits) {
+        var seen = new LinkedHashMap<String, Evidence.TraceHit>();
+        hits.forEach(hit -> seen.putIfAbsent(hit.traceId(), hit));
+        return List.copyOf(seen.values());
+    }
+
+    /**
+     * Tempo {@code /api/search} 응답을 후보 목록으로 읽는다.
+     *
+     * <p><b>깨진 행을 걸러내지 않고 표기한다.</b> Tempo가 {@code durationMs} 33일짜리 행이나
+     * {@code startTimeUnixNano == 0}인 행을 그대로 내려준 사례가 있다(CH-2 실측 · 같은 트레이스를
+     * {@code /api/traces/{id}}로 받으면 멀쩡하다). 버리면 그 트레이스에 도달할 길이 없어지므로
+     * {@code trusted=false}로 남기고 <b>정렬과 창 계산에서만 뺀다.</b>
+     */
+    private void parseHits(String json, String channel, List<Evidence.TraceHit> out) {
+        if (json == null || json.isBlank()) {
+            return;
         }
         try {
-            var traces = MAPPER.readTree(traceSearchJson).path("traces");
+            var traces = MAPPER.readTree(json).path("traces");
             if (!traces.isArray()) {
-                return List.of();
+                return;
             }
-            var hits = new ArrayList<Evidence.TraceHit>();
-            traces.forEach(node -> hits.add(new Evidence.TraceHit(
-                    node.path("traceID").asText(""),
-                    node.path("rootServiceName").asText(""),
-                    node.path("rootTraceName").asText(""),
-                    node.path("durationMs").asLong(0L))));
-            return List.copyOf(hits);
+            var windowSeconds = window == null ? Long.MAX_VALUE
+                    : Duration.between(window.start(), window.end()).getSeconds();
+
+            traces.forEach(node -> {
+                var durationMs = node.path("durationMs").asLong(0L);
+                var startNanos = parseLong(node.path("startTimeUnixNano").asText(null));
+                var startedAt = (startNanos == null || startNanos <= 0L) ? null
+                        : Instant.ofEpochSecond(startNanos / 1_000_000_000L, startNanos % 1_000_000_000L);
+
+                // 창보다 긴 duration은 물리적으로 불가능하다 — 창 안에서 검색한 결과이므로.
+                var durationSane = durationMs >= 0 && durationMs / 1000 <= windowSeconds;
+
+                out.add(new Evidence.TraceHit(
+                        node.path("traceID").asText(""),
+                        node.path("rootServiceName").asText(""),
+                        node.path("rootTraceName").asText(""),
+                        durationMs,
+                        channel,
+                        startedAt,
+                        startedAt != null && durationSane));
+            });
         } catch (Exception e) {
-            return List.of();
+            // 파싱 실패는 후보 0건으로 떨어진다. 조사를 멈추지 않는다.
+        }
+    }
+
+    private static Long parseLong(String raw) {
+        try {
+            return raw == null ? null : Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 }

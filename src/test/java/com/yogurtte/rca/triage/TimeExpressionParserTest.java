@@ -18,7 +18,8 @@ class TimeExpressionParserTest {
     private static final Instant NOW = Instant.parse("2026-07-28T05:00:00Z");
 
     private final TimeExpressionParser parser = new TimeExpressionParser(
-            new SurveyProperties("Asia/Seoul", 24, 48, "5m", null, 20, null, List.of()));
+            new SurveyProperties("Asia/Seoul", 24, 48, "5m", null, null, null, 20, null, List.of(),
+                    null, null, null));
 
     @Test
     void 어젯밤은_어제_18시부터_오늘_6시까지다() {

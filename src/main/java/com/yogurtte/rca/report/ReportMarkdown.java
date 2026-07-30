@@ -210,7 +210,12 @@ final class ReportMarkdown {
         sb.append("| 대상 | ").append(t.services().isEmpty() ? "(전체)" : String.join(", ", t.services())).append(" |\n");
         sb.append("| traceId | ").append(nz(t.traceId())).append(" |\n");
         sb.append("| 트레이스 후보 | ").append(t.traceCandidates().size()).append("건 |\n");
-        sb.append("| 계획 파싱 | ").append(t.planParsed() ? "성공" : "**실패 — 스윕 창 전체 사용**").append(" |\n");
+        if (!t.incidentCandidates().isEmpty()) {
+            sb.append("| 장애 후보 | ").append(t.incidentCandidates().size()).append("건 · 선택 ")
+                    .append(t.chosenIncidentIds().isEmpty() ? "없음" : String.join(", ", t.chosenIncidentIds()))
+                    .append(" |\n");
+        }
+        sb.append("| 계획 파싱 | ").append(t.planParsed() ? "성공" : "**실패 — fallback 적용**").append(" |\n");
         sb.append("| prompt | `").append(nz(t.promptSource())).append("` |\n");
         sb.append("| tokens | in ").append(t.inputTokens()).append(" / out ").append(t.outputTokens());
         if (t.costUsd() >= 0) {
@@ -233,11 +238,24 @@ final class ReportMarkdown {
         if (!t.traceCandidates().isEmpty()) {
             // 고른 것만이 아니라 후보 전부를 남긴다 — "다른 걸 골랐어야 했나"는 이게 있어야 판단된다.
             sb.append("**스윕이 찾은 트레이스** (고른 것은 ").append(nz(t.traceId())).append(")\n\n");
-            sb.append("| traceId | root service | root span | ms |\n|---|---|---|---:|\n");
-            t.traceCandidates().forEach(hit -> sb.append("| `%s`%s | %s | %s | %d |\n".formatted(
+            sb.append("| traceId | 채널 | root service | root span | ms |\n|---|---|---|---|---:|\n");
+            t.traceCandidates().forEach(hit -> sb.append("| `%s`%s | %s%s | %s | %s | %d |\n".formatted(
                     hit.traceId(),
                     hit.traceId().equals(t.traceId()) ? " ←선택" : "",
+                    hit.channel(),
+                    // 값을 못 믿는 행은 표기해 둔다 — 정렬하면 이 행이 1위가 된다(CH-2 실측).
+                    hit.trusted() ? "" : " ⚠값 신뢰 불가",
                     nz(hit.rootServiceName()), nz(hit.rootTraceName()), hit.durationMs())));
+            sb.append('\n');
+        }
+        if (!t.incidentCandidates().isEmpty()) {
+            // 창이 이 후보들의 신호 시각에서 계산된다 — 모델이 쓴 숫자가 아니다.
+            sb.append("**장애 후보** (코드가 신호를 묶은 것 · 창은 여기서 계산됨)\n\n");
+            t.incidentCandidates().forEach(c -> sb.append(c).append('\n'));
+        }
+        if (!t.dismissedIncidentIds().isEmpty()) {
+            sb.append("**기각한 후보**\n\n");
+            t.dismissedIncidentIds().forEach(d -> sb.append("- ").append(d).append('\n'));
             sb.append('\n');
         }
         if (!t.notes().isEmpty()) {

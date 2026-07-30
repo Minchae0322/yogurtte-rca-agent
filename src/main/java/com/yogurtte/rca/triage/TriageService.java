@@ -1,5 +1,6 @@
 package com.yogurtte.rca.triage;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import org.slf4j.Logger;
@@ -32,16 +33,23 @@ public class TriageService {
     private final TimeExpressionParser timeParser;
     private final Surveyor surveyor;
     private final SurveyContextAssembler surveyAssembler;
+    private final SignalExtractor signalExtractor;
+    private final IncidentClusterer clusterer;
+    private final SurveyProperties surveyProperties;
     private final SystemPromptLoader promptLoader;
     private final LlmClient llmClient;
     private final RcaService rcaService;
 
     public TriageService(TimeExpressionParser timeParser, Surveyor surveyor,
-                         SurveyContextAssembler surveyAssembler, SystemPromptLoader promptLoader,
-                         LlmClient llmClient, RcaService rcaService) {
+                         SurveyContextAssembler surveyAssembler, SignalExtractor signalExtractor,
+                         IncidentClusterer clusterer, SurveyProperties surveyProperties,
+                         SystemPromptLoader promptLoader, LlmClient llmClient, RcaService rcaService) {
         this.timeParser = timeParser;
         this.surveyor = surveyor;
         this.surveyAssembler = surveyAssembler;
+        this.signalExtractor = signalExtractor;
+        this.clusterer = clusterer;
+        this.surveyProperties = surveyProperties;
         this.promptLoader = promptLoader;
         this.rcaService = rcaService;
         this.llmClient = llmClient;
@@ -65,18 +73,29 @@ public class TriageService {
             var survey = surveyor.survey(window, resolved.expression());
             var surveyMs = System.currentTimeMillis() - surveyStart;
 
-            var context = surveyAssembler.assemble(survey, question);
+            // 코드가 신호를 뽑아 후보를 만든다. 모델은 "어느 후보인가"만 고르고 창은 계산된다.
+            var lookback = SurveyProperties.parse(surveyProperties.step(), Duration.ofMinutes(5));
+            var signals = signalExtractor.extract(survey, lookback);
+            var incidents = clusterer.cluster(signals, surveyProperties.clusterGapDuration());
+            log.info("signals={} incidents={} {}", signals.size(), incidents.size(),
+                    Incident.idsOf(incidents));
+
+            var context = surveyAssembler.assemble(survey, question, incidents);
             var prompt = promptLoader.load("triage");
             var llmResult = llmClient.analyze(prompt.text(), context);
             log.info("triage llm answered: in={} out={} {}ms",
                     llmResult.inputTokens(), llmResult.outputTokens(), llmResult.elapsedMs());
 
-            var plan = TriagePlan.parse(llmResult.text(), window);
+            var padding = new TriagePlan.Padding(
+                    surveyProperties.incidentPadExactDuration(),
+                    surveyProperties.incidentPadBucketDuration());
+            var plan = TriagePlan.parse(llmResult.text(), window, incidents, padding);
             if (!plan.parsed()) {
-                log.warn("triage plan을 읽지 못해 스윕 창 전체를 분석 범위로 쓴다: {}", plan.notes());
+                log.warn("triage plan을 읽지 못했다: {}", plan.notes());
             }
-            log.info("triage plan: window={}~{} services={} traceId={}",
-                    plan.window().start(), plan.window().end(), plan.services(), plan.traceId());
+            log.info("triage plan: window={}~{} services={} traceId={} chosen={} dismissed={}",
+                    plan.window().start(), plan.window().end(), plan.services(), plan.traceId(),
+                    plan.chosenIncidentIds(), plan.dismissedIncidentIds());
 
             var record = new RcaReport.Triage(
                     resolved.expression(),
@@ -102,7 +121,11 @@ public class TriageService {
                     prompt.text().length(),
                     surveyMs,
                     llmResult.elapsedMs(),
-                    survey.failures());
+                    survey.failures(),
+                    // 후보 전부를 남긴다 — "다른 걸 골랐어야 했나"는 그때 무엇이 보였는지가 있어야 판단된다.
+                    incidents.stream().map(Incident::describe).toList(),
+                    plan.chosenIncidentIds(),
+                    plan.dismissedIncidentIds());
 
             return rcaService.investigate(plan.toScope(), question, mode, record);
         } finally {

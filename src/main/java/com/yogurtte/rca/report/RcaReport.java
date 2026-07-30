@@ -75,7 +75,16 @@ public record RcaReport(
             int promptChars,
             long surveyMs,
             long llmMs,
-            List<String> surveyFailures) {
+            List<String> surveyFailures,
+            List<String> incidentCandidates,
+            List<String> chosenIncidentIds,
+            List<String> dismissedIncidentIds) {
+
+        public Triage {
+            incidentCandidates = incidentCandidates == null ? List.of() : List.copyOf(incidentCandidates);
+            chosenIncidentIds = chosenIncidentIds == null ? List.of() : List.copyOf(chosenIncidentIds);
+            dismissedIncidentIds = dismissedIncidentIds == null ? List.of() : List.copyOf(dismissedIncidentIds);
+        }
     }
 
     /**

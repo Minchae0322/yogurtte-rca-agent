@@ -105,19 +105,40 @@ class TriageFlowTest {
 
         var base = Instant.parse("2026-07-27T17:31:00Z");
 
+        // 에러 채널과 지연 채널을 따로 던진다. 어느 채널로 도달했는지가 후보에 남아야 한다.
+        // 에러 채널: 정상 행 하나 + 깨진 행 하나(durationMs 33일 · startTime 0) — Tempo 실측 사례.
         server.stubFor(get(urlPathEqualTo("/api/search"))
-                .willReturn(aResponse().withStatus(200).withBody(
-                        "{\"traces\":[{\"traceID\":\"abc123\",\"rootServiceName\":\"chat-service\","
-                                + "\"rootTraceName\":\"notification-consume\",\"durationMs\":30123},"
-                                + "{\"traceID\":\"def456\",\"rootServiceName\":\"content-service\","
-                                + "\"rootTraceName\":\"POST /comments\",\"durationMs\":140}]}")));
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock
+                        .containing("status = error"))
+                .willReturn(aResponse().withStatus(200).withBody("""
+                        {"traces":[
+                          {"traceID":"abc123","rootServiceName":"chat-service",
+                           "rootTraceName":"notification-consume","durationMs":30123,
+                           "startTimeUnixNano":"%d"},
+                          {"traceID":"broken1","rootServiceName":"chat-service",
+                           "rootTraceName":"?","durationMs":2851200000,
+                           "startTimeUnixNano":"0"}]}
+                        """.formatted(nanos(base)))));
+        // 지연 채널: 200 성공인데 느린 것 — 에러 검색에는 원리적으로 안 걸리는 형태다.
+        server.stubFor(get(urlPathEqualTo("/api/search"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock
+                        .containing("duration >"))
+                .willReturn(aResponse().withStatus(200).withBody("""
+                        {"traces":[
+                          {"traceID":"slow789","rootServiceName":"content-service",
+                           "rootTraceName":"POST /comments","durationMs":23458,
+                           "startTimeUnixNano":"%d"}]}
+                        """.formatted(nanos(base.plusSeconds(600))))));
 
         // 스윕은 집계(step 있음), 심층은 원본 라인(direction 있음) — 같은 엔드포인트지만 응답 모양이 다르다.
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
                 .withQueryParam("step", com.github.tomakehurst.wiremock.client.WireMock.matching(".+"))
                 .willReturn(aResponse().withStatus(200).withBody(
+                        // 버킷 시각은 창 안이어야 한다 — 신호 구간이 [ts-5m, ts] 로 잡히고
+                        // 그것이 그대로 조사 창 계산에 쓰인다.
                         "{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":"
-                                + "[{\"metric\":{\"service_name\":\"chat-service\"},\"values\":[[1785000000,\"42\"]]}]}}")));
+                                + "[{\"metric\":{\"service_name\":\"chat-service\"},\"values\":[["
+                                + base.getEpochSecond() + ",\"42\"]]}]}}")));
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
                 .withQueryParam("direction", com.github.tomakehurst.wiremock.client.WireMock.equalTo("forward"))
                 .willReturn(aResponse().withStatus(200).withBody("""
@@ -155,7 +176,8 @@ class TriageFlowTest {
         var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service",
                 "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30);
         var surveyProperties = new SurveyProperties("Asia/Seoul", 24, 48, "5m",
-                "{ status = error }", 20, null, List.of("up", "mongodb_up"));
+                "{ status = error }", "{ duration > %s && status != error }", "3s",
+                20, null, List.of("up", "mongodb_up"), "60s", "2m", "5m");
 
         llmClient = new ScriptedLlmClient();
         notifier = new RecordingNotifier();
@@ -170,7 +192,8 @@ class TriageFlowTest {
         triageService = new TriageService(
                 new TimeExpressionParser(surveyProperties),
                 new Surveyor(tempoClient, lokiClient, mimirClient, surveyProperties, collectProperties),
-                new SurveyContextAssembler(), promptLoader, llmClient, rcaService);
+                new SurveyContextAssembler(), new SignalExtractor(), new IncidentClusterer(),
+                surveyProperties, promptLoader, llmClient, rcaService);
     }
 
     @AfterEach
@@ -206,8 +229,8 @@ class TriageFlowTest {
         assertThat(llmClient.analysisContext()).contains("2026-07-27T17:29:00Z");
         assertThat(llmClient.analysisContext()).contains("notification-consume");
 
-        // 스윕은 집계, 분석은 원본 — 서로 다른 쿼리를 쓴다.
-        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
+        // 트레이스 검색은 두 번 — 에러 채널과 지연 채널을 따로 던져야 "어느 채널로 도달했는지"가 남는다.
+        server.verify(2, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/search")));
         server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/traces/abc123")));
@@ -217,9 +240,52 @@ class TriageFlowTest {
         assertThat(notifier.sent).hasSize(1);
 
         // 스윕이 찾은 후보는 고른 것 말고도 전부 남는다 — 회고에서 "다른 걸 골랐어야 했나"의 근거다.
-        assertThat(triage.traceCandidates()).hasSize(2);
+        // 두 채널이 병합되고, 깨진 행도 버리지 않고 표기만 한다(버리면 그 트레이스에 도달할 길이 없다).
         assertThat(triage.traceCandidates()).extracting(Evidence.TraceHit::traceId)
-                .containsExactly("abc123", "def456");
+                .containsExactly("abc123", "broken1", "slow789");
+        assertThat(triage.traceCandidates()).extracting(Evidence.TraceHit::channel)
+                .containsExactly("error", "error", "slow");
+        assertThat(triage.traceCandidates()).extracting(Evidence.TraceHit::trusted)
+                .containsExactly(true, false, true);
+    }
+
+    @Test
+    void 후보를_고르면_창을_모델이_아니라_신호_시각에서_계산한다() {
+        // 모델은 어느 후보인지만 고른다. windowStart/windowEnd 를 아예 쓰지 않는다.
+        llmClient.triageAnswer = """
+                ```json
+                {"incidentIds":["INC-1"],"services":[],
+                 "evidence":["mongodb_up이 0으로 꺾임"],"reason":"알림 저장 실패 구간",
+                 "dismissed":[{"incidentId":"INC-2","why":"증상과 시각이 다르다"}]}
+                ```
+                """;
+
+        var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        var triage = report.triage();
+
+        assertThat(triage.planParsed()).isTrue();
+        assertThat(triage.chosenIncidentIds()).containsExactly("INC-1");
+        assertThat(triage.dismissedIncidentIds()).anyMatch(d -> d.startsWith("INC-2"));
+        assertThat(triage.incidentCandidates()).isNotEmpty();
+
+        // 창이 스윕 창(12시간)보다 좁고, 후보의 신호 구간을 덮는다.
+        assertThat(triage.chosenStart()).isAfter(triage.surveyStart());
+        assertThat(triage.chosenEnd()).isBefore(triage.surveyEnd());
+        assertThat(triage.notes()).anyMatch(n -> n.contains("신호 시각에서 계산했다"));
+
+        assertThat(report.analysis()).startsWith("원인 후보 1");
+    }
+
+    @Test
+    void 지연_채널만_걸린_장애도_후보로_올라온다() {
+        // 200 성공 + 지연은 에러 검색에 원리적으로 안 걸린다. 그 형태가 후보에 남아야 한다.
+        llmClient.triageAnswer = "이상 없는 것 같습니다.";
+
+        triageService.diagnose("어젯밤에 앱이 잠깐 버벅였어요", null, null, "rca", NOW);
+
+        assertThat(llmClient.triageContext()).contains("지연 트레이스 검색");
+        assertThat(llmClient.triageContext()).contains("slow789");
+        assertThat(llmClient.triageContext()).contains("장애 후보");
     }
 
     @Test
@@ -292,14 +358,21 @@ class TriageFlowTest {
     }
 
     @Test
-    void 계획을_못_읽으면_스윕_창_전체로_분석하고_그_사실을_남긴다() {
+    void 계획을_못_읽으면_신호가_가장_많은_후보로_떨어지고_그_사실을_남긴다() {
+        // 스윕 창 전체로 떨어지면 비싸다. 후보가 있으면 그중 가장 신호가 많은 것을 쓰고,
+        // 나머지는 기록에 남아 되돌아갈 수 있다.
         llmClient.triageAnswer = "이상 없는 것 같습니다.";
 
         var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        var triage = report.triage();
 
-        assertThat(report.triage().planParsed()).isFalse();
-        assertThat(report.triage().chosenStart()).isEqualTo(Instant.parse("2026-07-27T09:00:00Z"));
-        assertThat(report.triage().notes()).anyMatch(note -> note.contains("찾지 못해"));
+        assertThat(triage.planParsed()).isFalse();
+        assertThat(triage.notes()).anyMatch(note -> note.contains("찾지 못해"));
+        assertThat(triage.notes()).anyMatch(note -> note.contains("신호가 가장 많은 후보"));
+
+        // 스윕 창 전체가 아니다.
+        assertThat(triage.chosenStart()).isAfter(Instant.parse("2026-07-27T09:00:00Z"));
+        assertThat(triage.incidentCandidates()).isNotEmpty();
         assertThat(report.analysis()).startsWith("원인 후보 1");
     }
 

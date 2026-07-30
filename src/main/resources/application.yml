@@ -91,18 +91,36 @@ rca:
     # TraceQL. ${} 플레이스홀더를 쓰지 않는다 — 중괄호가 플레이스홀더 문법과 겹친다.
     # 덮어쓰려면 환경변수 RCA_SURVEY_TRACE_QUERY를 쓰면 된다 (relaxed binding이 알아서 매핑한다).
     trace-query: '{ status = error }'
+    # 지연 채널. 에러 쿼리와 따로 던져 후보를 병합한다 — 단일 쿼리로 합치면 후보 목록에서
+    # "어느 채널로 도달했는지"가 사라진다. 200 성공 + 지연 장애(CH-3)에서는 그것이 곧 장애 성격이다.
+    # status != error 로 에러 채널과 겹치지 않게 가른다.
+    slow-trace-query: '{ duration > %s && status != error }'
+    # ⚠ 잠정값이다. 문항에서 역산하지 않고 정상 트래픽 분포(요청 p99 · span 최장)에서 정해야 하며
+    # 그 측정은 아직 하지 않았다 — docs/round-3/incident-clustering-spec.md §7.4.
+    # 참고: 이 시스템의 정상 요청은 수십~수백 ms대(76ms · 119ms · MySQL 수 ms)다.
+    slow-trace-threshold: ${RCA_SURVEY_SLOW_TRACE_THRESHOLD:3s}
+    # 채널마다 따로 적용된다. 임계값을 낮추면 후보가 늘어 정답이 상한에 밀려날 수 있다.
     trace-limit: ${RCA_SURVEY_TRACE_LIMIT:20}
     # 서비스별 ERROR/WARN 발생률. 라인 필터를 쓰는 이유는 collect의 errorWarnQuery와 같다 —
     # 평문 Logback이라 logfmt 파서가 level 필드를 만들지 못한다.
     log-query: 'sum by (service_name) (count_over_time({service_name=~"%s"} |~ "ERROR|WARN" [5m]))'
     # 부재가 곧 신호인 것들을 우선한다. up이 0으로 꺾이는 것이 트레이스 무신호 장애(AU-2)에서
     # 유일한 도달 경로였고, 에러 트레이스 검색만으로는 정의된 12문항 중 6문항을 못 찾는다.
+    #
+    # step(5m)을 줄이는 대신 **집계 함수로 구간 상태를 보존한다.** 순간값을 5분마다 찍으면
+    # 그 사이의 짧은 장애가 사라진다 — CH-3의 23초 다운이 mongodb_up 05:20:09=1 / 05:25:09=1
+    # 사이로 빠져 정상으로 관측됐다. step을 15s로 줄이면 응답이 10~20배가 되어
+    # "스윕은 집계라 창이 넓어도 응답이 작다"는 전제가 깨지므로, 각 스텝이 그 5분의
+    # 최솟값(또는 최댓값)을 담게 한다. **점 개수가 같아 응답 크기는 불변이다.**
+    #
+    # 방향을 메트릭마다 지정한다 — 생사 신호는 떨어진 것이 신호고, 누적 신호는 올라간 것이 신호다.
+    # 한계: 스크레이프 간격(15s)이 하한이다. 그보다 짧은 장애는 샘플 자체가 없어 이것으로도 안 보인다.
     metric-queries:
-      - "up"
-      - "mongodb_up"
-      - "kafka_brokers"
-      - "kafka_consumergroup_lag"
-      - "websocket_active_users"
+      - "min_over_time(up[5m])"
+      - "min_over_time(mongodb_up[5m])"
+      - "min_over_time(kafka_brokers[5m])"
+      - "max_over_time(kafka_consumergroup_lag[5m])"
+      - "max_over_time(websocket_active_users[5m])"
 
   # 시스템 프롬프트: 이 경로에 파일이 있으면 그것을, 없으면 classpath:prompts/system-prompt.md를 쓴다.
   # 외부 파일은 조사할 때마다 다시 읽으므로 재시작 없이 수정할 수 있다.

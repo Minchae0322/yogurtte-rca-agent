@@ -1,7 +1,9 @@
 package com.yogurtte.rca.triage;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -26,7 +28,9 @@ public record TriagePlan(
         String reason,
         List<String> evidence,
         boolean parsed,
-        List<String> notes) {
+        List<String> notes,
+        List<String> chosenIncidentIds,
+        List<String> dismissedIncidentIds) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Pattern FENCED_JSON = Pattern.compile("```(?:json)?\\s*(\\{.*?})\\s*```", Pattern.DOTALL);
@@ -35,6 +39,8 @@ public record TriagePlan(
         services = services == null ? List.of() : List.copyOf(services);
         evidence = evidence == null ? List.of() : List.copyOf(evidence);
         notes = notes == null ? List.of() : List.copyOf(notes);
+        chosenIncidentIds = chosenIncidentIds == null ? List.of() : List.copyOf(chosenIncidentIds);
+        dismissedIncidentIds = dismissedIncidentIds == null ? List.of() : List.copyOf(dismissedIncidentIds);
     }
 
     public Scope toScope() {
@@ -47,25 +53,118 @@ public record TriagePlan(
      * "실제로 고른 대상"으로 분석 점수를 매길 수 있어야 하기 때문이다.
      */
     public static TriagePlan parse(String llmText, TimeWindow surveyWindow) {
+        return parse(llmText, surveyWindow, List.of(), null);
+    }
+
+    /**
+     * @param incidents 코드가 만든 후보 목록. 모델이 고른 것의 <b>창을 여기서 계산한다.</b>
+     * @param padding   창 여유. {@code null}이면 후보 기반 창 계산을 하지 않는다(구 경로)
+     */
+    public static TriagePlan parse(String llmText, TimeWindow surveyWindow,
+                                   List<Incident> incidents, Padding padding) {
         var notes = new ArrayList<String>();
         var json = extractJson(llmText);
         if (json == null) {
             notes.add("LLM 응답에서 JSON 계획을 찾지 못해 스윕 창 전체를 분석 범위로 사용했다.");
-            return new TriagePlan(surveyWindow, List.of(), null, null, List.of(), false, notes);
+            return fallback(surveyWindow, incidents, padding, notes);
         }
 
         try {
             var node = MAPPER.readTree(json);
-            var window = readWindow(node, surveyWindow, notes);
             var services = readStrings(node.get("services"));
             var evidence = readStrings(node.get("evidence"));
-            var traceId = readText(node.get("traceId"));
             var reason = readText(node.get("reason"));
-            return new TriagePlan(window, services, traceId, reason, evidence, true, notes);
+            var chosenIds = readStrings(node.get("incidentIds"));
+            var dismissedIds = readDismissed(node.get("dismissed"));
+
+            var chosen = resolve(incidents, chosenIds);
+
+            // 후보를 골랐으면 창을 코드가 계산한다 — 모델이 쓴 시각을 쓰지 않는다.
+            if (!chosen.isEmpty() && padding != null) {
+                var window = Incident.unionWindow(chosen, padding.exact(), padding.bucket(), surveyWindow);
+                var services2 = services.isEmpty() ? resourcesOf(chosen) : services;
+                var traceId = firstTraceId(chosen);
+                if (chosenIds.size() != chosen.size()) {
+                    notes.add("모델이 지목한 후보 중 목록에 없는 것이 있어 무시했다: " + chosenIds);
+                }
+                notes.add("창을 후보 %s 의 신호 시각에서 계산했다 (%s ~ %s)"
+                        .formatted(Incident.idsOf(chosen), window.start(), window.end()));
+                return new TriagePlan(window, services2, traceId, reason, evidence, true, notes,
+                        Incident.idsOf(chosen), dismissedIds);
+            }
+
+            // 후보를 안 골랐으면 구 경로 — 모델이 준 시각을 쓴다.
+            var window = readWindow(node, surveyWindow, notes);
+            if (!incidents.isEmpty()) {
+                notes.add("모델이 후보를 지목하지 않아 응답의 windowStart/windowEnd를 사용했다.");
+            }
+            var traceId = readText(node.get("traceId"));
+            return new TriagePlan(window, services, traceId, reason, evidence, true, notes,
+                    List.of(), dismissedIds);
         } catch (Exception e) {
             notes.add("계획 JSON 파싱 실패(" + e.getClass().getSimpleName() + ") — 스윕 창 전체를 사용했다.");
-            return new TriagePlan(surveyWindow, List.of(), null, null, List.of(), false, notes);
+            return fallback(surveyWindow, incidents, padding, notes);
         }
+    }
+
+    /** 창 여유 폭. 신호의 정밀도에서 나온다. */
+    public record Padding(Duration exact, Duration bucket) {
+    }
+
+    /**
+     * 계획을 못 읽었을 때. <b>스윕 창 전체가 아니라 신호가 가장 많은 후보</b>로 떨어진다 —
+     * 틀릴 수 있지만 스윕 창 전체보다 싸고, 나머지 후보가 기록에 남아 되돌아갈 수 있다.
+     */
+    private static TriagePlan fallback(TimeWindow surveyWindow, List<Incident> incidents,
+                                       Padding padding, List<String> notes) {
+        if (incidents.isEmpty() || padding == null) {
+            return new TriagePlan(surveyWindow, List.of(), null, null, List.of(), false, notes,
+                    List.of(), List.of());
+        }
+        var strongest = incidents.stream()
+                .max(Comparator.comparingInt(i -> i.signals().size()))
+                .orElseThrow();
+        var window = strongest.window(padding.exact(), padding.bucket(), surveyWindow);
+        notes.add("신호가 가장 많은 후보 %s 로 떨어졌다 (%s ~ %s). 나머지 후보는 기록에 남는다."
+                .formatted(strongest.id(), window.start(), window.end()));
+        return new TriagePlan(window, resourcesOf(List.of(strongest)),
+                firstTraceId(List.of(strongest)), null, List.of(), false, notes,
+                List.of(strongest.id()), List.of());
+    }
+
+    private static List<Incident> resolve(List<Incident> incidents, List<String> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return incidents.stream().filter(i -> ids.contains(i.id())).toList();
+    }
+
+    private static List<String> resourcesOf(List<Incident> chosen) {
+        return chosen.stream().map(Incident::resource).distinct().filter(r -> !"?".equals(r)).toList();
+    }
+
+    private static String firstTraceId(List<Incident> chosen) {
+        return chosen.stream().flatMap(i -> i.traceIds().stream()).findFirst().orElse(null);
+    }
+
+    /** {@code dismissed: [{"incidentId":"INC-1","why":"..."}]} 또는 문자열 배열 양쪽을 읽는다. */
+    private static List<String> readDismissed(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        var out = new ArrayList<String>();
+        node.forEach(child -> {
+            if (child.isTextual()) {
+                out.add(child.asText());
+                return;
+            }
+            var id = readText(child.get("incidentId"));
+            var why = readText(child.get("why"));
+            if (id != null) {
+                out.add(why == null ? id : id + " — " + why);
+            }
+        });
+        return List.copyOf(out);
     }
 
     /**

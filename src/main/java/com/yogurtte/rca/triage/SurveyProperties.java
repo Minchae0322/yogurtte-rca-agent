@@ -1,5 +1,6 @@
 package com.yogurtte.rca.triage;
 
+import java.time.Duration;
 import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,7 +15,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param maxWindowHours       상한. 이보다 넓게 요청되면 끝(end) 기준으로 잘라낸다.
  * @param step                 집계 해상도. 창이 넓으므로 분석 단계(15s)보다 성기게 잡는다.
  * @param traceQuery           Tempo 검색 TraceQL. 기본은 에러 트레이스 전량.
- * @param traceLimit           Tempo 검색 결과 상한.
+ * @param slowTraceQuery       <b>지연 채널</b> TraceQL. {@code %s}에 임계값이 들어간다.
+ *                             에러 쿼리와 <b>따로 던져 후보를 병합</b>한다 — 단일 쿼리
+ *                             ({@code status = error || duration > Ns})로 합치면 후보 목록에서
+ *                             <b>어느 채널로 도달했는지가 사라진다.</b> 200 성공 + 지연 장애에서는
+ *                             그 사실 자체가 장애 성격이다(CH-3: 에러 검색 0건).
+ * @param slowTraceThreshold   지연 판정 임계값. <b>잠정값이다</b> — 문항에서 역산하지 않고
+ *                             정상 트래픽 분포(요청 p99 · span 최장)에서 정해야 하며 그 측정은
+ *                             아직 하지 않았다. 자세한 절차는 round-3 incident-clustering-spec §7.4.
+ * @param traceLimit           Tempo 검색 결과 상한. <b>채널마다 따로 적용된다</b> — 임계값을
+ *                             낮추면 후보가 늘어 정답이 상한에 밀려날 수 있다.
  * @param logQuery             Loki 집계 LogQL. {@code %s}에 앱 셀렉터 값이 들어간다.
  * @param metricQueries        Mimir 집계 PromQL. <b>부재가 곧 신호</b>인 것들을 우선 넣는다 —
  *                             {@code up}이 0으로 꺾이는 것이 AU-2에서 유일한 도달 경로였다.
@@ -26,9 +36,14 @@ public record SurveyProperties(
         int maxWindowHours,
         String step,
         String traceQuery,
+        String slowTraceQuery,
+        String slowTraceThreshold,
         int traceLimit,
         String logQuery,
-        List<String> metricQueries) {
+        List<String> metricQueries,
+        String clusterGap,
+        String incidentPadExact,
+        String incidentPadBucket) {
 
     public SurveyProperties {
         zone = blankTo(zone, "Asia/Seoul");
@@ -36,10 +51,71 @@ public record SurveyProperties(
         maxWindowHours = maxWindowHours <= 0 ? 48 : maxWindowHours;
         step = blankTo(step, "5m");
         traceQuery = blankTo(traceQuery, "{ status = error }");
+        // status != error 를 붙여 에러 채널과 겹치지 않게 가른다 — 어느 채널로 도달했는지가 남아야 한다.
+        slowTraceQuery = blankTo(slowTraceQuery, "{ duration > %s && status != error }");
+        slowTraceThreshold = blankTo(slowTraceThreshold, "3s");
         traceLimit = traceLimit <= 0 ? 20 : traceLimit;
         logQuery = blankTo(logQuery,
                 "sum by (service_name) (count_over_time({service_name=~\"%s\"} |~ \"ERROR|WARN\" [5m]))");
         metricQueries = metricQueries == null ? List.of() : List.copyOf(metricQueries);
+        clusterGap = blankTo(clusterGap, "60s");
+        incidentPadExact = blankTo(incidentPadExact, "2m");
+        incidentPadBucket = blankTo(incidentPadBucket, "5m");
+    }
+
+    /** 임계값을 채운 실제 지연 TraceQL. */
+    public String slowTraceQueryFor() {
+        return slowTraceQuery.contains("%s") ? slowTraceQuery.formatted(slowTraceThreshold) : slowTraceQuery;
+    }
+
+    /**
+     * 같은 키의 신호를 다른 사건으로 가르는 간격.
+     *
+     * <p>실측에서 유도된 값이다 — CH-1이 끝나고(05:03:30) CH-2가 시작하기까지(05:05:09)
+     * <b>99초</b>이므로 이보다 작아야 둘이 갈리고, CH-1의 30초 재시도 4회(연속 약 2분)는
+     * 묶여야 하며, CH-3 후보가 독립하려면 <b>4분 51초</b>보다 작아야 한다.
+     * 기본 60초는 안전 여유가 4배 이상이다.
+     */
+    public Duration clusterGapDuration() {
+        return parse(clusterGap, Duration.ofSeconds(60));
+    }
+
+    /** 시각이 ms 단위로 정확한 신호(트레이스 span)의 창 여유. */
+    public Duration incidentPadExactDuration() {
+        return parse(incidentPadExact, Duration.ofMinutes(2));
+    }
+
+    /**
+     * 집계 해상도만큼 흐린 신호(메트릭 샘플 · 로그 버킷)의 창 여유.
+     * <b>기본이 step과 같다</b> — 버킷 하나가 담는 폭이 곧 시각의 불확실성이다.
+     */
+    public Duration incidentPadBucketDuration() {
+        return parse(incidentPadBucket, Duration.ofMinutes(5));
+    }
+
+    /** {@code 5m} · {@code 60s} · {@code 90} (초) 형태를 읽는다. */
+    static Duration parse(String raw, Duration fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        var text = raw.trim().toLowerCase();
+        try {
+            if (text.endsWith("ms")) {
+                return Duration.ofMillis(Long.parseLong(text.substring(0, text.length() - 2)));
+            }
+            if (text.endsWith("h")) {
+                return Duration.ofHours(Long.parseLong(text.substring(0, text.length() - 1)));
+            }
+            if (text.endsWith("m")) {
+                return Duration.ofMinutes(Long.parseLong(text.substring(0, text.length() - 1)));
+            }
+            if (text.endsWith("s")) {
+                return Duration.ofSeconds(Long.parseLong(text.substring(0, text.length() - 1)));
+            }
+            return Duration.ofSeconds(Long.parseLong(text));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     /** 앱 셀렉터를 채운 실제 LogQL. */

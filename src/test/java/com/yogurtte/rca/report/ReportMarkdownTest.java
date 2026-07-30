@@ -88,11 +88,15 @@ class ReportMarkdownTest {
                 Instant.parse("2026-07-27T09:00:00Z"), Instant.parse("2026-07-27T21:00:00Z"),
                 Instant.parse("2026-07-27T17:29:00Z"), Instant.parse("2026-07-27T17:40:00Z"),
                 List.of("chat-service"), "abc123",
-                List.of(new Evidence.TraceHit("abc123", "chat-service", "notification-consume", 30123),
-                        new Evidence.TraceHit("def456", "content-service", "POST /comments", 140)),
+                List.of(new Evidence.TraceHit("abc123", "chat-service", "notification-consume", 30123,
+                                Evidence.TraceHit.CHANNEL_ERROR, base, true),
+                        new Evidence.TraceHit("def456", "content-service", "POST /comments", 140,
+                                Evidence.TraceHit.CHANNEL_SLOW, base, true)),
                 "알림 저장 실패 구간", List.of("mongodb_up이 0으로 꺾임"), true, List.of(),
                 "prompts/triage-prompt.md", "## 1. 판단 ...", 43_025, 2_264, 0.3585, 31_500, 2_200, 1200, 4300,
-                List.of("Metric 'up'이 이 창에서 시리즈 0건이다."));
+                List.of("Metric 'up'이 이 창에서 시리즈 0건이다."),
+                List.of("## INC-1  chat-service\n- 구간: … \n"), List.of("INC-1"),
+                List.of("INC-2 — 시각이 증상과 불일치"));
 
         var evidence = new Evidence("abc123", "abc123", 30,
                 List.of(new Evidence.SpanRecord("chat-service", "notification-consume", 30000.0, base)),
