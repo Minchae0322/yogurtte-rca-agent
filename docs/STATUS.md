@@ -497,6 +497,33 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-07-30 (탐색 신호·후보 구조 구현 + 로그 두 결함의 진짜 원인 규명)**:
+  **구현 완료 6건.** `B-15`(깨진 행 방어) · `B-17`(지연 채널) · `B-18`(`min_over_time` 구간 보존) ·
+  `B-20`(Signal → Incident → 복수 후보 → **창을 신호에서 계산**) · `B-11`(스택트레이스 도달) ·
+  `B-16`(DLQ traceId). `./gradlew build` 통과 · 테스트 40개.
+
+  **`B-11` — 처방이 문서와 달랐다.** round-3에 *"traceId 단위 전량 조회"* 로 적혀 있었는데
+  **그것으로는 스택에 도달하지 못한다** — 스택 줄에는 `ERROR` 도 traceId도 붙지 않는다
+  (Logback 패턴이 이벤트 첫 줄에만 적용되고 수집기가 줄 단위로 받으면 스택은 별개 엔트리).
+  실측 근거: JWT 채널 감사에서 traceId 전량은 INFO 한 줄, 문자열 검색으로만 스택 전문.
+  → 분석 단계 라인 필터에 `Exception|Caused by|\.java:[0-9]+\)` 추가.
+  **스윕 집계 쿼리는 의도적으로 그대로** — 거기 넣으면 발생률이 수십 배 부풀어 버킷 비교가 깨진다.
+  양은 **예외 건수에 비례**하므로 INFO 전량(1시간 2,300줄 중 ERROR/WARN 8줄 = 약 287배)과 다르다.
+  [log-stacktrace.md](round-3/log-stacktrace.md)
+
+  **`B-16` — 원인이 필터가 아니었다.** `toy-chat` 리스너 팩토리 **6개 중 5개**에
+  `setObservationEnabled(true)` 가 있고 `notificationDlqListenerFactory` 하나만 빠져 있었다
+  (**기본값 `false`**). 그래서 consume span·trace scope가 없어 MDC가 비고 `traceId=NONE` 이었다 —
+  **레벨 무관 `traceIdQuery`가 이미 있었는데도 못 찾은 이유**다. 앱 설정 한 줄로 수정.
+  **레벨을 WARN으로 올리는 안은 기각** — 채점 앵커가 요구하는 로그를 잡히게 하려고 레벨을
+  올리면 순환논증이고(프로브 심기 철회와 같은 계열), 성공을 이상으로 표시해 오귀인 재료가 되며,
+  운영에서 복구마다 알람이 울린다. 관례상으로도 재처리 **성공**은 INFO가 맞다.
+  **미확인**: `DeadLetterPublishingRecoverer`가 원본 헤더를 복사하지만 `KafkaTemplate`도
+  observation이 켜져 있어 **어느 traceId가 붙는지**는 배포 후 재주입으로 확인해야 한다 —
+  원본과 다르면 결말 어휘 추가가 다시 필요하다. [dlq-traceid.md](round-3/dlq-traceid.md)
+
+  **효과는 전부 미측정이다.** 검산 조건 ①~④(주입 불필요)도 아직 안 돌렸다.
+
 - **2026-07-30 (A-0 실제 적용 — 문서가 코드보다 앞서 나갔던 것을 정정)**:
   **`A-0`이 `선적용 완료`로 등재돼 있었는데 레포에는 반영돼 있지 않았다.** 세 파일
   (`toy-content`·`toy-chat`의 `JwtParser`, `toy-auth-user-region`의 `JwtProvider`) 모두 원래

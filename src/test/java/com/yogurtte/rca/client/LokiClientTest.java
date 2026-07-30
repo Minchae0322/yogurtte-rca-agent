@@ -65,6 +65,9 @@ class LokiClientTest {
      *       {@code app} 라벨은 Loki에 존재하지 않는다.</li>
      *   <li>파싱: 라인 필터({@code |~})를 쓴다. 평문 Logback이라 {@code | logfmt}로는
      *       {@code level} 필드가 안 생겨 뒤의 필터가 전부 걸러냈다.</li>
+     *   <li>스택: {@code ERROR|WARN} 만으로는 예외 <b>헤더 줄만</b> 왔다. 스택 줄에는
+     *       {@code ERROR} 도 traceId도 없어 어느 쿼리로도 도달하지 못했다 —
+     *       패턴 상세는 {@code CollectPropertiesTest}.</li>
      * </ul>
      */
     @Test
@@ -73,7 +76,8 @@ class LokiClientTest {
                 1000, "15s", java.util.List.of(), 102400, 30);
 
         assertThat(properties.errorWarnQuery())
-                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |~ \"ERROR|WARN\"");
+                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} "
+                        + "|~ `ERROR|WARN|Exception|Caused by|\\.java:[0-9]+\\)`");
         assertThat(properties.traceIdQuery("abc123"))
                 .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |= \"abc123\"");
     }
