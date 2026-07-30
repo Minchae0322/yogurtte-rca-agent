@@ -497,6 +497,25 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-07-30 (A-0 실제 적용 — 문서가 코드보다 앞서 나갔던 것을 정정)**:
+  **`A-0`이 `선적용 완료`로 등재돼 있었는데 레포에는 반영돼 있지 않았다.** 세 파일
+  (`toy-content`·`toy-chat`의 `JwtParser`, `toy-auth-user-region`의 `JwtProvider`) 모두 원래
+  `catch (SecurityException | MalformedJwtException e) { }` 그대로였고 working tree도 깨끗했다.
+  **같은 날 실제로 고치고 세 서비스 컴파일을 확인했다** — `io.jsonwebtoken.security.SignatureException`
+  명시 import + 포착 · 사유별 `WARN` · 최후 `catch (JwtException)`.
+  **`catch (JwtException)`이 재발 방지 장치다** — jjwt 예외의 부모이고 `io.jsonwebtoken` 패키지라
+  와일드카드에 잡히므로 새 예외 타입이 생겨도 500으로 새지 않는다.
+  **이것만으로 401이 된다** — `validateToken()`이 `false`를 내면 `JwtFilter:77`이
+  `sendError(401)`로 가고, catch에 걸리는 예외는 이미 401이 나가고 있었다(빠진 건
+  `SignatureException`이 목록에 없다는 것 하나).
+  **남은 구멍**: `parseClaims()`의 `throw new RuntimeException`은 그대로여서 **WS CONNECT 경로는
+  여전히 500**이다(`A-4`). 그리고 **`@ControllerAdvice`로 통합하는 안(`A-5`)은 보류** — 필터 예외는
+  `DispatcherServlet` 앞이라 지금 구조로는 도달하지 않고(로그가 `handleAllException`이 아니라
+  `dispatcherServlet … threw exception`이었던 것이 증거), 통합하면 **`A-1` 보존 결정이 자동으로
+  깨진다.** A-0 검증 ⓒ(WARN 줄에 traceId가 붙는가) 결과가 A-5의 필요성을 결정한다.
+  문서를 `jwt-exception-handling.md`(서술) · `-spec.md`(스펙)로 갈랐다.
+  **규율 추가: A군 항목은 `grep`으로 확인한 뒤 완료 표기한다.**
+
 - **2026-07-30 (B-20 문서를 서술/스펙 둘로 분리)**:
   [incident-clustering.md](round-3/incident-clustering.md)는 **서술 버전**(문제 상황 → 원인 →
   개선 방향), [incident-clustering-spec.md](round-3/incident-clustering-spec.md)는 **구현 스펙**으로
