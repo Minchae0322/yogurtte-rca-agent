@@ -78,7 +78,7 @@ final class ReportMarkdown {
         sb.append("---\n\n");
         sb.append(nz(report.analysis())).append("\n");
 
-        renderEvidence(sb, report.evidence());
+        renderEvidence(sb, report.evidence(), report.serviceGraph());
 
         return sb.toString();
     }
@@ -87,13 +87,19 @@ final class ReportMarkdown {
      * 분석 본문 <b>뒤에</b> 관측값 원문을 붙인다. 리포트에 모델의 서술만 남으면 나중에 그 서술이
      * 맞았는지 확인할 방법이 없다 — 회고와 채점은 바꿔 쓴 문장이 아니라 원문 위에서만 성립한다.
      */
-    private static void renderEvidence(StringBuilder sb, Evidence e) {
+    private static void renderEvidence(StringBuilder sb, Evidence e, ServiceGraph graph) {
         if (e == null) {
             return;
         }
         sb.append("\n---\n\n## 관측 증거 (Evidence)\n\n");
         sb.append("> 이 조사가 실제로 본 값이다. 원본 응답 전체는 `reports/raw/")
                 .append(e.rawPrefix()).append("-*.json`에 있다.\n\n");
+
+        // 그래프를 리포트에 안 남기면 그래프를 준 효과를 채점에서 귀속시킬 수 없다.
+        if (graph != null && !graph.isEmpty()) {
+            sb.append("### 호출 그래프 (트레이스에서 추출)\n\n");
+            sb.append("```\n").append(graph.toText()).append("```\n\n");
+        }
 
         if (!e.topSpans().isEmpty()) {
             sb.append("### span (duration 상위 %d / 전체 %d)\n\n".formatted(e.topSpans().size(), e.spanCount()));

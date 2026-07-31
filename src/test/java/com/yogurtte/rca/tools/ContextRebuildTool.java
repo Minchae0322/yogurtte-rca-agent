@@ -63,7 +63,8 @@ class ContextRebuildTool {
         // 조사 당시 설정과 같아야 하는 것은 maxTraceBytes·topSpans뿐이다.
         var assembler = new ContextAssembler(new CollectProperties(
                 120, "content-service|auth-service|chat-service", "service_name", 1000, "15s",
-                List.of(), MAX_TRACE_BYTES, TOP_SPANS));
+                List.of(), MAX_TRACE_BYTES, TOP_SPANS),
+                new com.yogurtte.rca.analyzer.ServiceGraphExtractor());
 
         var reports = new ArrayList<Path>();
         try (var stream = Files.list(REPORTS)) {

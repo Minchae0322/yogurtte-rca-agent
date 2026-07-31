@@ -184,9 +184,11 @@ class TriageFlowTest {
         var promptLoader = new SystemPromptLoader(new PromptProperties(null));
         var tokenCounter = new TokenCounter(new LlmProperties("fake", null, null, null));
 
+        var graphExtractor = new com.yogurtte.rca.analyzer.ServiceGraphExtractor();
         var rcaService = new RcaService(
                 new Collector(tempoClient, lokiClient, mimirClient, collectProperties),
-                new ContextAssembler(collectProperties), new EvidenceExtractor(), promptLoader,
+                new ContextAssembler(collectProperties, graphExtractor), new EvidenceExtractor(),
+                graphExtractor, promptLoader,
                 collectProperties, llmClient, tokenCounter, notifier);
 
         triageService = new TriageService(

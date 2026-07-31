@@ -1,7 +1,9 @@
 package com.yogurtte.rca.collector;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,14 +12,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Tempo의 OTLP 형태 트레이스 JSON을 평평한 span 리스트로 펼친다.
  * TimeWindow와 컨텍스트 조립기가 둘 다 쓰므로 static 헬퍼로 여기에 둔다.
  */
-public final class TraceSpans {
+public final class  TraceSpans {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private TraceSpans() {
     }
 
-    public record Span(String service, String name, long startNanos, long endNanos) {
+    /**
+     * @param spanId       base64 그대로다. 디코딩하지 않는다 — 문자열 그대로 키로 쓰면 부모를 찾는다.
+     * @param parentSpanId 루트 span이면 빈 문자열.
+     * @param attributes   span 태그. 키 이름은 계약이 아니라 계측 라이브러리의 관례다
+     *                     (OTel 컨벤션이면 {@code db.statement}일 것이 실제로는 {@code jdbc.query[0]}이다).
+     * @param eventNames   span events의 이름만. 12개 시큐리티 필터가 span이 아니라 여기 들어 있다 —
+     *                     span 이름만 세면 필터 span 수를 오독한다(실측).
+     */
+    public record Span(String service, String name, String spanId, String parentSpanId,
+                       Map<String, String> attributes, List<String> eventNames,
+                       long startNanos, long endNanos) {
+
+        public Span {
+            attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+            eventNames = eventNames == null ? List.of() : List.copyOf(eventNames);
+        }
+
         public long durationNanos() {
             return endNanos - startNanos;
         }
@@ -64,7 +82,10 @@ public final class TraceSpans {
                     if (start <= 0) {
                         continue;
                     }
-                    spans.add(new Span(service, span.path("name").asText(""), start, Math.max(end, start)));
+                    spans.add(new Span(service, span.path("name").asText(""),
+                            span.path("spanId").asText(""), span.path("parentSpanId").asText(""),
+                            attributesOf(span), eventNamesOf(span),
+                            start, Math.max(end, start)));
                 }
             }
         }
@@ -85,6 +106,46 @@ public final class TraceSpans {
                 .append(span.name())
                 .append('\n'));
         return sb.toString();
+    }
+
+    private static Map<String, String> attributesOf(JsonNode span) {
+        var map = new LinkedHashMap<String, String>();
+        var attributes = span.path("attributes");
+        if (!attributes.isArray()) {
+            return map;
+        }
+        for (var attribute : attributes) {
+            var key = attribute.path("key").asText("");
+            if (key.isEmpty()) {
+                continue;
+            }
+            var value = attribute.path("value");
+            if (value.hasNonNull("stringValue")) {
+                map.put(key, value.get("stringValue").asText(""));
+            } else if (value.hasNonNull("intValue")) {
+                map.put(key, value.get("intValue").asText(""));
+            } else if (value.hasNonNull("boolValue")) {
+                map.put(key, value.get("boolValue").asText(""));
+            } else if (value.hasNonNull("doubleValue")) {
+                map.put(key, value.get("doubleValue").asText(""));
+            }
+        }
+        return map;
+    }
+
+    private static List<String> eventNamesOf(JsonNode span) {
+        var events = span.path("events");
+        if (!events.isArray() || events.isEmpty()) {
+            return List.of();
+        }
+        var names = new ArrayList<String>();
+        for (var event : events) {
+            var name = event.path("name").asText("");
+            if (!name.isEmpty()) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 
     private static String serviceName(JsonNode batch) {

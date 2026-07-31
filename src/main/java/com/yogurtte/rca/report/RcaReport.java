@@ -38,6 +38,7 @@ public record RcaReport(
         Coverage coverage,
         Triage triage,
         Evidence evidence,
+        ServiceGraph serviceGraph,
         List<String> collectionFailures) {
 
     /**

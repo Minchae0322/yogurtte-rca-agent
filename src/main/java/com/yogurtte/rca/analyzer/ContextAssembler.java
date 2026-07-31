@@ -7,18 +7,24 @@ import org.springframework.stereotype.Component;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.CollectedData;
 import com.yogurtte.rca.collector.TraceSpans;
+import com.yogurtte.rca.report.ServiceGraph;
 
 /**
  * 수집한 모든 것을 하나의 텍스트 덩어리로 이어 붙인다. 가공은 의도적으로 최소화했다 -
  * v0는 모델에게 원본 데이터를 주고 추론을 맡긴다.
+ *
+ * <p>예외가 호출 그래프 절 하나다 — 요약을 <b>더하는</b> 것이지 원본 트레이스를 대체하는 것이
+ * 아니다. 코드가 놓친 엣지를 모델이 원본에서 직접 볼 여지를 남긴다.
  */
 @Component
 public class ContextAssembler {
 
     private final CollectProperties properties;
+    private final ServiceGraphExtractor graphExtractor;
 
-    public ContextAssembler(CollectProperties properties) {
+    public ContextAssembler(CollectProperties properties, ServiceGraphExtractor graphExtractor) {
         this.properties = properties;
+        this.graphExtractor = graphExtractor;
     }
 
     public String assemble(CollectedData data, String question) {
@@ -38,6 +44,14 @@ public class ContextAssembler {
             sb.append("아래 데이터는 확보하지 못했다. 결론을 낼 때 이 공백을 감안하라.\n");
             data.failures().forEach(failure -> sb.append("- ").append(failure).append('\n'));
             sb.append('\n');
+        }
+
+        var graph = graphExtractor.extract(data);
+        if (!graph.isEmpty()) {
+            sb.append("# 호출 그래프 (트레이스에서 추출)\n");
+            sb.append("span의 부모-자식 관계와 속성에서 유도한 호출 관계다. 같은 엣지의 span들은 한 줄로 "
+                    + "집약했고 error·events를 붙였다. 원본 트레이스는 아래 절에 그대로 있다.\n");
+            sb.append(graph.toText()).append('\n');
         }
 
         sb.append("# 트레이스 (Tempo)\n");

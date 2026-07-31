@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.yogurtte.rca.analyzer.ContextAssembler;
 import com.yogurtte.rca.analyzer.EvidenceExtractor;
+import com.yogurtte.rca.analyzer.ServiceGraphExtractor;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.CollectedData;
@@ -33,6 +34,7 @@ public class RcaService {
     private final Collector collector;
     private final ContextAssembler assembler;
     private final EvidenceExtractor evidenceExtractor;
+    private final ServiceGraphExtractor graphExtractor;
     private final SystemPromptLoader promptLoader;
     private final CollectProperties collectProperties;
     private final LlmClient llmClient;
@@ -40,11 +42,13 @@ public class RcaService {
     private final Notifier notifier;
 
     public RcaService(Collector collector, ContextAssembler assembler, EvidenceExtractor evidenceExtractor,
-                      SystemPromptLoader promptLoader, CollectProperties collectProperties,
+                      ServiceGraphExtractor graphExtractor, SystemPromptLoader promptLoader,
+                      CollectProperties collectProperties,
                       LlmClient llmClient, TokenCounter tokenCounter, Notifier notifier) {
         this.collector = collector;
         this.assembler = assembler;
         this.evidenceExtractor = evidenceExtractor;
+        this.graphExtractor = graphExtractor;
         this.promptLoader = promptLoader;
         this.collectProperties = collectProperties;
         this.llmClient = llmClient;
@@ -139,6 +143,7 @@ public class RcaService {
                 coverage(data, context, prompt.text(), contextTokens, overheadTokens),
                 triage,
                 evidenceExtractor.extract(data),
+                graphExtractor.extract(data),
                 data.failures());
 
         notifier.send(report);

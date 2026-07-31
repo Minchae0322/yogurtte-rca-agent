@@ -20,6 +20,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.yogurtte.rca.analyzer.ContextAssembler;
 import com.yogurtte.rca.analyzer.EvidenceExtractor;
 import com.yogurtte.rca.analyzer.PromptProperties;
+import com.yogurtte.rca.analyzer.ServiceGraphExtractor;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.LokiClient;
@@ -123,7 +124,9 @@ class RcaServiceFlowTest {
         var promptLoader = new SystemPromptLoader(new PromptProperties(null));
         // API 키 없는 LlmProperties -> TokenCounter가 비활성이라 contextTokens는 -1이 된다.
         var tokenCounter = new TokenCounter(new LlmProperties("fake", null, null, null));
-        service = new RcaService(collector, new ContextAssembler(collectProperties), new EvidenceExtractor(), promptLoader,
+        var graphExtractor = new ServiceGraphExtractor();
+        service = new RcaService(collector, new ContextAssembler(collectProperties, graphExtractor),
+                new EvidenceExtractor(), graphExtractor, promptLoader,
                 collectProperties, llmClient, tokenCounter, notifier);
     }
 
@@ -197,7 +200,7 @@ class RcaServiceFlowTest {
         var data = new com.yogurtte.rca.collector.CollectedData(
                 "trace-2", bigTrace, null, null, null, null, List.of(), null);
 
-        var context = new ContextAssembler(properties).assemble(data, "q");
+        var context = new ContextAssembler(properties, new ServiceGraphExtractor()).assemble(data, "q");
 
         assertThat(context).contains("duration 상위 30개 span만");
         // duration 상위 30개는 399번부터 370번까지; 그보다 짧은 span은 전부 버려진다.

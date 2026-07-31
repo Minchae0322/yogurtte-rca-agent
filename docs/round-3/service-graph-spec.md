@@ -49,7 +49,7 @@ auth는 인증을 담당한다.
 | **Redis** | `db.system=redis` · `db.operation` | **실측** |
 | **MySQL** | `jdbc.datasource.driver` · `.name` · `.pool` | **실측** |
 | **Kafka** | `messaging.system=kafka` · `destination.name` · `kafka.consumer.group` · `kafka.message.offset` · `kafka.source.partition` · `messaging.operation` | **실측** |
-| **MongoDB** | `db.system=mongodb` | 구두 확인 — 저장된 트레이스로 **재확인할 것** |
+| **MongoDB** | ~~`db.system=mongodb`~~ **span이 없다** | **실측 반증 (2026-07-31)** — 저장분 17개 트레이스 어디에도 mongodb span이 없다. Mongo 장애는 Kafka receive span의 `error` 속성 텍스트로만 온다 (아래 검증 ⑤) |
 
 `parentSpanId`는 base64인데 **디코딩할 필요가 없습니다.** 문자열 그대로 키로 쓰면 부모를 찾습니다.
 
@@ -92,11 +92,19 @@ public record Span(String service, String name,
 ① messaging.system 있다              → 메시징
 ② db.system 있다                     → 데이터베이스
 ③ jdbc.datasource.driver/.name 있다  → 데이터베이스
-④ 부모 span 의 service.name 이 다르다 → 서비스 경계
-⑤ peer.service 만 있다               → 미분류로 남긴다 (버리지 않는다)
+④ client.name 있다 (아웃바운드 HTTP)  → 서비스 경계 — 상대 span이 없어도 나온다
+⑤ 부모 span 의 service.name 이 다르다 → 서비스 경계
+⑥ peer.service 만 있다               → 미분류로 남긴다 (버리지 않는다)
 ```
 
-**⑤가 마지막인 이유가 함정입니다** (아래). **그리고 버리지 않습니다** — 못 알아본 엣지를
+**④는 검증에서 추가됐다 (2026-07-31 실측).** 원안은 ⑤(부모 서비스 상이)만으로 서비스
+경계를 잡으려 했는데, 이 규칙은 **양쪽 span이 트레이스에 모두 있어야만** 작동한다.
+AU-4가 정확히 그 반례다 — auth-service가 다운이라 호출이 Connection refused로 끝났고,
+**트레이스 66개 span 전부가 content-service**다. 죽은 서비스는 트레이스에 합류하지 못한다.
+아웃바운드 WebClient span에는 `client.name=auth-service` · `http.url` · `error`가 실측으로
+있으므로, ④가 있어야 *"auth를 불렀는데 거부됐다"* 가 엣지로 나온다.
+
+**⑥이 마지막인 이유가 함정입니다** (아래). **그리고 버리지 않습니다** — 못 알아본 엣지를
 버리면 새 인프라가 붙었을 때 조용히 사라집니다. 미분류로 남기고 원본 속성을 함께 실어
 모델이 판단하게 합니다.
 
@@ -117,6 +125,14 @@ kafka/user.notifications          ← messaging.system + messaging.destination.n
 
 **방향은 `messaging.operation`으로 정합니다** — `publish`면 서비스 → 토픽, `receive`면
 토픽 → 서비스. 프롬프트에 손으로 적은 `content → Kafka → chat` 이 **관측에서 그대로 나옵니다.**
+
+이름 규칙에 각주 둘 (2026-07-31 검증에서 확인):
+
+- **receive의 토픽명은 `messaging.destination.name`이 아니라 `messaging.source.name`에 온다.**
+  destination만 보면 receive 엣지가 `kafka/?`가 된다 — CH-1 실측.
+- **`jdbc.datasource.name`은 스키마명이 아니라 앱이 지은 풀/설정 이름이다.**
+  chat-service의 datasource 이름이 `content`라서 `chat-service → mysql/content` 엣지가
+  나온다(실측). 데이터에 충실한 결과지만 읽는 쪽이 오해할 수 있어 각주로 남긴다.
 
 ### ④ 거르지 말고 접는다
 
@@ -159,7 +175,9 @@ Collector → CollectedData ─┬→ ContextAssembler      → 컨텍스트 →
 
 ---
 
-## 함정 둘 — 실측으로 확인됐다
+## 함정 — 실측으로 확인됐다
+
+셋째 함정(*죽은 서비스는 트레이스에 합류하지 못한다*)은 판별 순서 ④에 서술했다.
 
 ### `peer.service`가 서비스 이름이 아니다
 
@@ -224,21 +242,35 @@ ServiceGraph merge(List<ServiceGraph> perTrace)   // calls 합산, maxMs 최대
 
 ---
 
-## 검증 — 저장된 원본으로 지금 가능하다
+## 검증 — 실행 완료 (2026-07-31)
 
-주입도 배포도 필요 없습니다. `reports/raw/`에 여러 문항의 트레이스가 쌓여 있습니다.
+주입도 배포도 없이 `reports/raw/`의 tempo-trace 원본 17개 전부에 판별·집약 규칙을
+시뮬레이션(Node 스크립트)으로 돌렸다.
 
-| | 확인할 것 |
-|---|---|
-| ① | 23 span이 엣지 1줄로 접히는가 |
-| ② | `peer.service=content` 가 **DB 엣지로** 분류되는가 (자기 참조가 안 생기는가) |
-| ③ | AU-4 트레이스에서 `content → redis` 와 `content → auth-service` 가 **둘 다** 나오는가 |
-| ④ | CH-1 트레이스에서 Kafka 엣지가 **방향까지** 나오는가 (publish / receive) |
-| ⑤ | **MongoDB가 `db.system=mongodb` 로 오는가** — 아직 확인 안 됨 |
+| | 확인할 것 | 결과 |
+|---|---|---|
+| ① | 23 span이 엣지 1줄로 접히는가 | **통과** — AP-3 트레이스 3개 모두 23 span → `content-service → mysql/content` 1줄(n=19, 나머지 4개는 내부 span). `Duplicate entry ... uk_feed_hashtag` 오류와 rollback 이벤트가 그 줄에 실린다 |
+| ② | `peer.service=content` 가 **DB 엣지로** 분류되는가 (자기 참조가 안 생기는가) | **통과** — 트레이스당 최대 60개인 `peer.service=content` span 전부 jdbc로 선분류. 자기참조 0건 · 미분류 0건 |
+| ③ | AU-4 트레이스에서 `content → redis` 와 `content → auth-service` 가 **둘 다** 나오는가 | **원안 실패 → ④규칙(`client.name`) 추가 후 통과** — auth가 다운이라 트레이스에 auth span이 아예 없었다(66/66 content-service). 규칙 추가 후 `content-service → auth-service` 엣지에 `WebClientRequestException / Connection refused` 오류까지 실린다 |
+| ④ | CH-1 트레이스에서 Kafka 엣지가 **방향까지** 나오는가 (publish / receive) | **키 수정 후 통과** — receive 토픽은 `messaging.source.name`(원안의 destination이면 `kafka/?`). 수정 후 publish 2건·receive 1건이 방향까지 나오고 클러스터 ID 잡음도 빠진다 |
+| ⑤ | **MongoDB가 `db.system=mongodb` 로 오는가** | **반증** — mongodb span이 저장분에 존재하지 않는다. Mongo 장애(MongoSocketOpenException)는 receive span의 `error` 속성 텍스트로만 오며, 엣지 error 주석(④집약)으로 모델에 전달된다. Mongo가 원인인 문항에서 `chat → mongodb` 엣지는 기대할 수 없다 |
 
 **③④가 결정적입니다** — 서비스 엣지와 인프라 엣지가 함께 나와야 프롬프트 문장을 대체할 수 있습니다.
+둘 다 규칙 수정이 필요했고, 수정안은 본문(판별 순서 ④ · 이름 규칙 각주)에 반영했다.
 
-확인 결과를 그대로 **테스트 픽스처로 고정**하면 구현이 회귀에 안전해집니다.
+CH-1 검증 출력 원문 — 그래프 여섯 줄이 정답 서사 전체를 담는다:
+
+```
+content-service → kafka/user.notifications        publish  n=1
+kafka/user.notifications → chat-service           receive  n=4  max=30108ms
+    err: MongoSocketOpenException ... Connection refused: ...:27017
+chat-service → kafka/user.notifications.dlq       publish  n=1
+chat-service → mysql/content                      n=4  max=30021ms  (rollback)
+content-service → mysql/content                   n=8
+content-service → redis                           n=1  GET
+```
+
+이 출력을 그대로 **테스트 픽스처로 고정**하면 구현이 회귀에 안전해집니다 (미착수).
 
 ## 반증 조건
 
@@ -254,25 +286,29 @@ ServiceGraph merge(List<ServiceGraph> perTrace)   // calls 합산, maxMs 최대
 
 | 순 | 무엇 | 주입 |
 |---:|---|---|
-| 1 | 저장된 트레이스로 **엣지 추출 검증**(①~⑤) | 불필요 |
-| 2 | `TraceSpans` 파싱 확장 + `ServiceGraphExtractor` | 불필요 |
-| 3 | 컨텍스트·리포트에 절 추가 | 불필요 |
-| 4 | 프롬프트의 토폴로지 문장 제거 | 3과 **같은 회차** |
+| 1 | 저장된 트레이스로 **엣지 추출 검증**(①~⑤) — **완료 2026-07-31** | 불필요 |
+| 2 | `TraceSpans` 파싱 확장 + `ServiceGraphExtractor` — **완료 2026-07-31** | 불필요 |
+| 3 | 컨텍스트·리포트에 절 추가 — **완료 2026-07-31** | 불필요 |
+| 4 | 프롬프트의 토폴로지 문장 제거 — **완료 2026-07-31** (3과 같은 날, 세 프롬프트 모두) | 3과 **같은 회차** |
 | 5 | `B-9` 후 여러 트레이스 누적 | `B-9` 이후 |
 | 6 | AU-4 재조사 → IN-1 재조사 | IN-1은 주입 필요 |
-
-**1~3은 지금 바로 됩니다.** 한 트레이스 그래프만으로도 AU-4에 실효가 있고, IN-1은 5번 이후입니다.
 
 ## 현재 상태
 
 | | |
 |---|---|
-| 데이터 확인 | Redis · MySQL · Kafka **실측 완료** · MongoDB **미확인** |
-| 함정 확인 | `peer.service` DB 이름 문제 · 필터 span 오독 **둘 다 실측으로 규명** |
-| 설계 | 판별 순서 · 이름 규칙 · 집약 방식 확정 |
-| 구현 | **미착수** |
-| 검증 | **미실행** (저장된 원본으로 가능) |
-| 효과 | **미측정** |
+| 데이터 확인 | Redis · MySQL · Kafka **실측 완료** · MongoDB **실측 반증** (span이 없다) |
+| 함정 확인 | `peer.service` DB 이름 문제 · 필터 span 오독 · **죽은 서비스는 트레이스에 합류하지 못한다**(→ 판별 순서 ④ 추가) — 셋 다 실측으로 규명 |
+| 설계 | 판별 순서 · 이름 규칙 · 집약 방식 확정 — 검증에서 두 곳 수정(④규칙 · receive 토픽 키) |
+| 구현 | **완료 (2026-07-31)** — `TraceSpans` 4필드 확장 · `ServiceGraphExtractor`/`ServiceGraph` 신규 · 컨텍스트 "호출 그래프" 절 · 리포트 관측 증거 절 · 프롬프트 토폴로지 문장 제거(6파일) |
+| 검증 | **실행 완료 (2026-07-31)** — ①② 원안 통과 · ③④ 규칙 수정 후 통과 · ⑤ 반증. 검증 출력은 `src/test/resources/traces/` 픽스처 3건 + `ServiceGraphExtractorTest` 5건으로 **박제됨** |
+| 효과 | **미측정** — AU-4 재조사(순서 6) 전이다. 반증 조건은 위 표 그대로 |
+
+부수 실측 (검증 중 발견): CH-1 트레이스에서 **chat-service의 JVM에 MySQL 풀(`HikariPool-1`,
+datasource명 `content`)이 실재**하고, `receive → connection(30초, rollback) → process-notification`
+부모 사슬로 알림 처리가 JDBC 트랜잭션 안에서 돈다. chat의 도메인 저장소가 MongoDB인 것과 별개다 —
+메시지 1건당 MySQL 커넥션 30초 점유는 nf-10(커넥션 점유) 계열의 앱 쪽 관찰이며, toy 쪽 확인 대상.
 
 **주장 범위**: *"트레이스에 관계 정보가 있는데 읽지 않고 있다는 것을 실측으로 확인하고,
-읽어내는 방식과 두 함정을 규명했다"* 까지입니다.
+읽어내는 방식과 함정을 규명한 뒤, 저장된 원본 17개로 추출 규칙을 검증하고 구현·픽스처 고정까지
+마쳤다"* 까지입니다. **점수 효과는 여전히 미측정이다** — 그것은 AU-4 재조사가 답한다.

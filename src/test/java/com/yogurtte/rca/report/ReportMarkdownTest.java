@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -22,8 +23,11 @@ class ReportMarkdownTest {
         assertThat(markdown).contains("어젯밤 (어제 18:00~오늘 06:00 Asia/Seoul)");
         assertThat(markdown).contains("abc123` ←선택").contains("def456");
 
-        // 관측 증거: span·로그 원문·메트릭
+        // 관측 증거: 호출 그래프·span·로그 원문·메트릭
         assertThat(markdown).contains("## 관측 증거 (Evidence)");
+        // 그래프가 리포트에 안 남으면 그래프를 준 효과를 채점에서 귀속시킬 수 없다.
+        assertThat(markdown).contains("### 호출 그래프 (트레이스에서 추출)");
+        assertThat(markdown).contains("kafka/user.notifications --messaging--> chat-service");
         assertThat(markdown).contains("notification-consume").contains("30000.00");
         assertThat(markdown).contains("MongoTimeoutException");
         assertThat(markdown).contains("mongodb_up");
@@ -61,7 +65,7 @@ class ReportMarkdownTest {
                 base.inputTokens(), base.outputTokens(), base.cacheReadTokens(),
                 base.cacheCreationTokens(), base.costUsd(), base.totalElapsedMs(), base.timings(),
                 base.contextChars(), noProbe, base.triage(), base.evidence(),
-                base.collectionFailures()));
+                base.serviceGraph(), base.collectionFailures()));
 
         assertThat(markdown).contains("overheadTokens 측정 안 됨");
         assertThat(markdown).contains("▓ 추정");
@@ -74,7 +78,7 @@ class ReportMarkdownTest {
                 "fake", "m", 1, "p", "분석 본문", 1, 1, -1, -1, 0.0, 10,
                 new Timings(1, 1, 1, 1, 1), 100, null, null,
                 new Evidence(null, "scan", 0, List.of(), 0, List.of(), List.of()),
-                List.of("Tempo 검색 0건")));
+                null, List.of("Tempo 검색 0건")));
 
         assertThat(markdown).contains("traceId 없음");
         assertThat(markdown).contains("수집된 관측값이 없다");
@@ -112,10 +116,16 @@ class ReportMarkdownTest {
                 24_619, 30, false, 3_912, 3_913, 8_100,
                 List.of("mongodb_up"), List.of("up"), 1_200, 40_981, -1, 21_247);
 
+        // 검증(2026-07-31)에서 실측한 형태 그대로의 엣지 — receive는 토픽 → 서비스 방향이다.
+        var graph = new ServiceGraph(List.of(new ServiceGraph.Edge(
+                "messaging", "kafka/user.notifications", "chat-service", "", 4, 30108.2,
+                List.of("receive"), List.of("MongoSocketOpenException: Connection refused"), List.of(), Map.of())));
+
         return new RcaReport("abc123", "어젯밤에 댓글 알림이 안 왔어요", "rca",
                 Instant.parse("2026-07-28T05:00:00Z"), "claude-cli", "claude-opus-5", 1,
                 "prompts/system-prompt.md", "## 1. 원인 후보 랭킹\n1. MongoDB 다운", 42_651, 4_950,
                 900, 300, 0.4234, 79_749, new Timings(1146, 261, 355, 1, 77_969), 40_981,
-                coverage, triage, evidence, List.of("Metric 'up' returned no series in this window; skipped."));
+                coverage, triage, evidence, graph,
+                List.of("Metric 'up' returned no series in this window; skipped."));
     }
 }
