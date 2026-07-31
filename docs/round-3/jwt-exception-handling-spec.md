@@ -114,6 +114,13 @@ public boolean validateToken(String token) {
 | toy-content | `app/auth/token/JwtParser.java` | 통과 |
 | toy-chat | `app/auth/token/JwtParser.java` | 통과 |
 | toy-auth-user-region | `app/common/util/JwtProvider.java` | 통과 |
+| **toy-user** | `app/common/util/JwtProvider.java` | 통과 (**2026-07-31 추가 반영**) |
+
+> **추가 발견 (2026-07-31).** auth-service 레포가 **둘**이다 — `toy-auth-user-region`(위 기반영)과
+> `toy-user`(같은 `ToyAuthApplication`·`spring.application.name: auth-service`, **A-0 미반영 상태였다**).
+> 사용자 지시로 toy-user에 같은 코드를 반영했고, JwtFilter의 USER_NOT_FOUND 무로그 500 경로와
+> ControllerAdvice(`RestApiException` 무로그 · `handleAllException` WARN→ERROR)도 함께 보강했다.
+> **어느 레포가 배포본인지 확정 전에는 A-0 "코드 완료"를 배포본 기준으로 단정할 수 없다.**
 
 **마지막 `catch (JwtException e)` 가 재발 방지 장치입니다.** `JwtException`은 jjwt 예외의 부모이고
 `io.jsonwebtoken` 패키지라 **와일드카드에 잡힙니다** — 새 예외 타입이 생겨도 500으로 새지 않습니다.
@@ -171,6 +178,12 @@ AU-3는 예외였습니다.
 `오귀인` 항목이 12회 만점으로 변별력 0이었는데, 이걸 푸는 재료가 됩니다.
 
 **단 A-0 배포 후 401로 바뀌면 증상이 달라지므로, 고치기 전에 재실측합니다.**
+
+> **R9 상호작용 (2026-07-31).** 로그 통합 R9(성공 INFO 제거,
+> [evidence-pipeline-improvements.md §3](evidence-pipeline-improvements.md))가 배포되면
+> **이 `200` 오기 INFO 줄 자체가 사라진다** — "로그가 응답과 다른 값을 말하는" 증상이
+> "로그가 아예 없는" 증상으로 바뀐다. **A-2를 문항 재료로 쓰려면 R9 배포 전에
+> 재실측·결정이 필요하다.** 둘 다 미배포라 아직 충돌은 잠재 상태다.
 
 ## 결함 18 — 예외 로그에 traceId가 없다 (A-1)
 

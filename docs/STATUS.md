@@ -447,6 +447,11 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
   정상 구간을 섞으면 **C7 오탐 대조군까지 이 트랙에서 해결**된다.
   **선행 확인: Grafana Cloud 보존기간에 07-26~28 데이터가 남아 있는가.** 없으면 회고 평가 불가.
   AU-3가 이 한계의 실증이다(전역 장애인데 입력이 요청 1건 → 하네스 우회 장치 필요).
+- **로그 포맷 통합 (변경군 A — 규칙 제정 완료·적용 대기)** — 저장을 "JSON 한 줄 = 이벤트
+  한 개"(부트 내장 structured logging, logstash)로 통일하는 규칙을 박제했다. 평문 우회
+  4종(logfmt 불가·스택 미도달 B-11·집계 부풀림·ANSI)의 공통 원인 제거가 목표이고,
+  toy-auth는 트레이싱 의존성 자체가 없어 선결 과제다. **B군과 같은 회차 금지** ·
+  적용 시 §5 쿼리 전환 + 도달 검증 4종 → [toy-content logging-format.md](../../toy-content/docs/observability/logging-format.md)
 - **AP-2 앵커 선박제** — 실행 전에 v2 원칙으로. AP-1(`38e01f0`)이 선례.
 - **AU-4 v5 앵커** — ⓒ`작성자 익명 전환`은 **질문에 적힌 증상**이라 근거가 될 수 없다(유형 E).
   회차 1(75)이 v3로 채점됐으므로 **회차 2부터** 적용하고, AP-2처럼 **두 앵커로 이중 채점**해
@@ -496,6 +501,53 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 | chaos 하네스 | 서버 `~/chaos` (이 레포 밖) — 시나리오·evidence·채점 |
 
 ## ④ 활동 로그 (최신이 위)
+
+- **2026-07-31 (B-28 호출 그래프 — 검증·구현·픽스처 고정 완료, 효과 미측정)**:
+  저장된 트레이스 17개 전부로 추출 규칙 검증(①~⑤) → **③④가 원안대로는 실패**해 규칙 두 곳
+  수정(`client.name` 서비스 엣지 신설 — 죽은 서비스는 트레이스에 합류하지 못한다 · receive 토픽은
+  `messaging.source.name`) · **⑤ MongoDB는 반증**(span이 없다, 장애는 receive span의 `error`
+  속성으로만 온다). 구현: `TraceSpans` 4필드 확장 · `ServiceGraphExtractor`/`ServiceGraph` 신규 ·
+  컨텍스트 "호출 그래프" 절 · 리포트 관측 증거 절 · **세 프롬프트의 토폴로지 문장 제거**(같은 회차 원칙).
+  검증 출력은 `src/test/resources/traces/` 픽스처 3건 + 테스트 5건으로 박제, `./gradlew test` 통과.
+  부수 실측: **chat-service JVM에 MySQL 풀이 실재**하고 알림 처리가 그 트랜잭션 안에서
+  30초 점유 후 rollback(도메인 저장소 Mongo와 별개 — nf-10 계열, toy 쪽 확인 대상).
+  **점수 효과 미측정** — AU-4 재조사(스펙 순서 6)가 답한다.
+  [round-3/service-graph-spec.md](round-3/service-graph-spec.md)
+  · auth-service 소스 레포는 [toy-user](https://github.com/Minchae0322/toy-user)로 이관됨(로컬 `C:\sources\toy-user`)
+
+- **2026-07-31 (로그 포맷 통합 규칙 제정 — 적용은 대기)**:
+  세 서비스 로그를 "JSON 한 줄 = 이벤트 한 개"로 통일하는 규칙을
+  [toy-content docs/observability/logging-format.md](../../toy-content/docs/observability/logging-format.md)에
+  박제했다. 동기: 평문 우회 4종(logfmt 파싱 불가 · 스택 traceId 미도달 B-11 ·
+  `count_over_time` 부풀림 · ANSI)의 **공통 원인이 "이벤트 하나 = 평문 여러 줄"** 이라
+  우회가 아니라 저장 단위를 바꿔야 한다는 판단. 레포 실측으로 격차도 확인 —
+  toy-content(3.4.1)·toy-chat(3.5.3)은 `pattern.level` 복붙 상태, **toy-auth(3.2.1)는
+  트레이싱 의존성·로깅 패턴 전무로 traceId가 아예 안 찍힌다**(선결 과제).
+  변경군 A로 분류해 **적용은 하지 않았다** — B군과 같은 회차에 넣지 않고,
+  전환은 회차 경계에서만(`| json`이 평문 줄에서 파싱 에러라 혼재 창은 반쪽만 보임).
+  적용 시 rca-agent 쿼리 전환(§5)과 도달 검증 4종(§6)이 규칙 문서에 박제돼 있다.
+  **R9 신설(요청 자동 기록)**: 실측 결과 요청 audit은 content만 있고(성공까지 INFO —
+  1시간 2,300줄의 대부분, Tempo 샘플링 1.0과 완전 중복), chat은 없음, auth는 로깅 호출이
+  예외 핸들러 2건뿐. **실패·저속만(4xx WARN·5xx ERROR·1s 초과) 세 서비스 통일**로 박제 —
+  content는 축소, chat·auth는 추가. content INFO 제거 전 앵커의 `[HTTP]` INFO 의존 확인 필요.
+  **R9 코드 반영 (사용자 지시로 content·chat만 즉시 적용, auth 보류)**: 앵커 의존 확인
+  결과 chaos 앵커에 `[HTTP]` 없음·리포트 인용은 전부 500 ERROR 줄이라 안전 →
+  content 필터에서 성공 INFO 제거, chat에 동일 규격 필터 신설(`app/global/filter/`).
+  부수 발견·수정: chat `logging.level` 키가 존재하지 않는 패키지(`com.example.chat`)라
+  헛돌고 있었다 → `com.example.toychat`으로 정정. INFO 공백 실사 결과 추가 불필요
+  (스케줄러·WebSocket 수명주기·DLQ 재처리 전부 INFO 기존재). 두 레포 compileJava 통과.
+  **주의: A군 변경이 회차 경계 밖에서 코드에 들어갔다** — 배포 전이므로 관측 데이터는
+  아직 무변경. **배포 시점을 회차 경계에 맞출 것.** JSON 전환(R1)은 여전히 미적용.
+
+- **2026-07-31 추가 (auth 로그 보강 + auth 레포 이원화 발견)**:
+  사용자 지시로 **toy-user**(auth-service)에 R9 필터 신설 + 무로그 실패 경로 셋 보강
+  (JWT 검증 실패 사유 = A-0 동일 코드 · JwtFilter USER_NOT_FOUND · ControllerAdvice
+  `RestApiException` 무로그, `handleAllException` WARN→ERROR). compileJava 통과, 미배포.
+  **발견 1 — auth 레포가 둘이다**: A-0는 `toy-auth-user-region`에 적용됐는데 `toy-user`는
+  미반영 상태였다(같은 `auth-service`). **배포본 확정 전에는 A-0 완료를 단정할 수 없다.**
+  어제 "auth는 트레이싱 전무"는 구본(`toy-auth`)을 본 오인 — logging-format.md 정정.
+  **발견 2 — A-2와 R9가 충돌한다**: R9가 content의 "500을 200으로 찍는" INFO 줄 자체를
+  없애 보존 문항 재료가 소멸한다. 잠재 충돌로 jwt-exception-handling-spec.md §4에 등재.
 
 - **2026-07-30 (탐색 신호·후보 구조 구현 + 로그 두 결함의 진짜 원인 규명)**:
   **구현 완료 6건.** `B-15`(깨진 행 방어) · `B-17`(지연 채널) · `B-18`(`min_over_time` 구간 보존) ·
