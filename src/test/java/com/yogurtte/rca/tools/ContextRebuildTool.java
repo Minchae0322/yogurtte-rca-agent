@@ -61,9 +61,10 @@ class ContextRebuildTool {
 
         // 셀렉터 값은 재구성에 영향이 없다(어셈블은 이미 받은 JSON을 붙일 뿐).
         // 조사 당시 설정과 같아야 하는 것은 maxTraceBytes·topSpans뿐이다.
+        // maxTraces=1: 과거 조사엔 후보 수집(B-9)이 없었다 — 재구성이 그때 입력과 같아야 한다.
         var assembler = new ContextAssembler(new CollectProperties(
                 120, "content-service|auth-service|chat-service", "service_name", 1000, "15s",
-                List.of(), MAX_TRACE_BYTES, TOP_SPANS),
+                List.of(), MAX_TRACE_BYTES, TOP_SPANS, 1),
                 new com.yogurtte.rca.analyzer.ServiceGraphExtractor());
 
         var reports = new ArrayList<Path>();
@@ -155,6 +156,7 @@ class ContextRebuildTool {
                 latestBefore(rawFiles, traceId, "loki-error-warn", reportStamp).orElse(null),
                 latestBefore(rawFiles, traceId, "loki-trace-id", reportStamp).orElse(null),
                 metrics,
+                null,
                 failures,
                 null));
     }

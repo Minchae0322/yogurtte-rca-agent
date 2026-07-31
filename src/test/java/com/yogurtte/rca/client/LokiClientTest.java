@@ -73,7 +73,7 @@ class LokiClientTest {
     @Test
     void buildsTheTwoConfiguredLogQueries() {
         var properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                1000, "15s", java.util.List.of(), 102400, 30);
+                1000, "15s", java.util.List.of(), 102400, 30, 3);
 
         assertThat(properties.errorWarnQuery())
                 .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} "

@@ -127,7 +127,19 @@ public class TriageService {
                     plan.chosenIncidentIds(),
                     plan.dismissedIncidentIds());
 
-            return rcaService.investigate(plan.toScope(), question, mode, record);
+            // B-9: 스윕이 찾은 이상 트레이스 중 좁힌 창 안의 것을 후보로 넘긴다. 신뢰 불가 행은
+            // 뺀다(B-15 — 정렬하면 그 행이 항상 1위가 된다). 창 기준 무조건 검색은 수집기가 한다.
+            var chosen = plan.window();
+            var candidates = survey.traceHits().stream()
+                    .filter(com.yogurtte.rca.report.Evidence.TraceHit::trusted)
+                    .filter(hit -> hit.startedAt() != null
+                            && !hit.startedAt().isBefore(chosen.start())
+                            && !hit.startedAt().isAfter(chosen.end()))
+                    .map(com.yogurtte.rca.report.Evidence.TraceHit::traceId)
+                    .distinct()
+                    .toList();
+
+            return rcaService.investigate(plan.toScope().withCandidates(candidates), question, mode, record);
         } finally {
             MDC.remove("traceId");
         }

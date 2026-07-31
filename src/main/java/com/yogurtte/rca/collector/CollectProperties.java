@@ -21,7 +21,8 @@ public record CollectProperties(
         String metricStep,
         List<String> metricQueries,
         int maxTraceBytes,
-        int topSpans) {
+        int topSpans,
+        int maxTraces) {
 
     /**
      * ERROR/WARN 로그. {@code {service_name=~"..."} |~ "ERROR|WARN"}

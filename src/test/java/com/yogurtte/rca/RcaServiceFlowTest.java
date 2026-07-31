@@ -110,7 +110,7 @@ class RcaServiceFlowTest {
         var rawStore = new RawResponseStore(reportProperties);
 
         var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                1000, "15s", List.of("hikaricp_connections_active"), 102400, 30);
+                1000, "15s", List.of("hikaricp_connections_active"), 102400, 30, 3);
 
         var collector = new Collector(
                 new TempoClient(grafana, rawStore),
@@ -181,6 +181,32 @@ class RcaServiceFlowTest {
     }
 
     @Test
+    void collectsCandidateTracesWithinAnExplicitWindow() {
+        var base = Instant.parse("2026-07-20T10:00:00Z");
+        // B-9: 창 기준 무조건 검색이 후보를 찾는다 — 선정 트레이스(trace-1)는 후보에서 빠져야 한다.
+        server.stubFor(get(urlPathEqualTo("/api/search")).willReturn(aResponse().withStatus(200).withBody(
+                "{\"traces\":[{\"traceID\":\"trace-2\"},{\"traceID\":\"trace-1\"},{\"traceID\":\"trace-3\"}]}")));
+        for (var id : new String[] {"trace-2", "trace-3"}) {
+            server.stubFor(get(urlPathEqualTo("/api/traces/" + id))
+                    .willReturn(aResponse().withStatus(200).withBody("""
+                            {"batches":[{"resource":{"attributes":[
+                                {"key":"service.name","value":{"stringValue":"content"}}]},
+                              "scopeSpans":[{"spans":[
+                                {"name":"candidate-span-%s","spanId":"%s","startTimeUnixNano":"%d","endTimeUnixNano":"%d"}]}]}]}
+                            """.formatted(id, id, nanos(base), nanos(base.plusSeconds(1))))));
+        }
+
+        var window = new com.yogurtte.rca.collector.TimeWindow(base.minusSeconds(60), base.plusSeconds(60));
+        var scope = new com.yogurtte.rca.collector.Scope(window, List.of(), "trace-1");
+        service.investigate(scope, "q", "rca", null);
+
+        // 선정 1건 + 후보 2건(maxTraces=3)이 전부 컨텍스트에 실린다.
+        assertThat(llmClient.seenContext).contains("# 창 안 후보 트레이스 (2건)");
+        assertThat(llmClient.seenContext).contains("candidate-span-trace-2").contains("candidate-span-trace-3");
+        assertThat(llmClient.seenContext).contains("notify");
+    }
+
+    @Test
     void trimsAnOversizedTraceToTheLongestSpans() {
         var base = Instant.parse("2026-07-20T10:00:00Z");
         var spans = new StringBuilder();
@@ -196,9 +222,9 @@ class RcaServiceFlowTest {
                 """.formatted(spans);
 
         var properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                1000, "15s", List.of(), 100, 30);  // 100 바이트 한도로 트리밍을 강제한다
+                1000, "15s", List.of(), 100, 30, 3);  // 100 바이트 한도로 트리밍을 강제한다
         var data = new com.yogurtte.rca.collector.CollectedData(
-                "trace-2", bigTrace, null, null, null, null, List.of(), null);
+                "trace-2", bigTrace, null, null, null, null, null, List.of(), null);
 
         var context = new ContextAssembler(properties, new ServiceGraphExtractor()).assemble(data, "q");
 

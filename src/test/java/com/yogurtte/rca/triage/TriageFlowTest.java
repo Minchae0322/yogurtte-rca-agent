@@ -129,6 +129,10 @@ class TriageFlowTest {
                            "rootTraceName":"POST /comments","durationMs":23458,
                            "startTimeUnixNano":"%d"}]}
                         """.formatted(nanos(base.plusSeconds(600))))));
+        // B-9 후보 채널(무조건 검색): 기본은 빈 결과 — 후보는 스윕이 넘긴 것만 남는다.
+        server.stubFor(get(urlPathEqualTo("/api/search"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo("{}"))
+                .willReturn(aResponse().withStatus(200).withBody("{\"traces\":[]}")));
 
         // 스윕은 집계(step 있음), 심층은 원본 라인(direction 있음) — 같은 엔드포인트지만 응답 모양이 다르다.
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
@@ -174,7 +178,7 @@ class TriageFlowTest {
         var mimirClient = new MimirClient(grafana, rawStore);
 
         var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service",
-                "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30);
+                "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30, 3);
         var surveyProperties = new SurveyProperties("Asia/Seoul", 24, 48, "5m",
                 "{ status = error }", "{ duration > %s && status != error }", "3s",
                 20, null, List.of("up", "mongodb_up"), "60s", "2m", "5m");
@@ -231,8 +235,8 @@ class TriageFlowTest {
         assertThat(llmClient.analysisContext()).contains("2026-07-27T17:29:00Z");
         assertThat(llmClient.analysisContext()).contains("notification-consume");
 
-        // 트레이스 검색은 두 번 — 에러 채널과 지연 채널을 따로 던져야 "어느 채널로 도달했는지"가 남는다.
-        server.verify(2, com.github.tomakehurst.wiremock.client.WireMock
+        // 트레이스 검색은 세 번 — 에러·지연 채널(스윕)에 후보 무조건 검색(B-9)이 더해진다.
+        server.verify(3, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/search")));
         server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/traces/abc123")));
@@ -352,11 +356,13 @@ class TriageFlowTest {
         assertThat(report.triage().traceId()).isNull();
         assertThat(report.analysis()).startsWith("원인 후보 1");
 
-        // 트레이스 조회는 아예 하지 않고, 그 부재를 모델에게 명시한다.
-        server.verify(0, com.github.tomakehurst.wiremock.client.WireMock
+        // 대표 트레이스의 부재는 모델에게 명시하되, 창 안 후보(B-9)는 실린다 —
+        // "트레이스가 안 만들어지는 장애"에서도 같은 창의 다른 서비스 트레이스가 근거가 된다 (CH-2·AU-2).
+        server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/traces/abc123")));
         assertThat(report.collectionFailures()).anyMatch(f -> f.contains("대표 traceId가 없다"));
         assertThat(llmClient.analysisContext()).contains("대표 traceId가 없다");
+        assertThat(llmClient.analysisContext()).contains("창 안 후보 트레이스").contains("notification-consume");
     }
 
     @Test

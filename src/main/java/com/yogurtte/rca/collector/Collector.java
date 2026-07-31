@@ -3,11 +3,14 @@ package com.yogurtte.rca.collector;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yogurtte.rca.client.LokiClient;
 import com.yogurtte.rca.client.MimirClient;
 import com.yogurtte.rca.client.TempoClient;
@@ -20,6 +23,11 @@ import com.yogurtte.rca.client.TempoClient;
 public class Collector {
 
     private static final Logger log = LoggerFactory.getLogger(Collector.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** B-9 후보 검색 TraceQL. 상태를 거르지 않는다 — 정답이 <b>정상 트레이스</b>인 문항이 있다
+     *  (AU-2: "정상 요청에 auth 호출 span이 없다"가 요건이라 error/slow 채널 어디에도 안 걸린다). */
+    private static final String ANY_TRACE_QUERY = "{}";
 
     private final TempoClient tempoClient;
     private final LokiClient lokiClient;
@@ -70,6 +78,11 @@ public class Collector {
 
         var window = resolveWindow(scope, traceJson, failures);
 
+        // --- B-9: 창 안 후보 트레이스 N건 ---
+        started = System.currentTimeMillis();
+        var candidateTraces = collectCandidates(scope, window, failures);
+        timings.put("tempoCandidatesMs", System.currentTimeMillis() - started);
+
         // --- Loki: traceId가 있으면 2회, 없으면 1회 ---
         String errorWarnLogs = null;
         String traceIdLogs = null;
@@ -114,7 +127,77 @@ public class Collector {
         timings.put("mimirMs", System.currentTimeMillis() - started);
 
         return new CollectedData(scope.traceId(), traceJson, window, errorWarnLogs, traceIdLogs,
-                metrics, failures, timings);
+                metrics, candidateTraces, failures, timings);
+    }
+
+    /**
+     * 창 안의 다른 트레이스를 최대 {@code maxTraces - 1}건 딥 페치한다 (B-9).
+     *
+     * <p><b>탐색을 거친 조사(창이 명시된 Scope)에서만 동작한다.</b> traceId로 직접 들어오는
+     * v0 경로는 후보 없이 기존과 동일하다 — baseline 경로를 바꾸면 두 진입점의 점수 비교가
+     * 무너진다.
+     *
+     * <p>후보 출처는 둘이다: ① 탐색 스윕이 찾은 이상 트레이스(error·slow 채널, Scope에 실려 옴)
+     * ② 자리가 남으면 창 기준 무조건 검색 — <b>정답이 정상 트레이스인 문항</b>은 ①로는 절대
+     * 오지 않기 때문이다.
+     */
+    private LinkedHashMap<String, String> collectCandidates(Scope scope, TimeWindow window,
+                                                            ArrayList<String> failures) {
+        var candidates = new LinkedHashMap<String, String>();
+        var slots = properties.maxTraces() - (scope.hasTraceId() ? 1 : 0);
+        if (scope.window() == null || slots <= 0) {
+            return candidates;
+        }
+
+        var ids = new LinkedHashSet<>(scope.candidateTraceIds());
+        ids.remove(scope.traceId());
+        if (ids.size() < slots) {
+            try {
+                var body = tempoClient.search(scope.correlationId() + "-candidates", ANY_TRACE_QUERY,
+                        window.start(), window.end(), properties.maxTraces() * 2);
+                ids.addAll(traceIdsOf(body));
+                ids.remove(scope.traceId());
+            } catch (Exception e) {
+                failures.add("Tempo 후보 검색 실패 — 후보 트레이스는 탐색이 넘긴 것뿐이다: " + describe(e));
+                log.warn("tempo candidate search failed for {}: {}", scope.correlationId(), e.toString());
+            }
+        }
+
+        for (var id : ids) {
+            if (candidates.size() >= slots) {
+                break;
+            }
+            try {
+                candidates.put(id, tempoClient.fetchTrace(id));
+            } catch (Exception e) {
+                failures.add("후보 트레이스 " + id + " 수집 실패: " + describe(e));
+                log.warn("candidate trace fetch failed for {}: {}", id, e.toString());
+            }
+        }
+        if (!candidates.isEmpty()) {
+            log.info("candidate traces collected: {} of {} ids (slots={})",
+                    candidates.size(), ids.size(), slots);
+        }
+        return candidates;
+    }
+
+    /** Tempo /api/search 응답의 {@code traces[].traceID}. */
+    private static List<String> traceIdsOf(String searchBody) {
+        var out = new ArrayList<String>();
+        if (searchBody == null || searchBody.isBlank()) {
+            return out;
+        }
+        try {
+            for (var trace : MAPPER.readTree(searchBody).path("traces")) {
+                var id = trace.path("traceID").asText("");
+                if (!id.isEmpty()) {
+                    out.add(id);
+                }
+            }
+        } catch (Exception e) {
+            // 검색 응답이 깨져도 조사는 계속한다 — 후보가 없을 뿐이다.
+        }
+        return out;
     }
 
     /**

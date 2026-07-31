@@ -57,6 +57,15 @@ public class ContextAssembler {
         sb.append("# 트레이스 (Tempo)\n");
         sb.append(traceSection(data.traceJson())).append("\n\n");
 
+        if (!data.candidateTraceJsons().isEmpty()) {
+            sb.append("# 창 안 후보 트레이스 (").append(data.candidateTraceJsons().size()).append("건)\n");
+            sb.append("조사 창 안에서 함께 수집한 다른 트레이스다. 선정 트레이스만으로 증상이 "
+                    + "설명되지 않으면 여기서 대조하라 — 정상 트레이스와의 차이 자체가 근거가 될 수 있다.\n");
+            data.candidateTraceJsons().forEach((id, json) -> sb
+                    .append("## traceId ").append(id).append('\n')
+                    .append(traceSection(json)).append("\n\n"));
+        }
+
         sb.append("# 로그 - ERROR/WARN (Loki)\n");
         sb.append(orMissing(data.errorWarnLogsJson())).append("\n\n");
 
