@@ -6,8 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,10 +20,11 @@ import com.yogurtte.rca.client.TempoClient;
  * traceId 하나에 대한 트레이스/로그/메트릭을 수집한다.
  * 한 소스가 실패해도 실행을 중단하지 않는다 - 실패 사유만 기록하고 수집을 계속한다.
  */
+@Slf4j
+@RequiredArgsConstructor
 @Component
 public class Collector {
 
-    private static final Logger log = LoggerFactory.getLogger(Collector.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** B-9 후보 검색 TraceQL. 상태를 거르지 않는다 — 정답이 <b>정상 트레이스</b>인 문항이 있다
@@ -33,14 +35,6 @@ public class Collector {
     private final LokiClient lokiClient;
     private final MimirClient mimirClient;
     private final CollectProperties properties;
-
-    public Collector(TempoClient tempoClient, LokiClient lokiClient, MimirClient mimirClient,
-                     CollectProperties properties) {
-        this.tempoClient = tempoClient;
-        this.lokiClient = lokiClient;
-        this.mimirClient = mimirClient;
-        this.properties = properties;
-    }
 
     /** traceId 하나만 주는 기존 v0 진입점. 동작은 {@link #collect(Scope)}와 동일하다. */
     public CollectedData collect(String traceId) {

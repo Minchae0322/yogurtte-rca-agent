@@ -23,6 +23,7 @@ import com.yogurtte.rca.analyzer.PromptProperties;
 import com.yogurtte.rca.analyzer.ServiceGraphExtractor;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.client.GrafanaProperties;
+import com.yogurtte.rca.client.GrafanaConfig;
 import com.yogurtte.rca.client.LokiClient;
 import com.yogurtte.rca.client.MimirClient;
 import com.yogurtte.rca.client.RawResponseStore;
@@ -30,6 +31,7 @@ import com.yogurtte.rca.client.TempoClient;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.Collector;
 import com.yogurtte.rca.llm.LlmClient;
+import com.yogurtte.rca.llm.LlmConfig;
 import com.yogurtte.rca.llm.LlmProperties;
 import com.yogurtte.rca.llm.LlmResult;
 import com.yogurtte.rca.llm.TokenCounter;
@@ -107,23 +109,23 @@ class RcaServiceFlowTest {
         var endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "1");
         var grafana = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
         var reportProperties = new ReportProperties(tempDir.toString());
-        var rawStore = new RawResponseStore(reportProperties);
+        var rawStore = new GrafanaConfig().rawResponseStore(reportProperties);
 
         var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", List.of("hikaricp_connections_active"), 102400, 30, 3);
 
         var collector = new Collector(
-                new TempoClient(grafana, rawStore),
-                new LokiClient(grafana, rawStore),
-                new MimirClient(grafana, rawStore),
+                new GrafanaConfig().tempoClient(grafana, rawStore),
+                new GrafanaConfig().lokiClient(grafana, rawStore),
+                new GrafanaConfig().mimirClient(grafana, rawStore),
                 collectProperties);
 
         llmClient = new FakeLlmClient();
         notifier = new RecordingNotifier();
         // 외부 프롬프트 경로 미설정 -> classpath 기본 프롬프트를 쓴다.
-        var promptLoader = new SystemPromptLoader(new PromptProperties(null));
+        var promptLoader = SystemPromptLoader.from(new PromptProperties(null));
         // API 키 없는 LlmProperties -> TokenCounter가 비활성이라 contextTokens는 -1이 된다.
-        var tokenCounter = new TokenCounter(new LlmProperties("fake", null, null, null));
+        var tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
         var graphExtractor = new ServiceGraphExtractor();
         service = new RcaService(collector, new ContextAssembler(collectProperties, graphExtractor),
                 new EvidenceExtractor(), graphExtractor, promptLoader,

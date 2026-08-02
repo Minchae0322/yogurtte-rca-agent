@@ -32,7 +32,7 @@ class LokiClientTest {
         var endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "999");
         var properties = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
 
-        client = new LokiClient(properties, new RawResponseStore(new ReportProperties(tempDir.toString())));
+        client = new GrafanaConfig().lokiClient(properties, new GrafanaConfig().rawResponseStore(new ReportProperties(tempDir.toString())));
     }
 
     @AfterEach

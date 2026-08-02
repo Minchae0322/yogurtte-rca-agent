@@ -11,10 +11,8 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -24,15 +22,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>프롬프트는 argv가 아니라 stdin으로 넘긴다: 조립된 RCA 컨텍스트는 수십 KB라
  * OS 커맨드라인 길이 제한을 넘기기 때문이다.
  */
-@Component
-@ConditionalOnProperty(name = "rca.llm.provider", havingValue = "claude-cli", matchIfMissing = true)
+@Slf4j
+@RequiredArgsConstructor
 public class ClaudeCliLlmClient implements LlmClient {
 
-    private static final Logger log = LoggerFactory.getLogger(ClaudeCliLlmClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** {@code rca.llm.claude-cli.model}이 비었을 때 쓰는 값. 절대 CLI 기본값에 맡기지 않는다. */
-    private static final String DEFAULT_MODEL = "claude-opus-5";
+    static final String DEFAULT_MODEL = "claude-opus-5";
 
     /** 오버헤드 프로브에 쓰는 최소 프롬프트. 페이로드 몫이 오차에 묻힐 만큼 작아야 한다. */
     private static final String OVERHEAD_PROBE = ".";
@@ -43,18 +40,6 @@ public class ClaudeCliLlmClient implements LlmClient {
     private final boolean probeOverhead;
     private final File sandbox;
     private final AtomicBoolean modelNotReportedWarned = new AtomicBoolean(false);
-
-    public ClaudeCliLlmClient(LlmProperties properties) {
-        var cli = properties.claudeCli();
-        var command = cli == null ? null : cli.command();
-        var configuredModel = cli == null ? null : cli.model();
-        this.command = (command == null || command.isBlank()) ? "claude" : command;
-        this.model = (configuredModel == null || configuredModel.isBlank()) ? DEFAULT_MODEL : configuredModel;
-        this.timeoutSeconds = cli == null ? 120 : cli.timeoutSeconds();
-        this.probeOverhead = cli == null || cli.probeOverhead();
-        this.sandbox = createSandbox();
-        log.info("claude CLI model pinned: {} · overhead probe: {}", this.model, this.probeOverhead ? "on" : "off");
-    }
 
     /**
      * 1자 프롬프트를 <b>본 호출과 같은 조건</b>(같은 명령·모델·샌드박스)으로 한 번 던져
@@ -97,7 +82,7 @@ public class ClaudeCliLlmClient implements LlmClient {
      * <p>실패하면 예외를 던진다. 조용히 레포 cwd로 떨어지면 오염을 눈치채지 못한 채 측정이
      * 계속되는데, 그게 격리 실패보다 나쁘다.
      */
-    private static File createSandbox() {
+    static File createSandbox() {
         try {
             var dir = Files.createTempDirectory("rca-cli-sandbox-");
             dir.toFile().deleteOnExit();

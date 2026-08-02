@@ -3,19 +3,15 @@ package com.yogurtte.rca.client;
 import java.time.Instant;
 import java.util.Map;
 
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.client.RestClient;
 
-@Component
+@RequiredArgsConstructor
 public class TempoClient {
 
     private final RestClient restClient;
     private final RawResponseStore rawStore;
-
-    public TempoClient(GrafanaProperties properties, RawResponseStore rawStore) {
-        this.restClient = properties.restClient(properties.tempo());
-        this.rawStore = rawStore;
-    }
 
     /** GET {TEMPO_URL}/api/traces/{traceId}로 받은 원본 트레이스 JSON. */
     public String fetchTrace(String traceId) {

@@ -1,24 +1,16 @@
 package com.yogurtte.rca.notify;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportStore;
 
-@Component
-@ConditionalOnProperty(name = "rca.notify.channel", havingValue = "console", matchIfMissing = true)
+@Slf4j
+@RequiredArgsConstructor
 public class ConsoleNotifier implements Notifier {
 
-    private static final Logger log = LoggerFactory.getLogger(ConsoleNotifier.class);
-
     private final ReportStore reportStore;
-
-    public ConsoleNotifier(ReportStore reportStore) {
-        this.reportStore = reportStore;
-    }
 
     @Override
     public void send(RcaReport report) {

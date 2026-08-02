@@ -3,8 +3,9 @@ package com.yogurtte.rca.triage;
 import java.time.Duration;
 import java.time.Instant;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
@@ -25,35 +26,18 @@ import com.yogurtte.rca.service.RcaService;
  * 분석 능력은 traceId로 직접 들어오는 기존 경로와 <b>완전히 같은 코드</b>여야 두 진입점의
  * 점수를 비교할 수 있다.
  */
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class TriageService {
-
-    private static final Logger log = LoggerFactory.getLogger(TriageService.class);
 
     private final TimeExpressionParser timeParser;
     private final Surveyor surveyor;
     private final SurveyContextAssembler surveyAssembler;
-    private final SignalExtractor signalExtractor;
-    private final IncidentClusterer clusterer;
     private final SurveyProperties surveyProperties;
     private final SystemPromptLoader promptLoader;
     private final LlmClient llmClient;
     private final RcaService rcaService;
-
-    public TriageService(TimeExpressionParser timeParser, Surveyor surveyor,
-                         SurveyContextAssembler surveyAssembler, SignalExtractor signalExtractor,
-                         IncidentClusterer clusterer, SurveyProperties surveyProperties,
-                         SystemPromptLoader promptLoader, LlmClient llmClient, RcaService rcaService) {
-        this.timeParser = timeParser;
-        this.surveyor = surveyor;
-        this.surveyAssembler = surveyAssembler;
-        this.signalExtractor = signalExtractor;
-        this.clusterer = clusterer;
-        this.surveyProperties = surveyProperties;
-        this.promptLoader = promptLoader;
-        this.rcaService = rcaService;
-        this.llmClient = llmClient;
-    }
 
     public RcaReport diagnose(String question, Instant from, Instant to, String mode) {
         return diagnose(question, from, to, mode, Instant.now());
@@ -75,8 +59,8 @@ public class TriageService {
 
             // 코드가 신호를 뽑아 후보를 만든다. 모델은 "어느 후보인가"만 고르고 창은 계산된다.
             var lookback = SurveyProperties.parse(surveyProperties.step(), Duration.ofMinutes(5));
-            var signals = signalExtractor.extract(survey, lookback);
-            var incidents = clusterer.cluster(signals, surveyProperties.clusterGapDuration());
+            var signals = Signal.extract(survey, lookback);
+            var incidents = Incident.cluster(signals, surveyProperties.clusterGapDuration());
             log.info("signals={} incidents={} {}", signals.size(), incidents.size(),
                     Incident.idsOf(incidents));
 
@@ -99,6 +83,7 @@ public class TriageService {
 
             var record = new RcaReport.Triage(
                     resolved.expression(),
+                    resolved.confidence().name(),
                     window.start(),
                     window.end(),
                     plan.window().start(),

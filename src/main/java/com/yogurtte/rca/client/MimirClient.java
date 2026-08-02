@@ -3,19 +3,15 @@ package com.yogurtte.rca.client;
 import java.time.Instant;
 import java.util.Map;
 
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.client.RestClient;
 
-@Component
+@RequiredArgsConstructor
 public class MimirClient {
 
     private final RestClient restClient;
     private final RawResponseStore rawStore;
-
-    public MimirClient(GrafanaProperties properties, RawResponseStore rawStore) {
-        this.restClient = properties.restClient(properties.mimir());
-        this.rawStore = rawStore;
-    }
 
     /**
      * {MIMIR_URL}/api/v1/query_range. start/end는 unix 초 단위다.

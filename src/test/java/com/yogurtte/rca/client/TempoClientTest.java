@@ -37,7 +37,7 @@ class TempoClientTest {
                 new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "12345"),
                 "secret-token", 3000, 10000);
 
-        client = new TempoClient(properties, new RawResponseStore(new ReportProperties(tempDir.toString())));
+        client = new GrafanaConfig().tempoClient(properties, new GrafanaConfig().rawResponseStore(new ReportProperties(tempDir.toString())));
     }
 
     @AfterEach

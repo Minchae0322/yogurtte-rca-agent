@@ -88,7 +88,7 @@ class ReportMarkdownTest {
         var base = Instant.parse("2026-07-27T17:31:00Z");
 
         var triage = new RcaReport.Triage(
-                "어젯밤 (어제 18:00~오늘 06:00 Asia/Seoul)",
+                "어젯밤 (어제 18:00~오늘 06:00 Asia/Seoul)", "EXACT",
                 Instant.parse("2026-07-27T09:00:00Z"), Instant.parse("2026-07-27T21:00:00Z"),
                 Instant.parse("2026-07-27T17:29:00Z"), Instant.parse("2026-07-27T17:40:00Z"),
                 List.of("chat-service"), "abc123",

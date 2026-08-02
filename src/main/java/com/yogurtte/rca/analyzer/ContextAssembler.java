@@ -2,6 +2,8 @@ package com.yogurtte.rca.analyzer;
 
 import java.nio.charset.StandardCharsets;
 
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 
 import com.yogurtte.rca.collector.CollectProperties;
@@ -13,19 +15,17 @@ import com.yogurtte.rca.report.ServiceGraph;
  * 수집한 모든 것을 하나의 텍스트 덩어리로 이어 붙인다. 가공은 의도적으로 최소화했다 -
  * v0는 모델에게 원본 데이터를 주고 추론을 맡긴다.
  *
- * <p>예외가 호출 그래프 절 하나다 — 요약을 <b>더하는</b> 것이지 원본 트레이스를 대체하는 것이
- * 아니다. 코드가 놓친 엣지를 모델이 원본에서 직접 볼 여지를 남긴다.
+ * <p>예외가 둘이다. 호출 그래프 절은 요약을 <b>더하는</b> 것이지 원본 트레이스를 대체하는 것이
+ * 아니고 — 코드가 놓친 엣지를 모델이 원본에서 직접 볼 여지를 남긴다 — 로그 중복 접기(B-10)는
+ * 두 채널에 같은 레코드가 겹칠 때 <b>두 번째 등장만</b> 뺀다. 정보를 빼는 게 아니라 같은
+ * 정보의 재등장을 빼는 것이고, 뺀 자리에는 표식이 남는다.
  */
+@RequiredArgsConstructor
 @Component
 public class ContextAssembler {
 
     private final CollectProperties properties;
     private final ServiceGraphExtractor graphExtractor;
-
-    public ContextAssembler(CollectProperties properties, ServiceGraphExtractor graphExtractor) {
-        this.properties = properties;
-        this.graphExtractor = graphExtractor;
-    }
 
     public String assemble(CollectedData data, String question) {
         var sb = new StringBuilder();
@@ -69,8 +69,13 @@ public class ContextAssembler {
         sb.append("# 로그 - ERROR/WARN (Loki)\n");
         sb.append(orMissing(data.errorWarnLogsJson())).append("\n\n");
 
+        var logs = LokiLogDedup.fold(data.errorWarnLogsJson(), data.traceIdLogsJson());
         sb.append("# 로그 - traceId 일치 (Loki)\n");
-        sb.append(orMissing(data.traceIdLogsJson())).append("\n\n");
+        if (logs.folded() > 0) {
+            sb.append("(").append(logs.folded())
+                    .append("줄은 위 ERROR/WARN 절과 동일한 레코드라 생략했다 — 이 채널로도 도달했다)\n");
+        }
+        sb.append(orMissing(logs.json())).append("\n\n");
 
         sb.append("# 메트릭 (Mimir)\n");
         if (data.metricsJson().isEmpty()) {

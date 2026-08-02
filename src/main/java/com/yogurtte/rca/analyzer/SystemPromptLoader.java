@@ -8,9 +8,8 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 모드별 시스템 프롬프트를 마크다운 파일에서 읽는다.
@@ -20,11 +19,13 @@ import org.springframework.stereotype.Component;
  * review-prompt.md를 쓴다. 재시작 없이 프롬프트를 튜닝할 수 있도록 조사할 때마다 다시 읽고,
  * 외부 파일이 없거나 읽기에 실패하면 jar에 포함된 기본 프롬프트로 대체한다.
  * 어떤 프롬프트로 실행했는지는 {@link Loaded#source()}로 리포트에 기록된다.
+ *
+ * <p>인스턴스는 {@link #from(PromptProperties)}으로 만든다 — 경로 파생과 기본 프롬프트
+ * 적재(classpath IO)는 거기서 끝나고, 생성자는 결과만 받는다.
  */
-@Component
+@Slf4j
+@RequiredArgsConstructor
 public class SystemPromptLoader {
-
-    private static final Logger log = LoggerFactory.getLogger(SystemPromptLoader.class);
 
     /** 모드 -> classpath 기본 리소스. */
     private static final Map<String, String> DEFAULT_RESOURCES = Map.of(
@@ -36,19 +37,21 @@ public class SystemPromptLoader {
     public record Loaded(String text, String source) {
     }
 
-    private final Map<String, Path> externalPaths = new LinkedHashMap<>();
-    private final Map<String, String> defaults = new LinkedHashMap<>();
+    private final Map<String, Path> externalPaths;
+    private final Map<String, String> defaults;
 
-    public SystemPromptLoader(PromptProperties properties) {
+    public static SystemPromptLoader from(PromptProperties properties) {
         var rcaPath = (properties.path() == null || properties.path().isBlank())
                 ? null
                 : Path.of(properties.path());
+        var externalPaths = new LinkedHashMap<String, Path>();
         externalPaths.put("rca", rcaPath);
         externalPaths.put("review", rcaPath == null ? null : rcaPath.resolveSibling("review-prompt.md"));
         externalPaths.put("triage", rcaPath == null ? null : rcaPath.resolveSibling("triage-prompt.md"));
 
+        var defaults = new LinkedHashMap<String, String>();
         DEFAULT_RESOURCES.forEach((mode, resource) -> {
-            try (var in = getClass().getClassLoader().getResourceAsStream(resource)) {
+            try (var in = SystemPromptLoader.class.getClassLoader().getResourceAsStream(resource)) {
                 if (in == null) {
                     throw new IllegalStateException("classpath:" + resource + " 리소스가 없다");
                 }
@@ -66,6 +69,7 @@ public class SystemPromptLoader {
                         DEFAULT_RESOURCES.get(mode), path == null ? "미설정" : path);
             }
         });
+        return new SystemPromptLoader(externalPaths, defaults);
     }
 
     /** 기존 호출 호환용 - rca 모드 프롬프트. */

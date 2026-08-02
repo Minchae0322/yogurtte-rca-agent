@@ -3,10 +3,10 @@ package com.yogurtte.rca.llm;
 import java.util.List;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,33 +29,14 @@ import com.fasterxml.jackson.databind.JsonNode;
  * <p>API 키가 없으면(구독 계정으로 claude CLI만 쓰는 구성) 조용히 -1을 반환한다. 측정이 안 되는
  * 것과 0인 것을 구별해야 하므로 0으로 채우지 않는다.
  */
-@Component
+@Slf4j
+@RequiredArgsConstructor
 public class TokenCounter {
 
-    private static final Logger log = LoggerFactory.getLogger(TokenCounter.class);
     private static final String ENDPOINT = "/v1/messages/count_tokens";
 
     private final RestClient client;
     private final String fallbackModel;
-
-    public TokenCounter(LlmProperties properties) {
-        var anthropic = properties.anthropic();
-        var apiKey = anthropic == null ? null : anthropic.apiKey();
-        var cli = properties.claudeCli();
-        this.fallbackModel = (cli == null || cli.model() == null || cli.model().isBlank())
-                ? "claude-opus-5" : cli.model();
-
-        if (apiKey == null || apiKey.isBlank()) {
-            this.client = null;
-            log.info("token counting 비활성 (ANTHROPIC_API_KEY 없음) — coverage.contextTokens는 -1로 기록된다");
-        } else {
-            this.client = RestClient.builder()
-                    .baseUrl("https://api.anthropic.com")
-                    .defaultHeader("x-api-key", apiKey)
-                    .defaultHeader("anthropic-version", "2023-06-01")
-                    .build();
-        }
-    }
 
     /**
      * 시스템 프롬프트 + 컨텍스트의 토큰 수. 못 재면 -1.

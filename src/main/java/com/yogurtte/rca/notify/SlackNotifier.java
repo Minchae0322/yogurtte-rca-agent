@@ -2,36 +2,25 @@ package com.yogurtte.rca.notify;
 
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportStore;
 
 /** webhook POST 한 번. SDK 없음. */
-@Component
-@ConditionalOnProperty(name = "rca.notify.channel", havingValue = "slack")
+@Slf4j
+@RequiredArgsConstructor
 public class SlackNotifier implements Notifier {
 
-    private static final Logger log = LoggerFactory.getLogger(SlackNotifier.class);
     private static final int MAX_CHARS = 3500;
 
     private final RestClient restClient = RestClient.create();
     private final ReportStore reportStore;
     private final String webhookUrl;
-
-    public SlackNotifier(ReportStore reportStore, NotifyProperties properties) {
-        var slack = properties.slack();
-        if (slack == null || slack.webhookUrl() == null || slack.webhookUrl().isBlank()) {
-            throw new IllegalStateException("rca.notify.channel=slack requires SLACK_WEBHOOK_URL");
-        }
-        this.reportStore = reportStore;
-        this.webhookUrl = slack.webhookUrl();
-    }
 
     @Override
     public void send(RcaReport report) {

@@ -25,6 +25,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+    // 생성자·로거 보일러플레이트 제거 (@RequiredArgsConstructor · @Slf4j). 버전은 Boot BOM이 관리.
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
     // starter가 아니라 model 모듈만 쓴다: ChatModel을 @ConditionalOnProperty 빈 안에서
     // 직접 만들기 때문에 선택된 provider만 인스턴스화되고, 자동설정이 ChatModel 빈
     // 두 개를 두고 고민할 일도 없다.

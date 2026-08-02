@@ -49,6 +49,8 @@ public record RcaReport(
      * "에이전트가 실제로 고른 범위"로 채점되어야 하므로, 여기에 그 선택의 근거를 통째로 남긴다.
      *
      * @param timeExpression   자연어 시간 표현을 어떻게 창으로 바꿨는지 (결정적 파싱의 근거)
+     * @param timeConfidence   창 확신도(EXACT/APPROX/FALLBACK) — FALLBACK으로 떨어진 회차를
+     *                         분리 집계하기 위한 구조화 값. 문자열 매칭으로는 집계가 안 됐다(B-26).
      * @param traceCandidates  스윕이 찾은 트레이스 전부. 고른 것 말고 <b>무엇이 더 있었는지</b>가
      *                         회고에서 "다른 걸 골랐어야 했나"를 판단하는 근거가 된다.
      * @param planParsed       LLM이 낸 계획을 실제로 읽어냈는지. false면 스윕 창을 그대로 쓴 것이다.
@@ -56,6 +58,7 @@ public record RcaReport(
      */
     public record Triage(
             String timeExpression,
+            String timeConfidence,
             Instant surveyStart,
             Instant surveyEnd,
             Instant chosenStart,

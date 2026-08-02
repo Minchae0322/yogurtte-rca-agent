@@ -299,6 +299,10 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 > 두고 회차 2 직전에 적용해야 델타가 성립한다. 그리고 **변경군 A(앱 계측)와 B(조사 도구)를
 > 섞지 않는다** — B는 주입 없이 기존 traceId 재조사로 검증되므로 먼저 하고, A는 회차 2
 > 주입으로 검증한다. 섞으면 점수가 올라도 원인을 못 가린다.
+>
+> **갱신 (2026-08-02):** NF-09 대응 **A-1·A-2·A-3 코드 적용 완료**
+> ([정리: evidence-pipeline-improvements.md §4](round-3/evidence-pipeline-improvements.md)) —
+> 배포·AU-4 회차 2 주입은 미실시.
 
 완료된 것 (2026-07-27):
 
@@ -501,6 +505,76 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 | chaos 하네스 | 서버 `~/chaos` (이 레포 밖) — 시나리오·evidence·채점 |
 
 ## ④ 활동 로그 (최신이 위)
+
+- **2026-08-02 (클래스 통합 — 레포 관례 "record + static 팩토리"로 수렴, 4파일 감소)**:
+  잘게 쪼개졌던 탐색 클래스들을 도메인 타입으로 흡수 — `SignalExtractor`+`PromMatrix` →
+  **`Signal.extract()`**(신호 record가 자기 태생을 가짐), `IncidentClusterer` →
+  **`Incident.cluster()`**, `Aliases` 유틸 → **`Aliased` 인터페이스 static**.
+  `TraceSpans.parse`·`TriagePlan.parse`·`TimeCandidates.parse`와 같은 꼴이 됐고
+  TriageService 의존성 9 → 7. 삭제 4파일(빈 2개 소멸), 근거 주석은 메서드로 이전.
+  전체 65개 테스트 통과(행동 불변).
+
+- **2026-08-02 (생성자 무로직화 — 조립을 @Configuration으로 · Lombok 도입 · 배선 스모크 신설)**:
+  Lombok 추가(@RequiredArgsConstructor 순수 대입 생성자 대체 · @Slf4j 수동 로거 12곳 제거).
+  생성자에서 일하던 11개 클래스는 조립·검증·파생을 **패키지별 @Configuration 6개**
+  (LlmConfig · NotifyConfig · GrafanaConfig · ReportConfig · AnalyzerConfig · TriageConfig)의
+  @Bean 팩토리로 올리고 구현 클래스는 조립된 값만 받는 순수 로직으로 — §6 "@ConditionalOnProperty로
+  하나만 뜬다" 계약이 config 파일에 모였다. `SystemPromptLoader.from()` 정적 팩토리 분리,
+  RcaService 기동 로그는 @PostConstruct로. 테스트는 config 팩토리를 직접 호출해 프로덕션과
+  같은 조립을 쓰도록 갱신. **레포 최초의 컨텍스트 기동 테스트**(`ContextWiringTest`,
+  @SpringBootTest) 신설 — 배선 실수가 다음 조사 기동에서야 터지는 구멍을 막았다.
+  전체 65개 테스트 통과(B-26 게이트 포함, 행동 불변).
+
+- **2026-08-02 (탐색 코드 구조 정리 + 신호 추출 잠복 버그 1건 수정 — 행동 불변은 테스트로 고정)**:
+  B-26 파서를 SRP로 분해 — 어휘·패턴·추출은 신설 `com.yogurtte.rca.time` 패키지
+  (`Meridiem`·`DayPart`·`NamedDay`·`RelativeUnit` enum이 단어 목록과 해석의 단일 출처,
+  정규식 alternation을 enum에서 생성 · `TimeCandidates.parse`가 L1·L2 전담)로, 파서에는
+  결합 정책만(231줄). `SignalExtractor`도 같은 기준 — Prometheus/Loki matrix 응답 방어 파싱을
+  `PromMatrix`로 모으고 `fromMetric`의 얽힌 검출 3종을 zeroRuns/valueChanges/gaps로 분리,
+  집계 함수 하드코딩 목록을 일반 벗기기로 교체. **수정한 버그**: 값 변화 비교가
+  `Double != Double`(참조 비교)라 **값이 같아도 매 인접 쌍이 "변화" 신호**로 나가던 것 —
+  07-30 구현 후 실전 조사 0회라 관측 전에 잡았다(원시값 비교로 교정). `IncidentClusterer`는
+  이미 깨끗해 traceId 병합의 Set화만. B-26 게이트(12문안 창·문자열 불변) 포함 64개 테스트
+  전 회차 통과(3회 반복 확인 — 중간 1회 실패는 WireMock 동적 포트 플레이키).
+
+- **2026-08-02 (B-26 시간창 파서 재작성 — 게이트 통과, 델타 기여 0 증명)**:
+  `TimeExpressionParser`를 3층(정규화 → 후보 전량 추출 → 결합)으로 재작성. **상대성 표지
+  필수화**로 `"14시 20분쯤"` → 최근 20분 오독이 소멸(→ 14:20 ±30분 APPROX), 후보 결합으로
+  `"어제 새벽"` → 오늘 새벽 하루 밀림 해소, 시각 구간(`10시부터 11시까지`)·날짜+시각 결합 신설.
+  **입력 검증**: from 단독·from>to를 조용히 무시하던 것을 `InvalidTimeWindowException` →
+  **400 거부**로(재조사 5회가 타는 경로 — 결함 22가 채점자 호출에서 먼저 터질 자리였다),
+  미래 to는 now로 잘림. `confidence`(EXACT/APPROX/FALLBACK)를 `Resolved`와 리포트
+  `triage.timeConfidence`에 적재 — FALLBACK 회차 분리 집계 가능.
+  **게이트**: 박제 문안 12개의 창·해석 문자열 불변을 `TimeExpressionParserGateTest`로 재작성
+  **전에** 박제(기대값 = 회차 2 리포트 8건 실측 `상대 표현 '최근 N시간'`) → 재작성 **후에도**
+  통과. 전체 테스트 64개(신규 12) 통과. **단계 1의 큰 코드는 이것으로 끝 —
+  다음 한 수: 재조사 일괄(단계 1-b B-20 델타 → 단계 2)**. 잔여는 B-12·B-13·B-4·B-24·B-25.
+
+- **2026-08-02 (B-10 어셈블 로그 dedup 적용 — 컨텍스트 효과 미측정)**:
+  두 Loki 채널(창 기준 ERROR/WARN · traceId 일치)이 같은 레코드를 각각 반환해 컨텍스트에
+  두 번 실리던 것(결함 5 · AP-3 회차 2 실측 N=2)을 어셈블 단계에서 접는다. `(timestamp, 줄)`
+  키의 교집합만 traceId 절에서 제거하고 표식 한 줄로 도달 사실 보존 — ERROR/WARN 절과
+  `reports/raw/` 원본은 무수정(채점 감사 자료). `LokiLogDedup` 신설 + 테스트 6건(실물 varchar
+  조사 응답을 픽스처로 박제), 전체 52개 통과. 실물 실측: traceId 채널 6,317B → 4,621B
+  (순절감 약 1.6KB, 채널의 27%). 절감 본체는 CH-2류 로그 과다 문항(예측 3~5%), 실측은
+  다음 재조사에서 raw 채널별 분해로 귀속(B-9 증가분과 총량이 섞이므로).
+  문서: [log-dedup.md 신설](round-3/log-dedup.md)(결함 구조 해설 포함) · round-3 README
+  소항목 표·체크리스트 동기화.
+  다음 한 수: 변함없이 **B-26(파서) → 재조사 일괄** — 단계 1 잔여는 B-12·B-13·B-4·B-24·B-25·B-26.
+
+- **2026-08-02 (변경군 A 적용 — A-1·A-2·A-3 코드 완료, 효과 미측정)**:
+  toy-content `external/user`에 round-2 대기열 A 적용. A-1 로그 접두사 규약
+  (`[user-fallback]` 5건 · `[user-cache]` 25건, 이모지 제거 — 비실패 INFO 2건은 프로브
+  오염 방지 위해 의도적 제외) · A-2 호출 시점 MDC 캡처를 `doOnError` 콜백에서 복원해
+  `traceId=NONE` 해소(전역 훅 대신 클래스 국소 — 델타 보존) · A-3 `user.fallback` 카운터
+  (`user_fallback_total`, `rate() > 0` 알람 성립). `compileJava` · 전체 테스트 통과.
+  **배포·A-4b(프로브 접두사 전환)·AU-4 회차 2 주입·검증 지표 5종 전부 미측정.**
+  다음 한 수: content-service 배포 → A-4b → AU-4 회차 2 주입.
+  **같은 날 확산**: 접두사 규약을 logging-format.md **R10**으로 박제한 뒤 세 서비스 전
+  로그로 일괄 적용 — content 88 · chat 225 · auth(toy-auth-user-region) 99개 로그 지점
+  (접두사 추가·이모지 제거만, 본문 불변 — 하네스 grep 문구 보존을 전후 개수 대조로 확인).
+  세 레포 컴파일·전체 테스트 통과, 미배포.
+  문서: [evidence-pipeline-improvements.md §4](round-3/evidence-pipeline-improvements.md)로 등재
 
 - **2026-07-31 (B-9 창 기준 N건 트레이스 수집 구현 — 효과 미측정)**:
   수집기가 선정 트레이스 1건만 딥 페치하던 것을 **좁힌 창 안 후보 N건(기본 3)** 으로 확장.

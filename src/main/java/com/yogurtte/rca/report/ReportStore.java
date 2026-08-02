@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -18,7 +18,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
  * 조사마다 ./reports/{traceId}-{ts}.json(기계 분석용)과 .md(사람이 읽는 보고서)를 함께 쓴다.
  * 어떤 notifier든 전달 전에 리포트를 먼저 저장한다.
  */
-@Component
+@RequiredArgsConstructor
 public class ReportStore {
 
     private static final DateTimeFormatter TS =
@@ -30,10 +30,6 @@ public class ReportStore {
             .enable(SerializationFeature.INDENT_OUTPUT);
 
     private final Path dir;
-
-    public ReportStore(ReportProperties properties) {
-        this.dir = Path.of(properties.dir());
-    }
 
     /** 저장된 두 파일 경로. */
     public record Saved(Path json, Path markdown) {

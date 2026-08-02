@@ -12,7 +12,7 @@ class SystemPromptLoaderTest {
 
     @Test
     void fallsBackToClasspathDefaultWhenNoExternalFile(@TempDir Path dir) {
-        var loader = new SystemPromptLoader(new PromptProperties(dir.resolve("없는파일.md").toString()));
+        var loader = SystemPromptLoader.from(new PromptProperties(dir.resolve("없는파일.md").toString()));
 
         var prompt = loader.load();
 
@@ -22,7 +22,7 @@ class SystemPromptLoaderTest {
 
     @Test
     void reviewModeFallsBackToClasspathDefault(@TempDir Path dir) {
-        var loader = new SystemPromptLoader(new PromptProperties(dir.resolve("없는파일.md").toString()));
+        var loader = SystemPromptLoader.from(new PromptProperties(dir.resolve("없는파일.md").toString()));
 
         var prompt = loader.load("review");
 
@@ -35,7 +35,7 @@ class SystemPromptLoaderTest {
     void reviewModeReadsSiblingFileOfConfiguredPath(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("skill.md"), "rca용");
         Files.writeString(dir.resolve("review-prompt.md"), "리뷰용 프롬프트");
-        var loader = new SystemPromptLoader(new PromptProperties(dir.resolve("skill.md").toString()));
+        var loader = SystemPromptLoader.from(new PromptProperties(dir.resolve("skill.md").toString()));
 
         assertThat(loader.load("review").text()).isEqualTo("리뷰용 프롬프트");
         assertThat(loader.load("rca").text()).isEqualTo("rca용");
@@ -46,7 +46,7 @@ class SystemPromptLoaderTest {
     void reReadsExternalFileOnEveryLoad(@TempDir Path dir) throws Exception {
         var skill = dir.resolve("skill.md");
         Files.writeString(skill, "버전 1: 너는 SRE다.");
-        var loader = new SystemPromptLoader(new PromptProperties(skill.toString()));
+        var loader = SystemPromptLoader.from(new PromptProperties(skill.toString()));
 
         assertThat(loader.load().text()).isEqualTo("버전 1: 너는 SRE다.");
         assertThat(loader.load().source()).isEqualTo(skill.toString());

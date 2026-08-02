@@ -22,6 +22,7 @@ import com.yogurtte.rca.analyzer.EvidenceExtractor;
 import com.yogurtte.rca.analyzer.PromptProperties;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
 import com.yogurtte.rca.client.GrafanaProperties;
+import com.yogurtte.rca.client.GrafanaConfig;
 import com.yogurtte.rca.client.LokiClient;
 import com.yogurtte.rca.client.MimirClient;
 import com.yogurtte.rca.client.RawResponseStore;
@@ -29,6 +30,7 @@ import com.yogurtte.rca.client.TempoClient;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.Collector;
 import com.yogurtte.rca.llm.LlmClient;
+import com.yogurtte.rca.llm.LlmConfig;
 import com.yogurtte.rca.llm.LlmProperties;
 import com.yogurtte.rca.llm.LlmResult;
 import com.yogurtte.rca.llm.TokenCounter;
@@ -171,11 +173,11 @@ class TriageFlowTest {
 
         var endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "1");
         var grafana = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
-        var rawStore = new RawResponseStore(new ReportProperties(tempDir.toString()));
+        var rawStore = new GrafanaConfig().rawResponseStore(new ReportProperties(tempDir.toString()));
 
-        var tempoClient = new TempoClient(grafana, rawStore);
-        var lokiClient = new LokiClient(grafana, rawStore);
-        var mimirClient = new MimirClient(grafana, rawStore);
+        var tempoClient = new GrafanaConfig().tempoClient(grafana, rawStore);
+        var lokiClient = new GrafanaConfig().lokiClient(grafana, rawStore);
+        var mimirClient = new GrafanaConfig().mimirClient(grafana, rawStore);
 
         var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service",
                 "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30, 3);
@@ -185,8 +187,8 @@ class TriageFlowTest {
 
         llmClient = new ScriptedLlmClient();
         notifier = new RecordingNotifier();
-        var promptLoader = new SystemPromptLoader(new PromptProperties(null));
-        var tokenCounter = new TokenCounter(new LlmProperties("fake", null, null, null));
+        var promptLoader = SystemPromptLoader.from(new PromptProperties(null));
+        var tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
 
         var graphExtractor = new com.yogurtte.rca.analyzer.ServiceGraphExtractor();
         var rcaService = new RcaService(
@@ -196,9 +198,9 @@ class TriageFlowTest {
                 collectProperties, llmClient, tokenCounter, notifier);
 
         triageService = new TriageService(
-                new TimeExpressionParser(surveyProperties),
+                new TriageConfig().timeExpressionParser(surveyProperties),
                 new Surveyor(tempoClient, lokiClient, mimirClient, surveyProperties, collectProperties),
-                new SurveyContextAssembler(), new SignalExtractor(), new IncidentClusterer(),
+                new SurveyContextAssembler(),
                 surveyProperties, promptLoader, llmClient, rcaService);
     }
 

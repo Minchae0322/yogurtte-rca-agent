@@ -5,8 +5,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import jakarta.annotation.PostConstruct;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
@@ -26,10 +29,10 @@ import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.Timings;
 
 /** collect -> assemble -> analyze -> notify. 루프도 도구도 없다: v0는 한 번의 직선 실행이다. */
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class RcaService {
-
-    private static final Logger log = LoggerFactory.getLogger(RcaService.class);
 
     private final Collector collector;
     private final ContextAssembler assembler;
@@ -41,19 +44,8 @@ public class RcaService {
     private final TokenCounter tokenCounter;
     private final Notifier notifier;
 
-    public RcaService(Collector collector, ContextAssembler assembler, EvidenceExtractor evidenceExtractor,
-                      ServiceGraphExtractor graphExtractor, SystemPromptLoader promptLoader,
-                      CollectProperties collectProperties,
-                      LlmClient llmClient, TokenCounter tokenCounter, Notifier notifier) {
-        this.collector = collector;
-        this.assembler = assembler;
-        this.evidenceExtractor = evidenceExtractor;
-        this.graphExtractor = graphExtractor;
-        this.promptLoader = promptLoader;
-        this.collectProperties = collectProperties;
-        this.llmClient = llmClient;
-        this.tokenCounter = tokenCounter;
-        this.notifier = notifier;
+    @PostConstruct
+    void logReady() {
         log.info("rca-agent ready: llm={} notifier={}", llmClient.provider(), notifier.channel());
     }
 

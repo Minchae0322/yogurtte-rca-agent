@@ -211,6 +211,7 @@ final class ReportMarkdown {
         sb.append("## 탐색 (Triage)\n\n");
         sb.append("| 항목 | 값 |\n|---|---|\n");
         sb.append("| 시간창 해석 | ").append(nz(t.timeExpression())).append(" |\n");
+        sb.append("| 시간창 확신도 | ").append(nz(t.timeConfidence())).append(" |\n");
         sb.append("| 스윕 창 | ").append(t.surveyStart()).append(" ~ ").append(t.surveyEnd()).append(" |\n");
         sb.append("| 좁힌 창 | ").append(t.chosenStart()).append(" ~ ").append(t.chosenEnd()).append(" |\n");
         sb.append("| 대상 | ").append(t.services().isEmpty() ? "(전체)" : String.join(", ", t.services())).append(" |\n");

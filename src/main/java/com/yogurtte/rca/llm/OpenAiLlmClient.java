@@ -2,33 +2,19 @@ package com.yogurtte.rca.llm;
 
 import java.util.List;
 
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
-@Component
-@ConditionalOnProperty(name = "rca.llm.provider", havingValue = "openai")
+/** 조립(설정 검증·ChatModel 생성)은 {@link LlmConfig}가 한다. */
+@RequiredArgsConstructor
 public class OpenAiLlmClient implements LlmClient {
 
     private final OpenAiChatModel chatModel;
     private final String model;
-
-    public OpenAiLlmClient(LlmProperties properties) {
-        var openai = properties.openai();
-        if (openai == null || openai.apiKey() == null || openai.apiKey().isBlank()) {
-            throw new IllegalStateException("rca.llm.provider=openai requires OPENAI_API_KEY");
-        }
-        this.model = openai.model();
-        this.chatModel = OpenAiChatModel.builder()
-                .openAiApi(OpenAiApi.builder().apiKey(openai.apiKey()).build())
-                .defaultOptions(OpenAiChatOptions.builder().model(openai.model()).build())
-                .build();
-    }
 
     @Override
     public LlmResult analyze(String systemPrompt, String context) {

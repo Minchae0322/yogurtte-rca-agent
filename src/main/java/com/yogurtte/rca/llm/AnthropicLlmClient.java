@@ -2,36 +2,19 @@ package com.yogurtte.rca.llm;
 
 import java.util.List;
 
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.ai.anthropic.AnthropicChatModel;
-import org.springframework.ai.anthropic.AnthropicChatOptions;
-import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
-@Component
-@ConditionalOnProperty(name = "rca.llm.provider", havingValue = "anthropic")
+/** 조립(설정 검증·ChatModel 생성)은 {@link LlmConfig}가 한다. */
+@RequiredArgsConstructor
 public class AnthropicLlmClient implements LlmClient {
 
     private final AnthropicChatModel chatModel;
     private final String model;
-
-    public AnthropicLlmClient(LlmProperties properties) {
-        var anthropic = properties.anthropic();
-        if (anthropic == null || anthropic.apiKey() == null || anthropic.apiKey().isBlank()) {
-            throw new IllegalStateException("rca.llm.provider=anthropic requires ANTHROPIC_API_KEY");
-        }
-        this.model = anthropic.model();
-        this.chatModel = AnthropicChatModel.builder()
-                .anthropicApi(AnthropicApi.builder().apiKey(anthropic.apiKey()).build())
-                .defaultOptions(AnthropicChatOptions.builder()
-                        .model(anthropic.model())
-                        .maxTokens(anthropic.maxTokens())
-                        .build())
-                .build();
-    }
 
     @Override
     public LlmResult analyze(String systemPrompt, String context) {

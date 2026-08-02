@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Pattern;
 
 import java.time.Instant;
 
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,17 +18,13 @@ import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.service.RcaService;
 import com.yogurtte.rca.triage.TriageService;
 
+@RequiredArgsConstructor
 @RestController
 @Validated
 public class RcaController {
 
     private final RcaService rcaService;
     private final TriageService triageService;
-
-    public RcaController(RcaService rcaService, TriageService triageService) {
-        this.rcaService = rcaService;
-        this.triageService = triageService;
-    }
 
     /** mode: rca(기본, 장애 원인 분석) | review(정상 트레이스 성능 리뷰). */
     public record InvestigateRequest(

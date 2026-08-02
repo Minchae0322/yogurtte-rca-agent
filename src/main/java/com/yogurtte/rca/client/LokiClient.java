@@ -3,19 +3,15 @@ package com.yogurtte.rca.client;
 import java.time.Instant;
 import java.util.Map;
 
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.client.RestClient;
 
-@Component
+@RequiredArgsConstructor
 public class LokiClient {
 
     private final RestClient restClient;
     private final RawResponseStore rawStore;
-
-    public LokiClient(GrafanaProperties properties, RawResponseStore rawStore) {
-        this.restClient = properties.restClient(properties.loki());
-        this.rawStore = rawStore;
-    }
 
     /** /loki/api/v1/query_range. Loki는 start/end를 unix 나노초로 받는다. */
     public String queryRange(String traceId, String label, String logql, Instant start, Instant end, int limit) {

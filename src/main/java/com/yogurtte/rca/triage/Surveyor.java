@@ -3,8 +3,9 @@ package com.yogurtte.rca.triage;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
 
 import com.yogurtte.rca.client.LokiClient;
@@ -23,25 +24,16 @@ import com.yogurtte.rca.collector.TimeWindow;
  * <p>{@link com.yogurtte.rca.collector.Collector}와 같은 클라이언트를 쓰지만 쿼리가 다르다 —
  * 이쪽은 전부 집계라 창이 넓어도 응답이 작다.
  */
+@Slf4j
+@RequiredArgsConstructor
 @Component
 public class Surveyor {
-
-    private static final Logger log = LoggerFactory.getLogger(Surveyor.class);
 
     private final TempoClient tempoClient;
     private final LokiClient lokiClient;
     private final MimirClient mimirClient;
     private final SurveyProperties surveyProperties;
     private final CollectProperties collectProperties;
-
-    public Surveyor(TempoClient tempoClient, LokiClient lokiClient, MimirClient mimirClient,
-                    SurveyProperties surveyProperties, CollectProperties collectProperties) {
-        this.tempoClient = tempoClient;
-        this.lokiClient = lokiClient;
-        this.mimirClient = mimirClient;
-        this.surveyProperties = surveyProperties;
-        this.collectProperties = collectProperties;
-    }
 
     public SurveyResult survey(TimeWindow window, String timeExpression) {
         var correlationId = "scan-" + window.start().getEpochSecond();
