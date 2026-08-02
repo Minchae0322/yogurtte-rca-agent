@@ -1,0 +1,1536 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="748.8pt" height="734.4pt" viewBox="0 0 748.8 734.4" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-08-02T17:45:55.146029</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.9.4, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 734.4 
+L 748.8 734.4 
+L 748.8 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 41.184 204.068673 
+L 739.8144 204.068673 
+L 739.8144 47.736 
+L 41.184 47.736 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1"/>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2"/>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3"/>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_4"/>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_5"/>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_6"/>
+    </g>
+    <g id="xtick_7">
+     <g id="line2d_7"/>
+    </g>
+    <g id="xtick_8">
+     <g id="line2d_8"/>
+    </g>
+    <g id="xtick_9">
+     <g id="line2d_9"/>
+    </g>
+    <g id="xtick_10">
+     <g id="line2d_10"/>
+    </g>
+    <g id="xtick_11">
+     <g id="line2d_11"/>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_12">
+      <defs>
+       <path id="mc3cd8b04c1" d="M 0 0 
+L -3 0 
+" style="stroke: #0b0b0b; stroke-width: 0.9"/>
+      </defs>
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="204.068673" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_1">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="207.29004" transform="rotate(-0 34.684 207.29004)">0</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_13">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="176.152124" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_2">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="179.373492" transform="rotate(-0 34.684 179.373492)">20</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_14">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="148.235576" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_3">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="151.456943" transform="rotate(-0 34.684 151.456943)">40</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_15">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="120.319027" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="123.540394" transform="rotate(-0 34.684 123.540394)">60</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_16">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="92.402478" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="95.623845" transform="rotate(-0 34.684 95.623845)">80</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_17">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="64.485929" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_6">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="67.707296" transform="rotate(-0 34.684 67.707296)">100</text>
+     </g>
+    </g>
+    <g id="text_7">
+     <text style="fill: #0b0b0b; font: 9px 'Apple SD Gothic Neo'; text-anchor: middle" x="15.985797" y="125.902337" transform="rotate(-90 15.985797 125.902337)">총점</text>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 41.184 204.068673 
+L 41.184 47.736 
+" style="fill: none; stroke: #0b0b0b; stroke-width: 0.9; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 41.184 204.068673 
+L 739.8144 204.068673 
+" style="fill: none; stroke: #0b0b0b; stroke-width: 0.9; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_8">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="75.800822" y="194.930959" transform="rotate(-0 75.800822 194.930959)">채점 불가</text>
+   </g>
+   <g id="patch_5">
+    <path d="M 133.075926 204.068673 
+L 144.405068 204.068673 
+L 144.405068 92.402478 
+L 133.075926 92.402478 
+z
+" clip-path="url(#p965036df62)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_9">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="138.740497" y="88.150159" transform="rotate(-0 138.740497 88.150159)">80</text>
+   </g>
+   <g id="text_10">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="201.680173" y="194.930959" transform="rotate(-0 201.680173 194.930959)">회차 없음</text>
+   </g>
+   <g id="patch_6">
+    <path d="M 258.955278 204.068673 
+L 270.284419 204.068673 
+L 270.284419 64.485929 
+L 258.955278 64.485929 
+z
+" clip-path="url(#p965036df62)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_11">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="264.619849" y="60.233611" transform="rotate(-0 264.619849 60.233611)">100</text>
+   </g>
+   <g id="patch_7">
+    <path d="M 321.894954 204.068673 
+L 333.224095 204.068673 
+L 333.224095 92.402478 
+L 321.894954 92.402478 
+z
+" clip-path="url(#p965036df62)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_12">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="327.559524" y="88.150159" transform="rotate(-0 327.559524 88.150159)">80</text>
+   </g>
+   <g id="patch_8">
+    <path d="M 384.834629 204.068673 
+L 396.163771 204.068673 
+L 396.163771 99.381615 
+L 384.834629 99.381615 
+z
+" clip-path="url(#p965036df62)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_13">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="95.129297" transform="rotate(-0 390.4992 95.129297)">75</text>
+   </g>
+   <g id="patch_9">
+    <path d="M 447.774305 204.068673 
+L 459.103446 204.068673 
+L 459.103446 99.381615 
+L 447.774305 99.381615 
+z
+" clip-path="url(#p965036df62)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_14">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="453.438876" y="95.129297" transform="rotate(-0 453.438876 95.129297)">75</text>
+   </g>
+   <g id="text_15">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="516.378551" y="194.930959" transform="rotate(-0 516.378551 194.930959)">채점 불가</text>
+   </g>
+   <g id="patch_10">
+    <path d="M 573.653656 204.068673 
+L 584.982798 204.068673 
+L 584.982798 120.319027 
+L 573.653656 120.319027 
+z
+" clip-path="url(#p965036df62)" style="fill: url(#h4029eb61a0)"/>
+   </g>
+   <g id="text_16">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="579.318227" y="116.066708" transform="rotate(-0 579.318227 116.066708)">≈60</text>
+   </g>
+   <g id="text_17">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="642.257903" y="194.930959" transform="rotate(-0 642.257903 194.930959)">회차 없음</text>
+   </g>
+   <g id="patch_11">
+    <path d="M 699.533008 204.068673 
+L 710.862149 204.068673 
+L 710.862149 204.068673 
+L 699.533008 204.068673 
+z
+" clip-path="url(#p965036df62)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_18">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="705.197578" y="199.816355" transform="rotate(-0 705.197578 199.816355)">0</text>
+   </g>
+   <g id="text_19">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(56.99015 221.541605)">알림 컨슈머</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(68.707822 230.222715)">전멸</text>
+   </g>
+   <g id="text_20">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="75.800822" y="250.005044" transform="rotate(-0 75.800822 250.005044)">CH-2</text>
+   </g>
+   <g id="text_21">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(121.020169 221.533918)">Kafka 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(123.476325 230.275887)">알림 유실</text>
+   </g>
+   <g id="text_22">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="138.740497" y="250.005044" transform="rotate(-0 138.740497 250.005044)">IN-2</text>
+   </g>
+   <g id="text_23">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(184.222501 221.533918)">Redis 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(186.416001 230.336746)">복합 증상</text>
+   </g>
+   <g id="text_24">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="201.680173" y="250.005044" transform="rotate(-0 201.680173 250.005044)">IN-1 *</text>
+   </g>
+   <g id="text_25">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(250.433849 221.533918)">해시태그</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(249.355677 230.336746)">중복 저장</text>
+   </g>
+   <g id="text_26">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="264.619849" y="250.005044" transform="rotate(-0 264.619849 250.005044)">AP-3</text>
+   </g>
+   <g id="text_27">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(302.406665 221.820918)">MongoDB 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(311.844352 230.583707)">DLQ 적재</text>
+   </g>
+   <g id="text_28">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="327.559524" y="250.005044" transform="rotate(-0 327.559524 250.005044)">CH-1</text>
+   </g>
+   <g id="text_29">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(375.235028 221.623605)">댓글 길이</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(383.4062 230.365574)">초과</text>
+   </g>
+   <g id="text_30">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="250.005044" transform="rotate(-0 390.4992 250.005044)">AP-1 †</text>
+   </g>
+   <g id="text_31">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(438.174704 221.533918)">인증 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(438.174704 230.275887)">익명 폴백</text>
+   </g>
+   <g id="text_32">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="453.438876" y="250.005044" transform="rotate(-0 453.438876 250.005044)">AU-4</text>
+   </g>
+   <g id="text_33">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(501.114379 221.533918)">인증 서버</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(501.114379 230.275887)">전면 다운</text>
+   </g>
+   <g id="text_34">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="516.378551" y="250.005044" transform="rotate(-0 516.378551 250.005044)">AU-2 ‡</text>
+   </g>
+   <g id="text_35">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(560.507555 221.541605)">팔로우 조회</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(572.065711 230.179472)">NPE</text>
+   </g>
+   <g id="text_36">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="579.318227" y="250.005044" transform="rotate(-0 579.318227 250.005044)">AP-2</text>
+   </g>
+   <g id="text_37">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(622.172387 221.820918)">Mongo 순단</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(634.480075 230.458785)">25초</text>
+   </g>
+   <g id="text_38">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="642.257903" y="250.005044" transform="rotate(-0 642.257903 250.005044)">CH-3</text>
+   </g>
+   <g id="text_39">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(686.02175 221.60823)">JWT 시크릿</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(691.011578 230.350199)">드리프트</text>
+   </g>
+   <g id="text_40">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="705.197578" y="250.005044" transform="rotate(-0 705.197578 250.005044)">AU-3</text>
+   </g>
+   <g id="text_41">
+    <text style="fill: #0b0b0b; font: 700 10.5px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="37.736" transform="rotate(-0 390.4992 37.736)">(a) 회차 1 총점 — traceId 입력 · 루브릭 v1 · N=1  (입력 모델이 달라 (b)와 직접 비교 불가)</text>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_12">
+    <path d="M 41.184 441.694337 
+L 739.8144 441.694337 
+L 739.8144 285.361663 
+L 41.184 285.361663 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_12">
+     <g id="line2d_18"/>
+    </g>
+    <g id="xtick_13">
+     <g id="line2d_19"/>
+    </g>
+    <g id="xtick_14">
+     <g id="line2d_20"/>
+    </g>
+    <g id="xtick_15">
+     <g id="line2d_21"/>
+    </g>
+    <g id="xtick_16">
+     <g id="line2d_22"/>
+    </g>
+    <g id="xtick_17">
+     <g id="line2d_23"/>
+    </g>
+    <g id="xtick_18">
+     <g id="line2d_24"/>
+    </g>
+    <g id="xtick_19">
+     <g id="line2d_25"/>
+    </g>
+    <g id="xtick_20">
+     <g id="line2d_26"/>
+    </g>
+    <g id="xtick_21">
+     <g id="line2d_27"/>
+    </g>
+    <g id="xtick_22">
+     <g id="line2d_28"/>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_7">
+     <g id="line2d_29">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="441.694337" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_42">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="444.915704" transform="rotate(-0 34.684 444.915704)">0</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_30">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="413.777788" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_43">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="416.999155" transform="rotate(-0 34.684 416.999155)">20</text>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_31">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="385.861239" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_44">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="389.082606" transform="rotate(-0 34.684 389.082606)">40</text>
+     </g>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_32">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="357.94469" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_45">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="361.166057" transform="rotate(-0 34.684 361.166057)">60</text>
+     </g>
+    </g>
+    <g id="ytick_11">
+     <g id="line2d_33">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="330.028141" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_46">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="333.249509" transform="rotate(-0 34.684 333.249509)">80</text>
+     </g>
+    </g>
+    <g id="ytick_12">
+     <g id="line2d_34">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="302.111593" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_47">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="305.33296" transform="rotate(-0 34.684 305.33296)">100</text>
+     </g>
+    </g>
+    <g id="text_48">
+     <text style="fill: #0b0b0b; font: 9px 'Apple SD Gothic Neo'; text-anchor: middle" x="15.985797" y="363.528" transform="rotate(-90 15.985797 363.528)">총점</text>
+    </g>
+   </g>
+   <g id="patch_13">
+    <path d="M 41.184 441.694337 
+L 41.184 285.361663 
+" style="fill: none; stroke: #0b0b0b; stroke-width: 0.9; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 41.184 441.694337 
+L 739.8144 441.694337 
+" style="fill: none; stroke: #0b0b0b; stroke-width: 0.9; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 63.055537 441.694337 
+L 74.384679 441.694337 
+L 74.384679 302.111593 
+L 63.055537 302.111593 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_49">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="68.720108" y="297.859274" transform="rotate(-0 68.720108 297.859274)">100</text>
+   </g>
+   <g id="patch_16">
+    <path d="M 77.216964 441.694337 
+L 88.546106 441.694337 
+L 88.546106 302.111593 
+L 77.216964 302.111593 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_50">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="82.881535" y="297.859274" transform="rotate(-0 82.881535 297.859274)">100</text>
+   </g>
+   <g id="patch_17">
+    <path d="M 125.995213 441.694337 
+L 137.324355 441.694337 
+L 137.324355 302.111593 
+L 125.995213 302.111593 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_51">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="131.659784" y="297.859274" transform="rotate(-0 131.659784 297.859274)">100</text>
+   </g>
+   <g id="patch_18">
+    <path d="M 140.15664 441.694337 
+L 151.485782 441.694337 
+L 151.485782 304.903248 
+L 140.15664 304.903248 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_52">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="145.821211" y="300.650929" transform="rotate(-0 145.821211 300.650929)">98</text>
+   </g>
+   <g id="patch_19">
+    <path d="M 196.015602 441.694337 
+L 207.344744 441.694337 
+L 207.344744 304.903248 
+L 196.015602 304.903248 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_53">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="201.680173" y="300.650929" transform="rotate(-0 201.680173 300.650929)">98</text>
+   </g>
+   <g id="patch_20">
+    <path d="M 251.874564 441.694337 
+L 263.203706 441.694337 
+L 263.203706 302.111593 
+L 251.874564 302.111593 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_54">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="257.539135" y="297.859274" transform="rotate(-0 257.539135 297.859274)">100</text>
+   </g>
+   <g id="patch_21">
+    <path d="M 266.035991 441.694337 
+L 277.365133 441.694337 
+L 277.365133 309.09073 
+L 266.035991 309.09073 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_55">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="271.700562" y="304.838411" transform="rotate(-0 271.700562 304.838411)">95</text>
+   </g>
+   <g id="patch_22">
+    <path d="M 314.81424 441.694337 
+L 326.143382 441.694337 
+L 326.143382 302.111593 
+L 314.81424 302.111593 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_56">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="320.478811" y="297.859274" transform="rotate(-0 320.478811 297.859274)">100</text>
+   </g>
+   <g id="patch_23">
+    <path d="M 328.975667 441.694337 
+L 340.304809 441.694337 
+L 340.304809 309.09073 
+L 328.975667 309.09073 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_57">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="334.640238" y="304.838411" transform="rotate(-0 334.640238 304.838411)">95</text>
+   </g>
+   <g id="patch_24">
+    <path d="M 377.753916 441.694337 
+L 389.083057 441.694337 
+L 389.083057 316.069867 
+L 377.753916 316.069867 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_58">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="383.418486" y="311.817548" transform="rotate(-0 383.418486 311.817548)">90</text>
+   </g>
+   <g id="patch_25">
+    <path d="M 391.915343 441.694337 
+L 403.244484 441.694337 
+L 403.244484 316.069867 
+L 391.915343 316.069867 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_59">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="397.579914" y="311.817548" transform="rotate(-0 397.579914 311.817548)">90</text>
+   </g>
+   <g id="patch_26">
+    <path d="M 440.693591 441.694337 
+L 452.022733 441.694337 
+L 452.022733 318.861522 
+L 440.693591 318.861522 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_60">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="446.358162" y="314.609203" transform="rotate(-0 446.358162 314.609203)">88</text>
+   </g>
+   <g id="patch_27">
+    <path d="M 454.855018 441.694337 
+L 466.18416 441.694337 
+L 466.18416 325.840659 
+L 454.855018 325.840659 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_61">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="460.519589" y="321.588341" transform="rotate(-0 460.519589 321.588341)">83</text>
+   </g>
+   <g id="patch_28">
+    <path d="M 503.633267 441.694337 
+L 514.962409 441.694337 
+L 514.962409 335.611451 
+L 503.633267 335.611451 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_62">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="509.297838" y="331.359133" transform="rotate(-0 509.297838 331.359133)">76</text>
+   </g>
+   <g id="patch_29">
+    <path d="M 517.794694 441.694337 
+L 529.123836 441.694337 
+L 529.123836 366.319655 
+L 517.794694 366.319655 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_63">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="523.459265" y="362.067336" transform="rotate(-0 523.459265 362.067336)">54</text>
+   </g>
+   <g id="patch_30">
+    <path d="M 566.572943 441.694337 
+L 577.902084 441.694337 
+L 577.902084 367.715482 
+L 566.572943 367.715482 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_64">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="572.237514" y="363.463164" transform="rotate(-0 572.237514 363.463164)">53</text>
+   </g>
+   <g id="patch_31">
+    <path d="M 580.73437 441.694337 
+L 592.063511 441.694337 
+L 592.063511 367.715482 
+L 580.73437 367.715482 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_65">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="586.398941" y="363.463164" transform="rotate(-0 586.398941 363.463164)">53</text>
+   </g>
+   <g id="patch_32">
+    <path d="M 622.431905 441.694337 
+L 633.761046 441.694337 
+L 633.761046 436.111027 
+L 622.431905 436.111027 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_66">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="628.096476" y="431.858708" transform="rotate(-0 628.096476 431.858708)">4</text>
+   </g>
+   <g id="patch_33">
+    <path d="M 636.593332 441.694337 
+L 647.922474 441.694337 
+L 647.922474 436.111027 
+L 636.593332 436.111027 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_67">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="642.257903" y="431.858708" transform="rotate(-0 642.257903 431.858708)">4</text>
+   </g>
+   <g id="patch_34">
+    <path d="M 650.754759 441.694337 
+L 662.083901 441.694337 
+L 662.083901 436.111027 
+L 650.754759 436.111027 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #1baf7a"/>
+   </g>
+   <g id="text_68">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="656.41933" y="431.858708" transform="rotate(-0 656.41933 431.858708)">4</text>
+   </g>
+   <g id="patch_35">
+    <path d="M 699.533008 441.694337 
+L 710.862149 441.694337 
+L 710.862149 441.694337 
+L 699.533008 441.694337 
+z
+" clip-path="url(#pa68e2e9889)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_69">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="705.197578" y="437.442018" transform="rotate(-0 705.197578 437.442018)">0</text>
+   </g>
+   <g id="text_70">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(56.99015 459.167269)">알림 컨슈머</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(68.707822 467.848378)">전멸</text>
+   </g>
+   <g id="text_71">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="75.800822" y="487.630707" transform="rotate(-0 75.800822 487.630707)">CH-2</text>
+   </g>
+   <g id="text_72">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(121.020169 459.159581)">Kafka 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(123.476325 467.90155)">알림 유실</text>
+   </g>
+   <g id="text_73">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="138.740497" y="487.630707" transform="rotate(-0 138.740497 487.630707)">IN-2</text>
+   </g>
+   <g id="text_74">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(184.222501 459.159581)">Redis 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(186.416001 467.962409)">복합 증상</text>
+   </g>
+   <g id="text_75">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="201.680173" y="487.630707" transform="rotate(-0 201.680173 487.630707)">IN-1 *</text>
+   </g>
+   <g id="text_76">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(250.433849 459.159581)">해시태그</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(249.355677 467.962409)">중복 저장</text>
+   </g>
+   <g id="text_77">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="264.619849" y="487.630707" transform="rotate(-0 264.619849 487.630707)">AP-3</text>
+   </g>
+   <g id="text_78">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(302.406665 459.446581)">MongoDB 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(311.844352 468.20937)">DLQ 적재</text>
+   </g>
+   <g id="text_79">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="327.559524" y="487.630707" transform="rotate(-0 327.559524 487.630707)">CH-1</text>
+   </g>
+   <g id="text_80">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(375.235028 459.249269)">댓글 길이</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(383.4062 467.991237)">초과</text>
+   </g>
+   <g id="text_81">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="487.630707" transform="rotate(-0 390.4992 487.630707)">AP-1 †</text>
+   </g>
+   <g id="text_82">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(438.174704 459.159581)">인증 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(438.174704 467.90155)">익명 폴백</text>
+   </g>
+   <g id="text_83">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="453.438876" y="487.630707" transform="rotate(-0 453.438876 487.630707)">AU-4</text>
+   </g>
+   <g id="text_84">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(501.114379 459.159581)">인증 서버</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(501.114379 467.90155)">전면 다운</text>
+   </g>
+   <g id="text_85">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="516.378551" y="487.630707" transform="rotate(-0 516.378551 487.630707)">AU-2 ‡</text>
+   </g>
+   <g id="text_86">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(560.507555 459.167269)">팔로우 조회</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(572.065711 467.805136)">NPE</text>
+   </g>
+   <g id="text_87">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="579.318227" y="487.630707" transform="rotate(-0 579.318227 487.630707)">AP-2</text>
+   </g>
+   <g id="text_88">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(622.172387 459.446581)">Mongo 순단</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(634.480075 468.084448)">25초</text>
+   </g>
+   <g id="text_89">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="642.257903" y="487.630707" transform="rotate(-0 642.257903 487.630707)">CH-3</text>
+   </g>
+   <g id="text_90">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(686.02175 459.233894)">JWT 시크릿</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(691.011578 467.975862)">드리프트</text>
+   </g>
+   <g id="text_91">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="705.197578" y="487.630707" transform="rotate(-0 705.197578 487.630707)">AU-3</text>
+   </g>
+   <g id="text_92">
+    <text style="fill: #0b0b0b; font: 700 10.5px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="275.361663" transform="rotate(-0 390.4992 275.361663)">(b) 회차 2 총점 — 자연어 입력 · 앵커 v2 · 루브릭 v3</text>
+   </g>
+  </g>
+  <g id="axes_3">
+   <g id="patch_36">
+    <path d="M 41.184 679.32 
+L 739.8144 679.32 
+L 739.8144 522.987327 
+L 41.184 522.987327 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_5">
+    <g id="xtick_23">
+     <g id="line2d_35"/>
+    </g>
+    <g id="xtick_24">
+     <g id="line2d_36"/>
+    </g>
+    <g id="xtick_25">
+     <g id="line2d_37"/>
+    </g>
+    <g id="xtick_26">
+     <g id="line2d_38"/>
+    </g>
+    <g id="xtick_27">
+     <g id="line2d_39"/>
+    </g>
+    <g id="xtick_28">
+     <g id="line2d_40"/>
+    </g>
+    <g id="xtick_29">
+     <g id="line2d_41"/>
+    </g>
+    <g id="xtick_30">
+     <g id="line2d_42"/>
+    </g>
+    <g id="xtick_31">
+     <g id="line2d_43"/>
+    </g>
+    <g id="xtick_32">
+     <g id="line2d_44"/>
+    </g>
+    <g id="xtick_33">
+     <g id="line2d_45"/>
+    </g>
+   </g>
+   <g id="matplotlib.axis_6">
+    <g id="ytick_13">
+     <g id="line2d_46">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="679.32" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_93">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="682.541367" transform="rotate(-0 34.684 682.541367)">0</text>
+     </g>
+    </g>
+    <g id="ytick_14">
+     <g id="line2d_47">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="649.48552" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_94">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="652.706888" transform="rotate(-0 34.684 652.706888)">50</text>
+     </g>
+    </g>
+    <g id="ytick_15">
+     <g id="line2d_48">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="619.651041" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_95">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="622.872408" transform="rotate(-0 34.684 622.872408)">100</text>
+     </g>
+    </g>
+    <g id="ytick_16">
+     <g id="line2d_49">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="589.816561" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_96">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="593.037928" transform="rotate(-0 34.684 593.037928)">150</text>
+     </g>
+    </g>
+    <g id="ytick_17">
+     <g id="line2d_50">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="559.982081" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_97">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="563.203449" transform="rotate(-0 34.684 563.203449)">200</text>
+     </g>
+    </g>
+    <g id="ytick_18">
+     <g id="line2d_51">
+      <g>
+       <use xlink:href="#mc3cd8b04c1" x="41.184" y="530.147602" style="fill: #0b0b0b; stroke: #0b0b0b; stroke-width: 0.9"/>
+      </g>
+     </g>
+     <g id="text_98">
+      <text style="fill: #0b0b0b; font: 8.5px 'Apple SD Gothic Neo'; text-anchor: end" x="34.684" y="533.368969" transform="rotate(-0 34.684 533.368969)">250</text>
+     </g>
+    </g>
+    <g id="text_99">
+     <text style="fill: #0b0b0b; font: 9px 'Apple SD Gothic Neo'; text-anchor: middle" x="14.490328" y="601.153663" transform="rotate(-90 14.490328 601.153663)">입력 토큰 (×1,000)</text>
+    </g>
+   </g>
+   <g id="patch_37">
+    <path d="M 41.184 679.32 
+L 41.184 522.987327 
+" style="fill: none; stroke: #0b0b0b; stroke-width: 0.9; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_38">
+    <path d="M 41.184 679.32 
+L 739.8144 679.32 
+" style="fill: none; stroke: #0b0b0b; stroke-width: 0.9; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_39">
+    <path d="M 63.055537 679.32 
+L 74.384679 679.32 
+L 74.384679 650.6789 
+L 63.055537 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_40">
+    <path d="M 63.055537 650.08221 
+L 74.384679 650.08221 
+L 74.384679 552.250178 
+L 63.055537 552.250178 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_100">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="68.720108" y="549.697359" transform="rotate(-0 68.720108 549.697359)">165</text>
+   </g>
+   <g id="patch_41">
+    <path d="M 77.216964 679.32 
+L 88.546106 679.32 
+L 88.546106 650.6789 
+L 77.216964 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_42">
+    <path d="M 77.216964 650.08221 
+L 88.546106 650.08221 
+L 88.546106 539.829487 
+L 77.216964 539.829487 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_101">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="82.881535" y="537.276668" transform="rotate(-0 82.881535 537.276668)">186</text>
+   </g>
+   <g id="patch_43">
+    <path d="M 125.995213 679.32 
+L 137.324355 679.32 
+L 137.324355 650.6789 
+L 125.995213 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_44">
+    <path d="M 125.995213 650.08221 
+L 137.324355 650.08221 
+L 137.324355 574.963764 
+L 125.995213 574.963764 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_102">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="131.659784" y="572.410945" transform="rotate(-0 131.659784 572.410945)">127</text>
+   </g>
+   <g id="patch_45">
+    <path d="M 140.15664 679.32 
+L 151.485782 679.32 
+L 151.485782 650.6789 
+L 140.15664 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_46">
+    <path d="M 140.15664 650.08221 
+L 151.485782 650.08221 
+L 151.485782 566.054591 
+L 140.15664 566.054591 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_103">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="145.821211" y="563.501773" transform="rotate(-0 145.821211 563.501773)">142</text>
+   </g>
+   <g id="patch_47">
+    <path d="M 196.015602 679.32 
+L 207.344744 679.32 
+L 207.344744 650.6789 
+L 196.015602 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_48">
+    <path d="M 196.015602 650.08221 
+L 207.344744 650.08221 
+L 207.344744 580.40975 
+L 196.015602 580.40975 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_104">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="201.680173" y="577.856931" transform="rotate(-0 201.680173 577.856931)">118</text>
+   </g>
+   <g id="patch_49">
+    <path d="M 251.874564 679.32 
+L 263.203706 679.32 
+L 263.203706 650.6789 
+L 251.874564 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_50">
+    <path d="M 251.874564 650.08221 
+L 263.203706 650.08221 
+L 263.203706 599.858847 
+L 251.874564 599.858847 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_105">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="257.539135" y="597.306028" transform="rotate(-0 257.539135 597.306028)">85</text>
+   </g>
+   <g id="patch_51">
+    <path d="M 266.035991 679.32 
+L 277.365133 679.32 
+L 277.365133 650.6789 
+L 266.035991 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_52">
+    <path d="M 266.035991 650.08221 
+L 277.365133 650.08221 
+L 277.365133 575.875505 
+L 266.035991 575.875505 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: url(#h44c8a76b26)"/>
+   </g>
+   <g id="text_106">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="271.700562" y="573.322687" transform="rotate(-0 271.700562 573.322687)">≈125</text>
+   </g>
+   <g id="patch_53">
+    <path d="M 314.81424 679.32 
+L 326.143382 679.32 
+L 326.143382 650.6789 
+L 314.81424 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_54">
+    <path d="M 314.81424 650.08221 
+L 326.143382 650.08221 
+L 326.143382 549.199901 
+L 314.81424 549.199901 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_107">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="320.478811" y="546.647082" transform="rotate(-0 320.478811 546.647082)">170</text>
+   </g>
+   <g id="patch_55">
+    <path d="M 328.975667 679.32 
+L 340.304809 679.32 
+L 340.304809 650.6789 
+L 328.975667 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_56">
+    <path d="M 328.975667 650.08221 
+L 340.304809 650.08221 
+L 340.304809 575.271059 
+L 328.975667 575.271059 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_108">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="334.640238" y="572.71824" transform="rotate(-0 334.640238 572.71824)">126</text>
+   </g>
+   <g id="patch_57">
+    <path d="M 377.753916 679.32 
+L 389.083057 679.32 
+L 389.083057 650.6789 
+L 377.753916 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_58">
+    <path d="M 377.753916 650.08221 
+L 389.083057 650.08221 
+L 389.083057 607.954731 
+L 377.753916 607.954731 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: url(#h4029eb61a0)"/>
+   </g>
+   <g id="text_109">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="383.418486" y="605.401913" transform="rotate(-0 383.418486 605.401913)">≈72</text>
+   </g>
+   <g id="patch_59">
+    <path d="M 391.915343 679.32 
+L 403.244484 679.32 
+L 403.244484 650.6789 
+L 391.915343 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_60">
+    <path d="M 391.915343 650.08221 
+L 403.244484 650.08221 
+L 403.244484 614.091684 
+L 391.915343 614.091684 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_110">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="397.579914" y="611.538865" transform="rotate(-0 397.579914 611.538865)">61</text>
+   </g>
+   <g id="patch_61">
+    <path d="M 440.693591 679.32 
+L 452.022733 679.32 
+L 452.022733 650.6789 
+L 440.693591 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_62">
+    <path d="M 440.693591 650.08221 
+L 452.022733 650.08221 
+L 452.022733 563.996012 
+L 440.693591 563.996012 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_111">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="446.358162" y="561.443194" transform="rotate(-0 446.358162 561.443194)">145</text>
+   </g>
+   <g id="patch_63">
+    <path d="M 454.855018 679.32 
+L 466.18416 679.32 
+L 466.18416 650.6789 
+L 454.855018 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_64">
+    <path d="M 454.855018 650.08221 
+L 466.18416 650.08221 
+L 466.18416 579.175796 
+L 454.855018 579.175796 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_112">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="460.519589" y="576.622977" transform="rotate(-0 460.519589 576.622977)">120</text>
+   </g>
+   <g id="patch_65">
+    <path d="M 503.633267 679.32 
+L 514.962409 679.32 
+L 514.962409 650.6789 
+L 503.633267 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_66">
+    <path d="M 503.633267 650.08221 
+L 514.962409 650.08221 
+L 514.962409 600.307558 
+L 503.633267 600.307558 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_113">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="509.297838" y="597.754739" transform="rotate(-0 509.297838 597.754739)">84</text>
+   </g>
+   <g id="patch_67">
+    <path d="M 517.794694 679.32 
+L 529.123836 679.32 
+L 529.123836 650.6789 
+L 517.794694 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_68">
+    <path d="M 517.794694 650.08221 
+L 529.123836 650.08221 
+L 529.123836 585.519799 
+L 517.794694 585.519799 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_114">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="523.459265" y="582.966981" transform="rotate(-0 523.459265 582.966981)">109</text>
+   </g>
+   <g id="patch_69">
+    <path d="M 566.572943 679.32 
+L 577.902084 679.32 
+L 577.902084 650.6789 
+L 566.572943 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_70">
+    <path d="M 566.572943 650.08221 
+L 577.902084 650.08221 
+L 577.902084 609.811033 
+L 566.572943 609.811033 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: url(#h4029eb61a0)"/>
+   </g>
+   <g id="text_115">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="572.237514" y="607.258214" transform="rotate(-0 572.237514 607.258214)">≈68</text>
+   </g>
+   <g id="patch_71">
+    <path d="M 580.73437 679.32 
+L 592.063511 679.32 
+L 592.063511 650.6789 
+L 580.73437 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_72">
+    <path d="M 580.73437 650.08221 
+L 592.063511 650.08221 
+L 592.063511 599.598094 
+L 580.73437 599.598094 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_116">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="586.398941" y="597.045275" transform="rotate(-0 586.398941 597.045275)">86</text>
+   </g>
+   <g id="patch_73">
+    <path d="M 622.431905 679.32 
+L 633.761046 679.32 
+L 633.761046 650.6789 
+L 622.431905 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_74">
+    <path d="M 622.431905 650.08221 
+L 633.761046 650.08221 
+L 633.761046 553.219798 
+L 622.431905 553.219798 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_117">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="628.096476" y="550.66698" transform="rotate(-0 628.096476 550.66698)">163</text>
+   </g>
+   <g id="patch_75">
+    <path d="M 636.593332 679.32 
+L 647.922474 679.32 
+L 647.922474 650.6789 
+L 636.593332 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_76">
+    <path d="M 636.593332 650.08221 
+L 647.922474 650.08221 
+L 647.922474 549.180806 
+L 636.593332 549.180806 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #eb6834"/>
+   </g>
+   <g id="text_118">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="642.257903" y="546.627988" transform="rotate(-0 642.257903 546.627988)">170</text>
+   </g>
+   <g id="patch_77">
+    <path d="M 650.754759 679.32 
+L 662.083901 679.32 
+L 662.083901 650.6789 
+L 650.754759 650.6789 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #c3c2b7"/>
+   </g>
+   <g id="patch_78">
+    <path d="M 650.754759 650.08221 
+L 662.083901 650.08221 
+L 662.083901 538.16353 
+L 650.754759 538.16353 
+z
+" clip-path="url(#pd8d9898cfc)" style="fill: #1baf7a"/>
+   </g>
+   <g id="text_119">
+    <text style="fill: #0b0b0b; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="656.41933" y="535.610711" transform="rotate(-0 656.41933 535.610711)">189</text>
+   </g>
+   <g id="text_120">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="705.197578" y="670.203596" transform="rotate(-0 705.197578 670.203596)">조사 미실행</text>
+   </g>
+   <g id="text_121">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(56.99015 696.366725)">알림 컨슈머</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(68.707822 705.047835)">전멸</text>
+   </g>
+   <g id="text_122">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="75.800822" y="724.158888" transform="rotate(-0 75.800822 724.158888)">CH-2</text>
+   </g>
+   <g id="text_123">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(121.020169 696.359038)">Kafka 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(123.476325 705.101006)">알림 유실</text>
+   </g>
+   <g id="text_124">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="138.740497" y="724.158888" transform="rotate(-0 138.740497 724.158888)">IN-2</text>
+   </g>
+   <g id="text_125">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(184.222501 696.359038)">Redis 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(186.416001 705.161866)">복합 증상</text>
+   </g>
+   <g id="text_126">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="201.680173" y="724.158888" transform="rotate(-0 201.680173 724.158888)">IN-1 *</text>
+   </g>
+   <g id="text_127">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(250.433849 696.359038)">해시태그</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(249.355677 705.161866)">중복 저장</text>
+   </g>
+   <g id="text_128">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="264.619849" y="724.158888" transform="rotate(-0 264.619849 724.158888)">AP-3</text>
+   </g>
+   <g id="text_129">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(302.406665 696.646038)">MongoDB 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(311.844352 705.408827)">DLQ 적재</text>
+   </g>
+   <g id="text_130">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="327.559524" y="724.158888" transform="rotate(-0 327.559524 724.158888)">CH-1</text>
+   </g>
+   <g id="text_131">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(375.235028 696.448725)">댓글 길이</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(383.4062 705.190694)">초과</text>
+   </g>
+   <g id="text_132">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="724.158888" transform="rotate(-0 390.4992 724.158888)">AP-1 †</text>
+   </g>
+   <g id="text_133">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(438.174704 696.359038)">인증 다운</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(438.174704 705.101006)">익명 폴백</text>
+   </g>
+   <g id="text_134">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="453.438876" y="724.158888" transform="rotate(-0 453.438876 724.158888)">AU-4</text>
+   </g>
+   <g id="text_135">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(501.114379 696.359038)">인증 서버</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(501.114379 705.101006)">전면 다운</text>
+   </g>
+   <g id="text_136">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="516.378551" y="724.158888" transform="rotate(-0 516.378551 724.158888)">AU-2 ‡</text>
+   </g>
+   <g id="text_137">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(560.507555 696.366725)">팔로우 조회</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(572.065711 705.004592)">NPE</text>
+   </g>
+   <g id="text_138">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="579.318227" y="724.158888" transform="rotate(-0 579.318227 724.158888)">AP-2</text>
+   </g>
+   <g id="text_139">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(622.172387 696.646038)">Mongo 순단</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(634.480075 705.283905)">25초</text>
+   </g>
+   <g id="text_140">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="642.257903" y="724.158888" transform="rotate(-0 642.257903 724.158888)">CH-3</text>
+   </g>
+   <g id="text_141">
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(686.02175 696.43335)">JWT 시크릿</text>
+    <text style="fill: #0b0b0b; font: 8.2px 'Apple SD Gothic Neo'" transform="translate(691.011578 705.175319)">드리프트</text>
+   </g>
+   <g id="text_142">
+    <text style="fill: #898781; font: 7.2px 'Apple SD Gothic Neo'; text-anchor: middle" x="705.197578" y="724.158888" transform="rotate(-0 705.197578 724.158888)">AU-3</text>
+   </g>
+   <g id="text_143">
+    <text style="fill: #0b0b0b; font: 700 10.5px 'Apple SD Gothic Neo'; text-anchor: middle" x="390.4992" y="512.987327" transform="rotate(-0 390.4992 512.987327)">(c) 회차 2 입력 토큰 — CLI 오버헤드(회색, 실측 평균 48k 통일) 위에 컨텍스트(색) · 숫자는 컨텍스트</text>
+   </g>
+  </g>
+  <g id="legend_1">
+   <g id="patch_79">
+    <path d="M 224.105 21.3215 
+L 232.105 21.3215 
+L 232.105 14.6815 
+L 224.105 14.6815 
+z
+" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_144">
+    <text style="fill: #0b0b0b; font: 8px 'Apple SD Gothic Neo'; text-anchor: start" x="238.505" y="20.7615" transform="rotate(-0 238.505 20.7615)">실행 1</text>
+   </g>
+   <g id="patch_80">
+    <path d="M 268.505 21.3215 
+L 276.505 21.3215 
+L 276.505 14.6815 
+L 268.505 14.6815 
+z
+" style="fill: #eb6834"/>
+   </g>
+   <g id="text_145">
+    <text style="fill: #0b0b0b; font: 8px 'Apple SD Gothic Neo'; text-anchor: start" x="282.905" y="20.7615" transform="rotate(-0 282.905 20.7615)">실행 2</text>
+   </g>
+   <g id="patch_81">
+    <path d="M 314.3125 21.3215 
+L 322.3125 21.3215 
+L 322.3125 14.6815 
+L 314.3125 14.6815 
+z
+" style="fill: #1baf7a"/>
+   </g>
+   <g id="text_146">
+    <text style="fill: #0b0b0b; font: 8px 'Apple SD Gothic Neo'; text-anchor: start" x="328.7125" y="20.7615" transform="rotate(-0 328.7125 20.7615)">실행 3 (CH-3)</text>
+   </g>
+   <g id="patch_82">
+    <path d="M 384.9675 21.3215 
+L 392.9675 21.3215 
+L 392.9675 14.6815 
+L 384.9675 14.6815 
+z
+" style="fill: #c3c2b7"/>
+   </g>
+   <g id="text_147">
+    <text style="fill: #0b0b0b; font: 8px 'Apple SD Gothic Neo'; text-anchor: start" x="399.3675" y="20.7615" transform="rotate(-0 399.3675 20.7615)">CLI 오버헤드</text>
+   </g>
+   <g id="patch_83">
+    <path d="M 451.02375 21.3215 
+L 459.02375 21.3215 
+L 459.02375 14.6815 
+L 451.02375 14.6815 
+z
+" style="fill: url(#h542f6f8755); stroke: #898781; stroke-width: 0.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_148">
+    <text style="fill: #0b0b0b; font: 8px 'Apple SD Gothic Neo'; text-anchor: start" x="465.42375" y="20.7615" transform="rotate(-0 465.42375 20.7615)">빗금·≈ = 추정·참고</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p965036df62">
+   <rect x="41.184" y="47.736" width="698.6304" height="156.332673"/>
+  </clipPath>
+  <clipPath id="pa68e2e9889">
+   <rect x="41.184" y="285.361663" width="698.6304" height="156.332673"/>
+  </clipPath>
+  <clipPath id="pd8d9898cfc">
+   <rect x="41.184" y="522.987327" width="698.6304" height="156.332673"/>
+  </clipPath>
+ </defs>
+ <defs>
+  <pattern id="h4029eb61a0" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#2a78d6"/>
+   <path d="M -36 36 
+L 36 -36 
+M -32 40 
+L 40 -32 
+M -28 44 
+L 44 -28 
+M -24 48 
+L 48 -24 
+M -20 52 
+L 52 -20 
+M -16 56 
+L 56 -16 
+M -12 60 
+L 60 -12 
+M -8 64 
+L 64 -8 
+M -4 68 
+L 68 -4 
+M 0 72 
+L 72 0 
+M 4 76 
+L 76 4 
+M 8 80 
+L 80 8 
+M 12 84 
+L 84 12 
+M 16 88 
+L 88 16 
+M 20 92 
+L 92 20 
+M 24 96 
+L 96 24 
+M 28 100 
+L 100 28 
+M 32 104 
+L 104 32 
+M 36 108 
+L 108 36 
+" style="fill: #1c5cab; stroke: #1c5cab; stroke-width: 0.8; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+  <pattern id="h44c8a76b26" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#eb6834"/>
+   <path d="M -36 36 
+L 36 -36 
+M -32 40 
+L 40 -32 
+M -28 44 
+L 44 -28 
+M -24 48 
+L 48 -24 
+M -20 52 
+L 52 -20 
+M -16 56 
+L 56 -16 
+M -12 60 
+L 60 -12 
+M -8 64 
+L 64 -8 
+M -4 68 
+L 68 -4 
+M 0 72 
+L 72 0 
+M 4 76 
+L 76 4 
+M 8 80 
+L 80 8 
+M 12 84 
+L 84 12 
+M 16 88 
+L 88 16 
+M 20 92 
+L 92 20 
+M 24 96 
+L 96 24 
+M 28 100 
+L 100 28 
+M 32 104 
+L 104 32 
+M 36 108 
+L 108 36 
+" style="fill: #d95926; stroke: #d95926; stroke-width: 0.8; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+  <pattern id="h542f6f8755" patternUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+   <rect x="0" y="0" width="73" height="73" fill="#ffffff"/>
+   <path d="M -36 36 
+L 36 -36 
+M -32 40 
+L 40 -32 
+M -28 44 
+L 44 -28 
+M -24 48 
+L 48 -24 
+M -20 52 
+L 52 -20 
+M -16 56 
+L 56 -16 
+M -12 60 
+L 60 -12 
+M -8 64 
+L 64 -8 
+M -4 68 
+L 68 -4 
+M 0 72 
+L 72 0 
+M 4 76 
+L 76 4 
+M 8 80 
+L 80 8 
+M 12 84 
+L 84 12 
+M 16 88 
+L 88 16 
+M 20 92 
+L 92 20 
+M 24 96 
+L 96 24 
+M 28 100 
+L 100 28 
+M 32 104 
+L 104 32 
+M 36 108 
+L 108 36 
+" style="fill: #898781; stroke: #898781; stroke-width: 0.8; stroke-linecap: butt; stroke-linejoin: miter"/>
+  </pattern>
+ </defs>
+</svg>

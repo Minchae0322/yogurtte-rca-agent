@@ -313,7 +313,8 @@ v1·v2가 "3s timeout"과 "fallback 로그"를 요구했으나 둘 다 실현되
 
 **단계 ③ — 앱(A), 주입 1회**
 
-- [ ] A-1 ~ A-5 적용 및 배포 확인
+- [x] A-1·A-2·A-3 코드 적용 (2026-08-02) — [정리: evidence-pipeline-improvements.md §4](../round-3/evidence-pipeline-improvements.md)
+- [ ] A-4b·A-5 적용 · A-1~A-3 배포 확인
 - [ ] AU-4 회차 2 주입 (auth 22분+ 다운 — 저트래픽 시간대)
 - [ ] 회차 2 채록 → 조사 → v3 앵커로 채점
 - [ ] 회차 1 대비 델타 기록
