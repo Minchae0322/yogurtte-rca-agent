@@ -30,8 +30,10 @@ traceId 하나로 Tempo·Loki·Mimir를 모아 LLM이 원인을 랭킹하는 v0 
 
 ### 1.1 채점 규칙
 
-- **앵커 기준 채점.** 문항별 `toy-content/docs/chaos/scenarios/<ID>/answer.md`(회차 1까지) 또는
-  [`chaos/anchors-v2.md`](../toy-content/docs/chaos/anchors-v2.md)(회차 2부터)의 "채점 앵커" 표와 대조한다.
+- **앵커 기준 채점 - 자는 하나다 (단일화 2026-08-03).** 모든 회차를
+  [`chaos/anchors-v2.md`](../toy-content/docs/chaos/anchors-v2.md) +
+  [rubric-v3](docs/scoring/rubric-v3.md)로 채점한다. 구 자(`scenarios/<ID>/answer.md` ·
+  [anchors-사용안함.md](docs/scoring/anchors-사용안함.md) · 루브릭 v1·v2)는 회차 1 기록의 보존본이며 채점에 쓰지 않는다.
   **정답지와의 자유 대조는 금지** - 앵커에 없는 잣대를 끌어오면 채점자 재량이 되어 그 회차는 무효다.
 - **앵커는 채록 전에 박제된 것만 유효.** 채록 후 앵커를 고치면 그 회차 채점은 무효이고, 개정은 **다음 회차부터** 적용한다.
   앵커가 실제 전개와 안 맞으면 점수를 만들지 말고 **"채점 불가"** 로 기록한 뒤 결함으로 남긴다.
@@ -43,7 +45,7 @@ traceId 하나로 Tempo·Loki·Mimir를 모아 LLM이 원인을 랭킹하는 v0 
 | | 회차 1까지 (v0) | 회차 2~ (v1) |
 |---|---|---|
 | 입력 | 사람이 고른 **traceId 1개** | **자연어 질문 하나** (문안 박제) |
-| 앵커 | `answer.md` · [anchors.md](docs/scoring/anchors.md) | **[anchors-v2.md](../toy-content/docs/chaos/anchors-v2.md)** (전 문항 SoT) |
+| 앵커 | `answer.md` · [anchors-사용안함.md](docs/scoring/anchors-사용안함.md) | **[anchors-v2.md](../toy-content/docs/chaos/anchors-v2.md)** (전 문항 SoT) |
 | 루브릭 | v1 (근본40·근거30·오귀20·조치10) | **[v3](docs/scoring/rubric-v3.md)** - 원인 40 · 근거 25 · 탐색 15 · 영향 10 · 오귀인 5 · 조치 5 |
 
 원칙은 **"어떻게든 원인을 맞히는 것이 첫째, 경로는 묻지 않는다."**
@@ -296,7 +298,7 @@ api → service → collector(client) + analyzer → llm → notify → report
 | **회차 문서를 어떻게 쓰나 (표준 형식)** | [docs/ch-1/round-2.md](docs/ch-1/round-2.md) - 이걸 복제한다 |
 | **장애별 항목 점수** | [scoring/summary.md](docs/scoring/summary.md) |
 | **앵커 요건 (회차 2~ · 자연어)** | [toy-content `chaos/anchors-v2.md`](../toy-content/docs/chaos/anchors-v2.md) - 질문 문안 · 탐색 요건 · 채널 감사 |
-| 앵커 요건 (회차 1까지 · 보존) | [scoring/anchors.md](docs/scoring/anchors.md) |
+| 앵커 요건 (회차 1까지 · 보존) | [scoring/anchors-사용안함.md](docs/scoring/anchors-사용안함.md) |
 | **채점 항목을 어떻게 정했나** | [scoring/rubric-v3.md](docs/scoring/rubric-v3.md) - 탐색부터 원인 분석까지 |
 | **대외용 종합 보고서** | [scoring/report.md](docs/scoring/report.md) - 장애 상황 + 채점 항목 + 결과 |
 | **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) - 토큰·비용 측정 기준 |

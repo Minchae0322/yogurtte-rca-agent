@@ -639,7 +639,7 @@ A·B·C는 기준 작성 체크리스트로, D는 실행 전 자동 게이트로
 | 문서 | 내용 |
 |---|---|
 | `docs/scoring/README.md` | 회차별 채점 판정 근거 원문 |
-| `docs/scoring/anchors.md` | 시나리오별 기준 요건과 채널 감사 |
+| `docs/scoring/anchors-사용안함.md` | 시나리오별 기준 요건과 채널 감사 |
 | `docs/scoring/summary.md` | 항목 단위 점수표 |
 | `docs/measurement.md` | 토큰·비용 측정 기준 |
 | `docs/round-2/README.md` | 2회차 변경 대기열과 인용 규율 |

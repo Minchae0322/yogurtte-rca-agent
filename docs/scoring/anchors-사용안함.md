@@ -1,5 +1,10 @@
 # 채점 앵커 — 장애별 항목 요건
 
+> **보존 문서 — 채점에 쓰지 않는다 (2026-08-03 자 단일화).** 이 앵커와 v1 루브릭
+> (근본 40 · 근거 30 · 오귀 20 · 조치 10)은 회차 1이 채점된 자라 §8.2에 따라 보존할 뿐이다.
+> **모든 회차의 채점 자는 하나다:
+> [anchors-v2](../../../toy-content/docs/chaos/anchors-v2.md) + [rubric-v3](rubric-v3.md).**
+
 문항마다 **무엇을 만점으로 볼 것인가**를 한 장에 모았다. 원본(SoT)은 toy-content
 `docs/chaos/scenarios/<ID>/answer.md`이고, 이 문서는 **읽기 편한 사본 + 채널 감사**다.
 점수 기록은 [summary.md](summary.md), 판정 근거 원문은 [README.md](README.md).

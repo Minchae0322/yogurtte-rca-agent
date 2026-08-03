@@ -176,7 +176,8 @@ public class RcaService {
                 systemPrompt == null ? 0 : systemPrompt.length(),
                 context.length(),
                 contextTokens,
-                overheadTokens);
+                overheadTokens,
+                collectProperties.metricSummary());
     }
 
     private static int utf8Bytes(String s) {

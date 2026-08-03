@@ -55,6 +55,10 @@ public record SurveyProperties(
         String clusterGap,
         String incidentPadExact,
         String incidentPadBucket,
+        // B-30: 0이 이상 신호인 지표명. 여기 없는 지표는 0 구간을 신호로 만들지 않는다.
+        // 지표마다 0의 의미가 반대다 — up·mongodb_up은 0이 곧 다운이지만
+        // kafka_consumergroup_lag·websocket_active_users는 0이 정상(안 밀림/접속 없음)이다.
+        List<String> zeroIsAbnormal,
         // Boolean이다 — 설정이 빠졌을 때 primitive면 조용히 false(대조군 B)가 되어,
         // 어느 팔로 돌았는지 모른 채 회차가 기록된다.
         Boolean includeRaw) {
@@ -76,6 +80,16 @@ public record SurveyProperties(
         clusterGap = blankTo(clusterGap, "60s");
         incidentPadExact = blankTo(incidentPadExact, "2m");
         incidentPadBucket = blankTo(incidentPadBucket, "5m");
+        // 빈 목록이면 0 구간 신호가 전부 사라진다 — 설정 누락과 "일부러 껐다"를 구별할 수 없으므로
+        // null(미설정)일 때만 기본값을 채운다. 가용성 게이지 셋만 0이 이상이다.
+        zeroIsAbnormal = zeroIsAbnormal == null
+                ? List.of("up", "mongodb_up", "kafka_brokers")
+                : List.copyOf(zeroIsAbnormal);
+    }
+
+    /** {@code SignalExtractor}에 넘길 형태. 조회가 시리즈마다 일어나므로 Set으로 준다. */
+    public java.util.Set<String> zeroIsAbnormalSet() {
+        return java.util.Set.copyOf(zeroIsAbnormal);
     }
 
     /** 임계값을 채운 실제 지연 TraceQL. */

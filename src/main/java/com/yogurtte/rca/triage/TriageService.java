@@ -20,6 +20,7 @@ import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.service.RcaService;
 import com.yogurtte.rca.triage.incident.Incident;
 import com.yogurtte.rca.triage.incident.Signal;
+import com.yogurtte.rca.triage.incident.SignalExtractor;
 import com.yogurtte.rca.triage.plan.SurveyContextAssembler;
 import com.yogurtte.rca.triage.plan.TriagePlan;
 import com.yogurtte.rca.triage.survey.SurveyResult;
@@ -71,7 +72,8 @@ public class TriageService {
 
             // 코드가 신호를 뽑아 후보를 만든다. 모델은 "어느 후보인가"만 고르고 창은 계산된다.
             Duration lookback = SurveyProperties.parse(surveyProperties.step(), Duration.ofMinutes(5));
-            List<Signal> signals = Signal.extract(survey, lookback);
+            List<Signal> signals = SignalExtractor.extract(survey, lookback,
+                    surveyProperties.zeroIsAbnormalSet());
             List<Incident> incidents = Incident.cluster(signals, surveyProperties.clusterGapDuration());
             log.info("signals={} incidents={} {}", signals.size(), incidents.size(),
                     Incident.idsOf(incidents));

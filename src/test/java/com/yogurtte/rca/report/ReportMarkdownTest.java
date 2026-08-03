@@ -61,7 +61,7 @@ class ReportMarkdownTest {
                 c.traceTrimmed(), c.candidateTraces(), c.candidateTraceBytes(),
                 c.errorWarnLogBytes(), c.traceIdLogBytes(), c.metricsBytes(),
                 c.metricsCollected(), c.metricsMissing(), c.promptChars(), c.contextChars(),
-                c.contextTokens(), -1);
+                c.contextTokens(), -1, c.metricSummarized());
 
         String markdown = ReportMarkdown.render(new RcaReport(
                 base.traceId(), base.question(), base.mode(), base.startedAt(), base.llmProvider(),
@@ -118,7 +118,7 @@ class ReportMarkdownTest {
         RcaReport.Coverage coverage = new RcaReport.Coverage(
                 Instant.parse("2026-07-27T17:29:00Z"), Instant.parse("2026-07-27T17:40:00Z"), 660,
                 24_619, 30, false, 2, 28_288, 3_912, 3_913, 8_100,
-                List.of("mongodb_up"), List.of("up"), 1_200, 40_981, -1, 21_247);
+                List.of("mongodb_up"), List.of("up"), 1_200, 40_981, -1, 21_247, true);
 
         // 검증(2026-07-31)에서 실측한 형태 그대로의 엣지 — receive는 토픽 → 서비스 방향이다.
         ServiceGraph graph = new ServiceGraph(List.of(new ServiceGraph.Edge(

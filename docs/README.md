@@ -88,7 +88,7 @@ traceId 없이는 쿼리 자체를 만들 수 없다.
    면제하면 도구를 고쳤을 때 개선폭이 측정되지 않는다.
 
 → 주입 하네스 [toy-content `docs/chaos/`](../../toy-content/docs/chaos/README.md) (문항·정답지·실행기) · 루브릭 [rubric-v3.md](scoring/rubric-v3.md) ·
-문항별 요건 [anchors.md](scoring/anchors.md)(회차 1) · [anchors-v2.md](../../toy-content/docs/chaos/anchors-v2.md)(회차 2~) ·
+문항별 요건 [anchors-사용안함.md](scoring/anchors-사용안함.md)(회차 1) · [anchors-v2.md](../../toy-content/docs/chaos/anchors-v2.md)(회차 2~) ·
 회차별 판정 근거 [scoring/README.md](scoring/README.md)
 
 ### 2.2 비용 축 — `contextTokens`
@@ -230,8 +230,8 @@ AU-2는 트레이스 완전 무신호에서 메트릭 단절만으로 정답 도
 | **장애 주입 하네스** (문항·정답지·실행기) | toy-content [`docs/chaos/`](../../toy-content/docs/chaos/README.md) — 복붙 실행 [COMMANDS.md](../../toy-content/docs/chaos/COMMANDS.md) · 절차 [RUNBOOK.md](../../toy-content/docs/chaos/RUNBOOK.md) · 결과 종합 [RESULTS.md](../../toy-content/docs/chaos/RESULTS.md) |
 | 회차별 채점 판정 근거 원문 | [scoring/README.md](scoring/README.md) — **조사를 돌렸으면 여기에 회차를 추가한다** |
 | 항목 단위 점수표 | [scoring/summary.md](scoring/summary.md) |
-| 문항별 앵커 요건 + 채널 감사 | [scoring/anchors.md](scoring/anchors.md)(회차 1) · [toy-content `chaos/anchors-v2.md`](../../toy-content/docs/chaos/anchors-v2.md)(회차 2~, 자연어 입력) |
-| 채점 루브릭 v3 | [scoring/rubric-v3.md](scoring/rubric-v3.md) (v2 소항목안은 [보류](scoring/rubric-v2.md)) |
+| 문항별 앵커 요건 + 채널 감사 | [scoring/anchors-사용안함.md](scoring/anchors-사용안함.md)(회차 1) · [toy-content `chaos/anchors-v2.md`](../../toy-content/docs/chaos/anchors-v2.md)(회차 2~, 자연어 입력) |
+| 채점 루브릭 v3 | [scoring/rubric-v3.md](scoring/rubric-v3.md) (v2 소항목안은 [보류](scoring/rubric-v2-사용안함.md)) |
 | 토큰·비용 측정 기준 | [measurement.md](measurement.md) |
 | 회차 1 토큰 실측 | [round-1-input-tokens.md](round-1-input-tokens.md) |
 

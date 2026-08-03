@@ -73,12 +73,26 @@ class LokiClientTest {
     @Test
     void buildsTheTwoConfiguredLogQueries() {
         CollectProperties properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                1000, "15s", java.util.List.of(), 102400, 30, 3);
+                1000, "15s", java.util.List.of(), 102400, 30, 3, true);
 
         assertThat(properties.errorWarnQuery())
                 .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} "
                         + "|~ `ERROR|WARN|Exception|Caused by|\\.java:[0-9]+\\)`");
+        // DEBUG 제외 — 계측 덤프가 이 채널의 92%를 먹었다(AP-1 회차 3 실측). INFO는 남긴다.
         assertThat(properties.traceIdQuery("abc123"))
-                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |~ \"abc123\"");
+                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} "
+                        + "|~ \"abc123\" != \"DEBUG\"");
+    }
+
+    @Test
+    void traceId_채널은_INFO를_남기고_DEBUG만_뺀다() {
+        CollectProperties properties = new CollectProperties(120, "content-service", "service_name",
+                1000, "15s", java.util.List.of(), 102400, 30, 3, true);
+
+        String query = properties.traceIdQuery(java.util.List.of("id1", "id2"), java.util.List.of());
+
+        assertThat(query).contains("|~ \"id1|id2\"");     // 지목된 traceId 전부가 대상
+        assertThat(query).contains("!= \"DEBUG\"");        // 계측 덤프만 제외
+        assertThat(query).doesNotContain("INFO");          // 도착·성공 신호는 살아 있어야 한다 (B-16)
     }
 }

@@ -29,7 +29,8 @@ public record CollectProperties(
         List<String> metricQueries,
         int maxTraceBytes,
         int topSpans,
-        int maxTraces) {
+        int maxTraces,
+        boolean metricSummary) {
 
     /**
      * ERROR/WARN 로그. {@code {service_name=~"..."} |~ "ERROR|WARN"}
@@ -83,7 +84,25 @@ public record CollectProperties(
         return "{%s=~\"%s\"} |~ `%s`".formatted(appLabel, appsPattern(services), ERROR_LINE_PATTERN);
     }
 
-    /** 해당 traceId가 찍힌 모든 줄. {@code {service_name=~"..."} |= "<traceId>"} */
+    /**
+     * 계측 프레임워크가 남기는 디버그 덤프를 이 채널에서 제외한다.
+     *
+     * <p><b>레벨을 거르는 것이 목적이 아니다</b> — INFO는 반드시 남겨야 한다(도착·성공·복구
+     * 신호가 본질적으로 INFO다 · B-16). 빼는 것은 DEBUG 하나이고, 이유는 그 줄들이
+     * <b>장애 정보가 아니라 옵저베이션 내부 상태 덤프</b>이기 때문이다.
+     *
+     * <p>실측(AP-1 회차 3 재실행): traceId 채널 79줄 중 <b>chat-service DEBUG 45줄이
+     * 107,932B로 전체의 92%</b>였다. 한 줄 평균 2,398B이고 내용은
+     * {@code context=name='jdbc.connection' … map=[class io.micrometer.core.instrument…]} 다.
+     * 분석 리포트가 이 45줄에서 인용한 것은 <b>하나도 없었다.</b>
+     *
+     * <p>줄 어디에든 {@code DEBUG}가 있으면 빠지는 과대 매칭이 있다. 레벨 위치를 정규식으로
+     * 고정하는 쪽이 정확하지만 ANSI 이스케이프 때문에 그 방식은 이미 한 번 깨졌다
+     * ({@link #ERROR_LINE_PATTERN} 주석). 잃는 쪽이 디버그 덤프뿐이라 과대 매칭을 감수한다.
+     */
+    static final String DEBUG_EXCLUDE = "DEBUG";
+
+    /** 해당 traceId가 찍힌 모든 줄(DEBUG 제외). {@code {service_name=~"..."} |~ "<ids>" != "DEBUG"} */
     public String traceIdQuery(String traceId) {
         return traceIdQuery(traceId, List.of());
     }
@@ -95,7 +114,8 @@ public record CollectProperties(
     /** 여러 traceId를 한 번에 — 대표를 뽑지 않으므로 지목된 것 전부가 대상이다. */
     public String traceIdQuery(List<String> traceIds, List<String> services) {
         String ids = String.join("|", traceIds);
-        return "{%s=~\"%s\"} |~ \"%s\"".formatted(appLabel, appsPattern(services), ids);
+        return "{%s=~\"%s\"} |~ \"%s\" != \"%s\""
+                .formatted(appLabel, appsPattern(services), ids, DEBUG_EXCLUDE);
     }
 
     /**

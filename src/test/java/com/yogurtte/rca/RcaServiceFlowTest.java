@@ -77,7 +77,7 @@ class RcaServiceFlowTest {
         RawResponseStore rawStore = new GrafanaConfig().rawResponseStore(reportProperties);
 
         CollectProperties collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                1000, "15s", List.of("hikaricp_connections_active"), 102400, 30, 3);
+                1000, "15s", List.of("hikaricp_connections_active"), 102400, 30, 3, true);
 
         Collector collector = new Collector(
                 new GrafanaConfig().tempoClient(grafana, rawStore),
@@ -189,7 +189,7 @@ class RcaServiceFlowTest {
                 """.formatted(spans);
 
         CollectProperties properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                1000, "15s", List.of(), 100, 30, 3);  // 100 바이트 한도로 트리밍을 강제한다
+                1000, "15s", List.of(), 100, 30, 3, true);  // 100 바이트 한도로 트리밍을 강제한다
         com.yogurtte.rca.collector.CollectedData data = new com.yogurtte.rca.collector.CollectedData(
                 "trace-2", null, null, null, null, java.util.Map.of("trace-2", bigTrace), List.of(), null);
 

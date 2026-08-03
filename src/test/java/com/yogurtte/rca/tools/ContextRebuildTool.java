@@ -54,6 +54,12 @@ class ContextRebuildTool {
     /** 조사 당시 설정. application.yml 기본값과 같아야 재구성이 일치한다. */
     private static final int MAX_TRACE_BYTES = 102_400;
     private static final int TOP_SPANS = 30;
+    /**
+     * 과거 회차를 복원할 때는 <b>false</b>여야 한다 — 그 회차는 메트릭 원본을 그대로 실었고,
+     * 요약(B-25)으로 재조립하면 {@code contextChars} 검증이 깨진다. B-25 적용 후 회차를
+     * 복원할 때만 {@code true}로 바꾼다.
+     */
+    private static final boolean METRIC_SUMMARY = Boolean.getBoolean("rca.tools.metric-summary");
 
     @Test
     void rebuildContextsFromRawResponses() throws IOException {
@@ -65,7 +71,7 @@ class ContextRebuildTool {
         // maxTraces=1: 과거 조사엔 후보 수집(B-9)이 없었다 — 재구성이 그때 입력과 같아야 한다.
         ContextAssembler assembler = new ContextAssembler(new CollectProperties(
                 120, "content-service|auth-service|chat-service", "service_name", 1000, "15s",
-                List.of(), MAX_TRACE_BYTES, TOP_SPANS, 1),
+                List.of(), MAX_TRACE_BYTES, TOP_SPANS, 1, METRIC_SUMMARY),
                 new com.yogurtte.rca.analyzer.ServiceGraphExtractor());
 
         ArrayList<Path> reports = new ArrayList<>();

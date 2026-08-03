@@ -137,10 +137,10 @@ class TriageFlowTest {
         MimirClient mimirClient = new GrafanaConfig().mimirClient(grafana, rawStore);
 
         CollectProperties collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service",
-                "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30, 0);
+                "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30, 0, true);
         SurveyProperties surveyProperties = new SurveyProperties("Asia/Seoul", 24, 48, "5m",
                 "{ status = error }", "{ duration > %s && status != error }", "3s",
-                20, null, List.of("up", "mongodb_up"), "60s", "2m", "5m", true);
+                20, null, List.of("up", "mongodb_up"), "60s", "2m", "5m", null, true);
         // max-traces 0 = 상한 없음. 운영 기본값과 같은 조건으로 흐름을 검증한다.
 
         llmClient = new ScriptedLlmClient();

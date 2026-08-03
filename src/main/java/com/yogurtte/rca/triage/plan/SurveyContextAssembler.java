@@ -3,7 +3,8 @@ package com.yogurtte.rca.triage.plan;
 import org.springframework.stereotype.Component;
 import com.yogurtte.rca.report.Evidence;
 import com.yogurtte.rca.triage.incident.Incident;
-import com.yogurtte.rca.triage.incident.Signal;
+import com.yogurtte.rca.triage.incident.Channel;
+import com.yogurtte.rca.triage.incident.SignalExtractor;
 import com.yogurtte.rca.triage.survey.SurveyResult;
 
 /**
@@ -123,12 +124,12 @@ public class SurveyContextAssembler {
                 .filter(hit -> Evidence.TraceHit.CHANNEL_SLOW.equals(hit.channel())).count();
         sb.append("- Tempo 에러 검색: ").append(errorHits).append("건\n");
         sb.append("- Tempo 지연 검색: ").append(slowHits).append("건\n");
-        sb.append("- Loki ERROR/WARN: 신호 ").append(countSignals(incidents, Signal.Channel.LOKI)).append("건\n");
+        sb.append("- Loki ERROR/WARN: 신호 ").append(countSignals(incidents, Channel.LOKI)).append("건\n");
 
         survey.metricsJson().keySet().forEach(query -> {
-            String name = Signal.metricNameOf(query);
+            String name = SignalExtractor.metricNameOf(query);
             long signals = incidents.stream()
-                    .filter(incident -> incident.channel() == Signal.Channel.MIMIR)
+                    .filter(incident -> incident.channel() == Channel.MIMIR)
                     .filter(incident -> name.equals(incident.signature()))
                     .mapToLong(incident -> incident.signals().size())
                     .sum();
@@ -137,7 +138,7 @@ public class SurveyContextAssembler {
         sb.append('\n');
     }
 
-    private static long countSignals(java.util.List<Incident> incidents, Signal.Channel channel) {
+    private static long countSignals(java.util.List<Incident> incidents, Channel channel) {
         return incidents.stream()
                 .filter(incident -> incident.channel() == channel)
                 .mapToLong(incident -> incident.signals().size())

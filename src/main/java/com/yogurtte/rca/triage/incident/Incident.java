@@ -34,7 +34,7 @@ public record Incident(
         String id,
         String resource,
         String signature,
-        Signal.Channel channel,
+        Channel channel,
         List<Signal> signals,
         List<String> traceIds,
         List<String> related) {
@@ -64,10 +64,10 @@ public record Incident(
     }
 
     /** 가장 <b>거친</b> 신호를 기준으로 한다. 하나라도 흐릿하면 창의 여유도 그만큼 필요하다. */
-    public Signal.Precision precision() {
-        return signals.stream().anyMatch(s -> s.precision() == Signal.Precision.BUCKET)
-                ? Signal.Precision.BUCKET
-                : Signal.Precision.EXACT;
+    public Precision precision() {
+        return signals.stream().anyMatch(s -> s.precision() == Precision.BUCKET)
+                ? Precision.BUCKET
+                : Precision.EXACT;
     }
 
     /**
@@ -78,7 +78,7 @@ public record Incident(
      * 덧대는 방식(추측을 추측으로 보정)은 이 계산이 대신한다.
      */
     public TimeWindow window(Duration exactPad, Duration bucketPad, TimeWindow sweep) {
-        Duration pad = precision() == Signal.Precision.EXACT ? exactPad : bucketPad;
+        Duration pad = precision() == Precision.EXACT ? exactPad : bucketPad;
         Instant start = firstAt().minus(pad);
         Instant end = lastAt().plus(pad);
         if (sweep == null) {
@@ -111,7 +111,7 @@ public record Incident(
         sb.append('\n');
         sb.append("- 구간: ").append(firstAt()).append(" ~ ").append(lastAt())
                 .append("  (").append(channel).append(" · ")
-                .append(precision() == Signal.Precision.EXACT ? "시각 정확" : "집계 해상도만큼 흐림")
+                .append(precision() == Precision.EXACT ? "시각 정확" : "집계 해상도만큼 흐림")
                 .append(")\n");
         signals.forEach(s -> sb.append("- ").append(s.what()).append('\n'));
         if (!traceIds.isEmpty()) {
@@ -256,7 +256,7 @@ public record Incident(
     /** 신호 묶음이 딸고 있는 traceId들. 빈 값·비-Tempo 채널은 여기서 걸러진다. */
     private static Stream<String> tempoRefs(List<Signal> signals) {
         return signals.stream()
-                .filter(s -> s.channel() == Signal.Channel.TEMPO)
+                .filter(s -> s.channel() == Channel.TEMPO)
                 .map(Signal::ref)
                 .filter(ref -> ref != null && !ref.isBlank());
     }

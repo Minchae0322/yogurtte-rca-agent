@@ -25,7 +25,7 @@ class TimeExpressionParserTest {
 
     private final TimeExpressionParser parser = new TriageConfig().timeExpressionParser(
             new SurveyProperties("Asia/Seoul", 24, 48, "5m", null, null, null, 20, null, List.of(),
-                    null, null, null, true));
+                    null, null, null, null, true));
 
     @Test
     void 어젯밤은_어제_18시부터_오늘_6시까지다() {

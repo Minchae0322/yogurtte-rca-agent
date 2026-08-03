@@ -316,7 +316,7 @@ docker compose up --build  # 컨테이너엔 claude CLI가 없음 → RCA_LLM_PR
 | **[📊 평가 보고서](docs/scoring/report.md)** | 장애 12종의 상황·함정·채점 요건·결과를 한 문서로 |
 | [📌 현황판 (STATUS)](docs/STATUS.md) | 지금 어디까지 왔나, 다음 할 일, 활동 로그 |
 | [아키텍처 상세](docs/architecture.md) | 소스별 실제 쿼리 · 컨텍스트 구성 · 리포트 구조 · 알려진 공백 |
-| [채점 대장](docs/scoring/README.md) | 회차별 점수와 판정 근거 · [항목별 점수표](docs/scoring/summary.md) · [앵커 요건표](docs/scoring/anchors.md) |
+| [채점 대장](docs/scoring/README.md) | 회차별 점수와 판정 근거 · [항목별 점수표](docs/scoring/summary.md) · [앵커 요건표](docs/scoring/anchors-사용안함.md) |
 | [루브릭 v3](docs/scoring/rubric-v3.md) | 채점 항목을 어떻게 정했나 — 탐색부터 원인 분석까지 |
 | [측정 기준](docs/measurement.md) | 어떤 숫자를 개선 근거로 쓰나 (토큰·비용·통제 변수) |
 | [전략 로드맵](docs/strategy.md) | Phase별 계획과 각 단계의 진입 게이트 |

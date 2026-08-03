@@ -83,6 +83,13 @@ public class ContextAssembler {
         sb.append("# 메트릭 (Mimir)\n");
         if (data.metricsJson().isEmpty()) {
             sb.append("(수집된 메트릭 없음)\n");
+        } else if (properties.metricSummary()) {
+            // B-25: 전 데이터 포인트 대신 요약. 시리즈마다 값 범위·0 구간·결측·균등 표본이 남는다.
+            sb.append("시계열을 요약해 싣는다 — 값 범위와 0이던 구간·결측 구간, 그리고 곡선 모양을 "
+                    + "보이는 균등 표본이다. 전 구간 상수인 시리즈는 그 사실만 적었다.\n\n");
+            data.metricsJson().forEach((query, body) -> sb
+                    .append("## ").append(query).append('\n')
+                    .append(EvidenceExtractor.metricSummary(query, body)).append('\n'));
         } else {
             data.metricsJson().forEach((query, body) -> sb
                     .append("## ").append(query).append('\n')

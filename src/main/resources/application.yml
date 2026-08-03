@@ -77,6 +77,11 @@ rca:
       - 'sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))'
     # 뺀 것: kafka_consumer_fetch_manager_records_lag — 앱 메트릭이라 컨슈머가 죽으면 함께
     # 사라진다. 5회 전부 "no series"였고, 정작 필요한 CH-2에서 구조적으로 무용이다 (AE-04).
+    # B-25: 메트릭을 전 데이터 포인트가 아니라 요약으로 싣는다 (값 범위·0 구간·결측·균등 표본).
+    # false면 원본 JSON 그대로 — 두 팔을 같은 저장 원본으로 대조할 수 있다.
+    # 근거: AP-1 회차 3에서 메트릭이 컨텍스트의 32%(89,649B)였고, 판단에 쓰인 것은 값 범위와
+    # 0/결측 구간뿐이었다. ⚠ 모델이 보는 텍스트가 바뀌므로 이전 회차와 점수 비교가 성립하지 않는다.
+    metric-summary: ${RCA_METRIC_SUMMARY:true}
     max-trace-bytes: ${RCA_MAX_TRACE_BYTES:102400}
     top-spans: ${RCA_TOP_SPANS:30}
     # B-9: 딥 페치할 창 안 트레이스 총 개수. 탐색을 거친 조사에서만 동작한다.
@@ -143,6 +148,16 @@ rca:
     # ⚠ false에서 나빠져도 원인이 갈리지 않는다 — 원본 부재 탓인지, 후보 지문이 부실한 탓인지
     # (Mimir 시리즈 라벨·신뢰 불가 트레이스 행이 후보에서 빠진다). 해석에 이 한계를 명시할 것.
     include-raw: ${RCA_SURVEY_INCLUDE_RAW:true}
+    # B-30: 0이 "이상"인 지표만 여기 둔다. 목록에 없는 지표는 0 구간을 후보 신호로 만들지 않는다.
+    # 지표마다 0의 뜻이 반대다 — up·mongodb_up·kafka_brokers는 0이 곧 다운이지만,
+    # kafka_consumergroup_lag는 0이 "안 밀림"(정상)이고 websocket_active_users는 "접속 없음"이다.
+    # 근거(CH-1 회차 3 실측): lag이 전 구간 0인 정상 파티션 36개가 각각 60분짜리 "0이었다" 신호가
+    # 됐고, 군집 키가 지표명이라 41개가 후보 하나로 뭉쳐 조사 창이 스윕 창 전체로 벌어졌다
+    # → 컨텍스트 363,268자·비용 $2.78·지목 20건, 정답 트레이스가 수집 상한에 밀림.
+    zero-is-abnormal:
+      - "up"
+      - "mongodb_up"
+      - "kafka_brokers"
 
   # 시스템 프롬프트: 이 경로에 파일이 있으면 그것을, 없으면 classpath:prompts/system-prompt.md를 쓴다.
   # 외부 파일은 조사할 때마다 다시 읽으므로 재시작 없이 수정할 수 있다.

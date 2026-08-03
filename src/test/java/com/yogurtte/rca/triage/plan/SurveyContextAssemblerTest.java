@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import com.yogurtte.rca.collector.TimeWindow;
 import com.yogurtte.rca.triage.incident.Incident;
+import com.yogurtte.rca.triage.incident.Channel;
+import com.yogurtte.rca.triage.incident.Precision;
 import com.yogurtte.rca.triage.incident.Signal;
 import com.yogurtte.rca.triage.survey.SurveyResult;
 
@@ -35,7 +37,7 @@ class SurveyContextAssemblerTest {
 
     private List<Incident> incidents() {
         Instant at = Instant.parse("2026-07-29T08:51:47Z");
-        Signal signal = new Signal(at, at.plusMillis(119), Signal.Channel.TEMPO, Signal.Precision.EXACT,
+        Signal signal = new Signal(at, at.plusMillis(119), Channel.TEMPO, Precision.EXACT,
                 "content-service", "http post /feeds", "content-service http post /feeds 119ms", "abc123");
         return Incident.cluster(List.of(signal), Duration.ofSeconds(60));
     }

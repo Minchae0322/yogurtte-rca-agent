@@ -131,6 +131,9 @@ public record RcaReport(
             int promptChars,
             int contextChars,
             long contextTokens,
-            long overheadTokens) {
+            long overheadTokens,
+            /* 메트릭을 요약으로 실었는지(B-25). 모델이 보는 텍스트가 달라지므로 이게 없으면
+               두 회차의 컨텍스트 크기 차이가 도구 때문인지 팔 때문인지 갈리지 않는다. */
+            boolean metricSummarized) {
     }
 }

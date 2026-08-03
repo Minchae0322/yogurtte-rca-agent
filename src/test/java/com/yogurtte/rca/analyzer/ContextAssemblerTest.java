@@ -18,7 +18,7 @@ class ContextAssemblerTest {
 
     private final ContextAssembler assembler = new ContextAssembler(
             new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                    200, "5m", List.of(), 60_000, 20, 3),
+                    200, "5m", List.of(), 60_000, 20, 3, true),
             new ServiceGraphExtractor());
 
     @Test

@@ -18,7 +18,7 @@ class CollectPropertiesTest {
 
     private final CollectProperties properties = new CollectProperties(
             120, "content-service|auth-service|chat-service", "service_name",
-            1000, "15s", List.of("up"), 102400, 30, 3);
+            1000, "15s", List.of("up"), 102400, 30, 3, true);
 
     /** 실제로 잘렸던 로그 원문 모양. */
     private static final String HEADER =
