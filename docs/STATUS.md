@@ -506,6 +506,61 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-08-03 (관측 백엔드 교체 가능성 조사 — 인터페이스를 지금 넣지 않기로, [round-4](round-4/README.md) 등재)**:
+  Tempo·Loki가 나중에 서버 로그 디렉터리·**Scouter APM**으로 바뀔 수 있다는 요구.
+  **Scouter Web API 문서 대조 결과 축 하나가 비어 있다** — 트레이스는 `/v1/xlog-data`(gxid가
+  traceId 자리)와 `/v1/profile-data`로, 메트릭은 `/v1/counter`로 대응되지만 **애플리케이션 로그
+  엔드포인트가 없다**(XLog는 트랜잭션 기록이지 로그가 아니다). 따라서 `provider=scouter` 같은
+  **전역 스위치는 틀렸고 축별 스위치**여야 한다. 부수 확인: PromQL 식이 카운터 **이름**으로 바뀌고,
+  경로의 `{yyyymmdd}` 때문에 자정을 넘는 창은 호출을 쪼개야 하며, Scouter는 자바 에이전트라
+  도입 시 계측 교체(**변경군 A**)가 딸려 온다. 첫 판단은 "`LlmClient`처럼
+  인터페이스 + `@ConditionalOnProperty`" 였으나 **그 자리가 seam이 아니었다** — 현재 시그니처가
+  `queryRange(..., logql, ...)` 라 파일/JEUS 구현은 받은 쿼리를 실행할 수 없다. 응답 봉투를 푸는
+  코드도 client 패키지 **밖 6곳**에 있다. 결정적으로, 진짜 seam(의도 단위)으로 옮기면 실패 문구가
+  쿼리 원문을 품고 있어(`probe("Metric '" + query + "'")`) **모델이 보는 텍스트가 바뀐다** —
+  `SurveyResult.failures`는 컨텍스트에 그대로 실린다. 그래서 코드는 그대로 두고 설계만 대기열로.
+  **미착수·미측정**이며, 착수 순서는 ① 인터페이스만 추출(행동 불변) ② 쿼리 이관(문구 변경 —
+  여기서 회차를 끊는다) ③ 두 번째 구현체는 실제 요구가 생긴 뒤.
+
+- **2026-08-03 (거부 문구를 ErrorCode로 · 테스트 더블 공용화)**:
+  ① **문구를 코드 옆에 둔다.** `INVALID_TIME_WINDOW` 하나에 세 사유가 매달려 있고 문구는
+  던지는 자리에 손으로 적혀 있었다. 사유별로 코드를 갈랐고(`..._INCOMPLETE` · `..._FUTURE` ·
+  `..._REVERSED` — 셋 다 400이지만 호출자가 고쳐야 할 것이 다르다) 문구는 `%s` 템플릿으로
+  enum에 옮겼다. 던지는 쪽은 `RestApiException.of(code, from, to)` 로 **값만** 넘긴다.
+  기존 코드의 `"…" + "… from=%s, to=%s".formatted(from, to)` 는 `.formatted`가 뒤 리터럴에만
+  붙는 형태였는데 자리표시자 둘이 다 뒤에 있어 우연히 맞았다 — 템플릿화로 그 취약점이 사라졌다.
+  **함께 삭제**: 미사용이던 `ErrorResponse.of(ErrorCode)` · `RestApiException(ErrorCode)` —
+  템플릿이 생긴 순간 이 둘은 `%s`를 그대로 응답에 싣는 경로가 된다.
+  ② **테스트 더블을 `support/` 로.** `RecordingNotifier`가 `RcaServiceFlowTest`와
+  `TriageFlowTest`에 **글자 그대로 두 벌** 있었다. 두 진입점(traceId · 자연어)이 같은 분석
+  경로를 쓰는지 비교하는 것이 측정 목적이라 더블이 갈라지면 그 비교가 조용히 무너진다.
+  `triage/` 밑이 아니라 공용 패키지에 둔 이유가 이것이다. 죽은 필드 `seenPrompts` 삭제.
+  68개 테스트 통과(사용자가 추가한 `ApiExceptionHandlerTest` 3개 포함).
+
+- **2026-08-03 (`var` 전면 폐기 — 지역변수 542곳을 명시 타입으로, 레포 전체)**:
+  `src/main` 40파일 · `src/test` 15파일에 퍼져 있던 `var`를 전부 걷어냈다(잔존 0건).
+  전환 규칙은 "**추론된 타입 그대로**" — `List`로 넓히는 식의 개선을 섞지 않아야 diff가
+  `var` 전환만 담고 리뷰가 가능해진다. 향상된 for문(`for (var s : …)`)도 포함.
+  **검증 3단**: ① `clean test` 65개 통과 ② 제가 이번 주에 손대지 않은 파일들의
+  `git diff -U0` 삭제 라인 351줄이 전부 `var` 아니면 import — 즉 전환 외 변경 0
+  ③ 새로 명시된 원시 숫자 타입 41건을 우변과 대조(`asLong()`→`long`, `size()`→`int` 등).
+  반대 방향 오류(추론 `long`을 `int`로 적기)는 컴파일이 막으므로 남는 위험은 넓히기뿐인데
+  그건 의미가 같다. **부수 발견**: `analyzer/LokiLogDedup.java`의 구분자가 `\0` 이스케이프가
+  아니라 **raw NUL 바이트**로 박혀 있어 git이 그 파일을 바이너리로 취급한다(HEAD부터 그랬고
+  이번 변경으로 개수 불변 — 고치지 않고 남긴다).
+
+- **2026-08-03 (triage 패키지를 파이프라인 단계별 폴더로 + 누적 out-파라미터 제거 — 행동 불변)**:
+  한 폴더에 평평하게 쌓여 있던 11파일을 `TriageService`가 이미 javadoc으로 그리고 있던
+  단계 그대로 나눴다 — `window/`(창 파싱) · `survey/`(스윕) · `incident/`(후보 묶기) ·
+  `plan/`(선정), 오케스트레이션·배선·설정만 루트. 테스트도 같은 구조.
+  구조 정리와 함께 **결과 리스트를 인자로 넘겨 채우던 방식**(`fromTraces(survey, out)` 등
+  7개 메서드)을 값을 반환하는 스트림 조합으로 교체했고, 메트릭 판정 3종은 라벨을 떼어낸
+  `Finding`(구간+설명)만 내놓고 지표명·리소스·쿼리는 한 곳에서 붙이도록 바꿔 인자 5개가 2개가 됐다.
+  `mergeByTraceLink`의 `List<List<Signal>>`+`List<Set<String>>` **인덱스 맞춤 병렬 리스트**는
+  두 값을 함께 들고 다니는 `Cluster`로 대체(한쪽만 갱신하면 조용히 어긋나던 구조).
+  남긴 명령형 루프 4개는 전부 상태 누적형(런 길이·reach·try/catch 분기)이라 스트림이 더 길어진다.
+  전체 65개 테스트 통과(행동 불변). **변경군 아님** — 신호 산출값이 같아야 회차 비교가 성립한다.
+
 - **2026-08-02 (클래스 통합 — 레포 관례 "record + static 팩토리"로 수렴, 4파일 감소)**:
   잘게 쪼개졌던 탐색 클래스들을 도메인 타입으로 흡수 — `SignalExtractor`+`PromMatrix` →
   **`Signal.extract()`**(신호 record가 자기 태생을 가짐), `IncidentClusterer` →
@@ -541,7 +596,7 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
   `TimeExpressionParser`를 3층(정규화 → 후보 전량 추출 → 결합)으로 재작성. **상대성 표지
   필수화**로 `"14시 20분쯤"` → 최근 20분 오독이 소멸(→ 14:20 ±30분 APPROX), 후보 결합으로
   `"어제 새벽"` → 오늘 새벽 하루 밀림 해소, 시각 구간(`10시부터 11시까지`)·날짜+시각 결합 신설.
-  **입력 검증**: from 단독·from>to를 조용히 무시하던 것을 `InvalidTimeWindowException` →
+  **입력 검증**: from 단독·from>to를 조용히 무시하던 것을 `ErrorCode.INVALID_TIME_WINDOW` →
   **400 거부**로(재조사 5회가 타는 경로 — 결함 22가 채점자 호출에서 먼저 터질 자리였다),
   미래 to는 now로 잘림. `confidence`(EXACT/APPROX/FALLBACK)를 `Resolved`와 리포트
   `triage.timeConfidence`에 적재 — FALLBACK 회차 분리 집계 가능.

@@ -1,6 +1,7 @@
 package com.yogurtte.rca.analyzer;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -41,17 +42,17 @@ public class SystemPromptLoader {
     private final Map<String, String> defaults;
 
     public static SystemPromptLoader from(PromptProperties properties) {
-        var rcaPath = (properties.path() == null || properties.path().isBlank())
+        Path rcaPath = (properties.path() == null || properties.path().isBlank())
                 ? null
                 : Path.of(properties.path());
-        var externalPaths = new LinkedHashMap<String, Path>();
+        LinkedHashMap<String, Path> externalPaths = new LinkedHashMap<>();
         externalPaths.put("rca", rcaPath);
         externalPaths.put("review", rcaPath == null ? null : rcaPath.resolveSibling("review-prompt.md"));
         externalPaths.put("triage", rcaPath == null ? null : rcaPath.resolveSibling("triage-prompt.md"));
 
-        var defaults = new LinkedHashMap<String, String>();
+        LinkedHashMap<String, String> defaults = new LinkedHashMap<>();
         DEFAULT_RESOURCES.forEach((mode, resource) -> {
-            try (var in = SystemPromptLoader.class.getClassLoader().getResourceAsStream(resource)) {
+            try (InputStream in = SystemPromptLoader.class.getClassLoader().getResourceAsStream(resource)) {
                 if (in == null) {
                     throw new IllegalStateException("classpath:" + resource + " 리소스가 없다");
                 }
@@ -81,7 +82,7 @@ public class SystemPromptLoader {
         if (!defaults.containsKey(mode)) {
             throw new IllegalArgumentException("지원하지 않는 프롬프트 모드: " + mode);
         }
-        var externalPath = externalPaths.get(mode);
+        Path externalPath = externalPaths.get(mode);
         if (externalPath != null && Files.isRegularFile(externalPath)) {
             try {
                 return new Loaded(Files.readString(externalPath, StandardCharsets.UTF_8), externalPath.toString());

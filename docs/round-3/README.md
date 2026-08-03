@@ -1708,7 +1708,7 @@ rubric §3의 B는 이미 이 문제를 피해 갔는데(*"정상 구간 대조 
       고정한 뒤 재작성 **후에도** 통과함을 확인(기대값은 회차 2 리포트 8건의
       `상대 표현 '최근 N시간'` 실측). 오독 4종이 테스트로 재현·해소: `"14시 20분쯤"` →
       최근 20분(→ 14:20 ±30분 APPROX) · `"어제 새벽"` → 오늘 새벽(→ 어제 00~06) ·
-      날짜+시각 미결합 · from 단독 조용한 무시(→ **400 거부**, `InvalidTimeWindowException`).
+      날짜+시각 미결합 · from 단독 조용한 무시(→ **400 거부**, `ErrorCode.INVALID_TIME_WINDOW`).
       `confidence`(EXACT/APPROX/FALLBACK)는 리포트 `triage.timeConfidence`로 적재 —
       FALLBACK 회차 분리 집계 가능. 전체 테스트 64개 통과
 - [ ] ~~B-19 탐색 2단계~~ — **B-20에 흡수. 단독으로 넣지 않는다**

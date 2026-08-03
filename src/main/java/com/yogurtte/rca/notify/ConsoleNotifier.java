@@ -42,7 +42,7 @@ public class ConsoleNotifier implements Notifier {
                 report.analysis());
 
         try {
-            var saved = reportStore.save(report);
+            ReportStore.Saved saved = reportStore.save(report);
             log.info("report saved: {} (json: {})", saved.markdown(), saved.json());
         } catch (Exception e) {
             log.warn("failed to save report: {}", e.getMessage());
@@ -58,7 +58,7 @@ public class ConsoleNotifier implements Notifier {
         if (c == null) {
             return "  (없음)";
         }
-        var metrics = "%d 수집 / %,dB".formatted(c.metricsCollected().size(), c.metricsBytes());
+        String metrics = "%d 수집 / %,dB".formatted(c.metricsCollected().size(), c.metricsBytes());
         if (!c.metricsMissing().isEmpty()) {
             metrics += ", 누락 " + c.metricsMissing();
         }

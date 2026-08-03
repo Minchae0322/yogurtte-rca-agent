@@ -3,6 +3,7 @@ package com.yogurtte.rca.analyzer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -22,11 +23,11 @@ class ContextAssemblerTest {
 
     @Test
     void 두_로그_절에_겹친_레코드는_한_번만_실리고_표식이_남는다() {
-        var data = new CollectedData("6a68c522cb16f0a29c2c4bd0a86df613", null, null,
+        CollectedData data = new CollectedData("6a68c522cb16f0a29c2c4bd0a86df613", null, null,
                 fixture("/loki/varchar-errwarn.json"), fixture("/loki/varchar-traceid.json"),
                 Map.of(), Map.of(), List.of(), Map.of());
 
-        var context = assembler.assemble(data, "댓글이 안 써져요");
+        String context = assembler.assemble(data, "댓글이 안 써져요");
 
         // 겹친 ERROR 줄은 ERROR/WARN 절에 한 번만 — 접기 전에는 두 번 실렸다(결함 5).
         assertThat(countOf(context, "Data too long for column")).isEqualTo(1);
@@ -37,15 +38,15 @@ class ContextAssemblerTest {
     }
 
     private static int countOf(String text, String needle) {
-        var count = 0;
-        for (var i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + 1)) {
+        int count = 0;
+        for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + 1)) {
             count++;
         }
         return count;
     }
 
     private static String fixture(String path) {
-        try (var in = ContextAssemblerTest.class.getResourceAsStream(path)) {
+        try (InputStream in = ContextAssemblerTest.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

@@ -29,8 +29,8 @@ class LokiClientTest {
         server = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         server.start();
 
-        var endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "999");
-        var properties = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
+        GrafanaProperties.Endpoint endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "999");
+        GrafanaProperties properties = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
 
         client = new GrafanaConfig().lokiClient(properties, new GrafanaConfig().rawResponseStore(new ReportProperties(tempDir.toString())));
     }
@@ -45,10 +45,10 @@ class LokiClientTest {
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
                 .willReturn(aResponse().withStatus(200).withBody("{\"status\":\"success\"}")));
 
-        var start = Instant.parse("2026-07-20T10:00:00Z");
-        var end = Instant.parse("2026-07-20T10:05:00Z");
+        Instant start = Instant.parse("2026-07-20T10:00:00Z");
+        Instant end = Instant.parse("2026-07-20T10:05:00Z");
 
-        var body = client.queryRange("t1", "error-warn", "{app=~\"content|auth|chat\"}", start, end, 1000);
+        String body = client.queryRange("t1", "error-warn", "{app=~\"content|auth|chat\"}", start, end, 1000);
 
         assertThat(body).contains("success");
         server.verify(getRequestedFor(urlPathEqualTo("/loki/api/v1/query_range"))
@@ -72,7 +72,7 @@ class LokiClientTest {
      */
     @Test
     void buildsTheTwoConfiguredLogQueries() {
-        var properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
+        CollectProperties properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", java.util.List.of(), 102400, 30, 3);
 
         assertThat(properties.errorWarnQuery())

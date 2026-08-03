@@ -1,6 +1,7 @@
 package com.yogurtte.rca.analyzer;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,7 +29,7 @@ public class ContextAssembler {
     private final ServiceGraphExtractor graphExtractor;
 
     public String assemble(CollectedData data, String question) {
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
         sb.append("# 조사 대상\n");
         sb.append("traceId: ").append(data.traceId()).append('\n');
@@ -46,7 +47,7 @@ public class ContextAssembler {
             sb.append('\n');
         }
 
-        var graph = graphExtractor.extract(data);
+        ServiceGraph graph = graphExtractor.extract(data);
         if (!graph.isEmpty()) {
             sb.append("# 호출 그래프 (트레이스에서 추출)\n");
             sb.append("span의 부모-자식 관계와 속성에서 유도한 호출 관계다. 같은 엣지의 span들은 한 줄로 "
@@ -69,7 +70,7 @@ public class ContextAssembler {
         sb.append("# 로그 - ERROR/WARN (Loki)\n");
         sb.append(orMissing(data.errorWarnLogsJson())).append("\n\n");
 
-        var logs = LokiLogDedup.fold(data.errorWarnLogsJson(), data.traceIdLogsJson());
+        LokiLogDedup.Result logs = LokiLogDedup.fold(data.errorWarnLogsJson(), data.traceIdLogsJson());
         sb.append("# 로그 - traceId 일치 (Loki)\n");
         if (logs.folded() > 0) {
             sb.append("(").append(logs.folded())
@@ -94,11 +95,11 @@ public class ContextAssembler {
         if (traceJson == null || traceJson.isBlank()) {
             return "(수집 실패 - 트레이스 없음)";
         }
-        var bytes = traceJson.getBytes(StandardCharsets.UTF_8).length;
+        int bytes = traceJson.getBytes(StandardCharsets.UTF_8).length;
         if (bytes <= properties.maxTraceBytes()) {
             return traceJson;
         }
-        var spans = TraceSpans.parse(traceJson);
+        List<TraceSpans.Span> spans = TraceSpans.parse(traceJson);
         return "(원본 %d bytes로 %d bytes 한도를 초과하여 duration 상위 %d개 span만 포함. 전체 span 수: %d)\n%s"
                 .formatted(bytes, properties.maxTraceBytes(), properties.topSpans(), spans.size(),
                         TraceSpans.topByDuration(spans, properties.topSpans()));

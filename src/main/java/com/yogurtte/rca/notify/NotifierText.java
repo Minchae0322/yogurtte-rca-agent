@@ -9,8 +9,8 @@ final class NotifierText {
     }
 
     static String render(RcaReport report, int maxChars) {
-        var cost = report.costUsd() < 0 ? "" : " | cost $%.4f".formatted(report.costUsd());
-        var header = """
+        String cost = report.costUsd() < 0 ? "" : " | cost $%.4f".formatted(report.costUsd());
+        String header = """
                 *RCA* `%s` (%s)
                 q: %s
                 provider: %s (%s, turns %d) | tokens in/out: %d/%d%s | total: %dms
@@ -31,8 +31,8 @@ final class NotifierText {
                 scope(report.coverage()),
                 report.collectionFailures().isEmpty() ? "none" : String.join("; ", report.collectionFailures()));
 
-        var budget = maxChars - header.length();
-        var analysis = report.analysis() == null ? "" : report.analysis();
+        int budget = maxChars - header.length();
+        String analysis = report.analysis() == null ? "" : report.analysis();
         if (budget > 0 && analysis.length() > budget) {
             analysis = analysis.substring(0, budget - 20) + "\n... (truncated)";
         }

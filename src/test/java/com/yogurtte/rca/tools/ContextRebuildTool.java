@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -57,24 +58,24 @@ class ContextRebuildTool {
     @Test
     void rebuildContextsFromRawResponses() throws IOException {
         Files.createDirectories(OUT);
-        var systemPrompt = Files.readString(Path.of("prompts", "system-prompt.md"), StandardCharsets.UTF_8);
+        String systemPrompt = Files.readString(Path.of("prompts", "system-prompt.md"), StandardCharsets.UTF_8);
 
         // 셀렉터 값은 재구성에 영향이 없다(어셈블은 이미 받은 JSON을 붙일 뿐).
         // 조사 당시 설정과 같아야 하는 것은 maxTraceBytes·topSpans뿐이다.
         // maxTraces=1: 과거 조사엔 후보 수집(B-9)이 없었다 — 재구성이 그때 입력과 같아야 한다.
-        var assembler = new ContextAssembler(new CollectProperties(
+        ContextAssembler assembler = new ContextAssembler(new CollectProperties(
                 120, "content-service|auth-service|chat-service", "service_name", 1000, "15s",
                 List.of(), MAX_TRACE_BYTES, TOP_SPANS, 1),
                 new com.yogurtte.rca.analyzer.ServiceGraphExtractor());
 
-        var reports = new ArrayList<Path>();
-        try (var stream = Files.list(REPORTS)) {
+        ArrayList<Path> reports = new ArrayList<>();
+        try (Stream<Path> stream = Files.list(REPORTS)) {
             stream.filter(p -> p.getFileName().toString().endsWith(".json")).sorted().forEach(reports::add);
         }
         assertThat(reports).as("reports/*.json 이 있어야 한다").isNotEmpty();
 
-        var rawFiles = new ArrayList<Path>();
-        try (var stream = Files.list(RAW)) {
+        ArrayList<Path> rawFiles = new ArrayList<>();
+        try (Stream<Path> stream = Files.list(RAW)) {
             stream.filter(p -> p.getFileName().toString().endsWith(".json")).forEach(rawFiles::add);
         }
 
@@ -82,26 +83,26 @@ class ContextRebuildTool {
         System.out.printf("%-34s %10s %10s %8s  %s%n", "traceId", "재구성", "기록됨", "일치", "출력");
         System.out.println("-".repeat(96));
 
-        var matched = 0;
-        for (var reportPath : reports) {
-            var report = MAPPER.readTree(Files.readString(reportPath, StandardCharsets.UTF_8));
-            var traceId = report.path("traceId").asText();
-            var stamp = stampOf(reportPath.getFileName().toString(), traceId);
+        int matched = 0;
+        for (Path reportPath : reports) {
+            JsonNode report = MAPPER.readTree(Files.readString(reportPath, StandardCharsets.UTF_8));
+            String traceId = report.path("traceId").asText();
+            String stamp = stampOf(reportPath.getFileName().toString(), traceId);
 
-            var data = rebuild(traceId, stamp, report, rawFiles);
+            Optional<CollectedData> data = rebuild(traceId, stamp, report, rawFiles);
             if (data.isEmpty()) {
                 System.out.printf("%-34s %10s%n", traceId, "원본 없음");
                 continue;
             }
 
-            var context = assembler.assemble(data.get(), report.path("question").asText());
-            var recorded = report.path("coverage").path("contextChars").asInt(-1);
-            var ok = context.length() == recorded;
+            String context = assembler.assemble(data.get(), report.path("question").asText());
+            int recorded = report.path("coverage").path("contextChars").asInt(-1);
+            boolean ok = context.length() == recorded;
             if (ok) {
                 matched++;
             }
 
-            var out = OUT.resolve(traceId + ".txt");
+            Path out = OUT.resolve(traceId + ".txt");
             Files.writeString(out, systemPrompt + "\n\n---\n\n" + context, StandardCharsets.UTF_8);
 
             System.out.printf("%-34s %,10d %,10d %8s  %s%n",
@@ -126,22 +127,22 @@ class ContextRebuildTool {
     private static Optional<CollectedData> rebuild(
             String traceId, String reportStamp, JsonNode report, List<Path> rawFiles) throws IOException {
 
-        var trace = latestBefore(rawFiles, traceId, "tempo-trace", reportStamp);
+        Optional<String> trace = latestBefore(rawFiles, traceId, "tempo-trace", reportStamp);
         if (trace.isEmpty()) {
             return Optional.empty();
         }
 
-        var metrics = new LinkedHashMap<String, String>();
-        for (var query : report.path("coverage").path("metricsCollected")) {
-            var name = "mimir-" + query.asText().replaceAll("[^a-zA-Z0-9._-]", "_");
+        LinkedHashMap<String, String> metrics = new LinkedHashMap<>();
+        for (JsonNode query : report.path("coverage").path("metricsCollected")) {
+            String name = "mimir-" + query.asText().replaceAll("[^a-zA-Z0-9._-]", "_");
             latestBefore(rawFiles, traceId, name, reportStamp)
                     .ifPresent(body -> metrics.put(query.asText(), body));
         }
 
-        var failures = new ArrayList<String>();
+        ArrayList<String> failures = new ArrayList<>();
         report.path("collectionFailures").forEach(f -> failures.add(f.asText()));
 
-        var coverage = report.path("coverage");
+        JsonNode coverage = report.path("coverage");
         TimeWindow window = null;
         if (!coverage.path("windowStart").isMissingNode() && !coverage.path("windowStart").isNull()) {
             window = new TimeWindow(
@@ -164,8 +165,8 @@ class ContextRebuildTool {
     private static Optional<String> latestBefore(
             List<Path> rawFiles, String traceId, String artifact, String reportStamp) throws IOException {
 
-        var suffix = "-" + artifact + ".json";
-        var best = rawFiles.stream()
+        String suffix = "-" + artifact + ".json";
+        Optional<String> best = rawFiles.stream()
                 .map(p -> p.getFileName().toString())
                 .filter(n -> n.startsWith(traceId + "-") && n.endsWith(suffix))
                 .filter(n -> n.substring(traceId.length() + 1, n.length() - suffix.length())

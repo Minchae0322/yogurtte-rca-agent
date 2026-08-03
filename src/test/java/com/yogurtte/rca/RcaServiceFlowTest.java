@@ -7,7 +7,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -22,62 +21,28 @@ import com.yogurtte.rca.analyzer.EvidenceExtractor;
 import com.yogurtte.rca.analyzer.PromptProperties;
 import com.yogurtte.rca.analyzer.ServiceGraphExtractor;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
-import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.GrafanaConfig;
+import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.LokiClient;
 import com.yogurtte.rca.client.MimirClient;
 import com.yogurtte.rca.client.RawResponseStore;
 import com.yogurtte.rca.client.TempoClient;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.Collector;
-import com.yogurtte.rca.llm.LlmClient;
 import com.yogurtte.rca.llm.LlmConfig;
 import com.yogurtte.rca.llm.LlmProperties;
-import com.yogurtte.rca.llm.LlmResult;
 import com.yogurtte.rca.llm.TokenCounter;
-import com.yogurtte.rca.notify.Notifier;
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportProperties;
 import com.yogurtte.rca.service.RcaService;
+import com.yogurtte.rca.support.FakeLlmClient;
+import com.yogurtte.rca.support.RecordingNotifier;
 
 /**
  * fake LlmClient로 v0 전체 흐름을 돈다: Tempo와 Mimir는 응답하고 Loki는 죽어 있다.
  * 그래도 실행은 중단 없이 완주하고, 그 사실을 결과에 남겨야 한다.
  */
 class RcaServiceFlowTest {
-
-    /** 건네받은 컨텍스트를 기록해서, 모델이 보게 될 내용을 테스트가 검증할 수 있게 한다. */
-    static class FakeLlmClient implements LlmClient {
-        String seenSystemPrompt;
-        String seenContext;
-
-        @Override
-        public LlmResult analyze(String systemPrompt, String context) {
-            this.seenSystemPrompt = systemPrompt;
-            this.seenContext = context;
-            return new LlmResult("원인 후보 1: Kafka consumer lag", 1234, 567, 900, 300,
-                    "fake-model", 1, 42, 0.0123);
-        }
-
-        @Override
-        public String provider() {
-            return "fake";
-        }
-    }
-
-    static class RecordingNotifier implements Notifier {
-        final List<RcaReport> sent = new ArrayList<>();
-
-        @Override
-        public void send(RcaReport report) {
-            sent.add(report);
-        }
-
-        @Override
-        public String channel() {
-            return "recording";
-        }
-    }
 
     private WireMockServer server;
     private RcaService service;
@@ -89,7 +54,7 @@ class RcaServiceFlowTest {
         server = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         server.start();
 
-        var base = Instant.parse("2026-07-20T10:00:00Z");
+        Instant base = Instant.parse("2026-07-20T10:00:00Z");
         server.stubFor(get(urlPathEqualTo("/api/traces/trace-1"))
                 .willReturn(aResponse().withStatus(200).withBody("""
                         {"batches":[{"resource":{"attributes":[
@@ -106,15 +71,15 @@ class RcaServiceFlowTest {
                 .willReturn(aResponse().withStatus(200).withBody(
                         "{\"status\":\"success\",\"data\":{\"result\":[{\"values\":[[1,\"7\"]]}]}}")));
 
-        var endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "1");
-        var grafana = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
-        var reportProperties = new ReportProperties(tempDir.toString());
-        var rawStore = new GrafanaConfig().rawResponseStore(reportProperties);
+        GrafanaProperties.Endpoint endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "1");
+        GrafanaProperties grafana = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
+        ReportProperties reportProperties = new ReportProperties(tempDir.toString());
+        RawResponseStore rawStore = new GrafanaConfig().rawResponseStore(reportProperties);
 
-        var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
+        CollectProperties collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", List.of("hikaricp_connections_active"), 102400, 30, 3);
 
-        var collector = new Collector(
+        Collector collector = new Collector(
                 new GrafanaConfig().tempoClient(grafana, rawStore),
                 new GrafanaConfig().lokiClient(grafana, rawStore),
                 new GrafanaConfig().mimirClient(grafana, rawStore),
@@ -123,10 +88,10 @@ class RcaServiceFlowTest {
         llmClient = new FakeLlmClient();
         notifier = new RecordingNotifier();
         // 외부 프롬프트 경로 미설정 -> classpath 기본 프롬프트를 쓴다.
-        var promptLoader = SystemPromptLoader.from(new PromptProperties(null));
+        SystemPromptLoader promptLoader = SystemPromptLoader.from(new PromptProperties(null));
         // API 키 없는 LlmProperties -> TokenCounter가 비활성이라 contextTokens는 -1이 된다.
-        var tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
-        var graphExtractor = new ServiceGraphExtractor();
+        TokenCounter tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
+        ServiceGraphExtractor graphExtractor = new ServiceGraphExtractor();
         service = new RcaService(collector, new ContextAssembler(collectProperties, graphExtractor),
                 new EvidenceExtractor(), graphExtractor, promptLoader,
                 collectProperties, llmClient, tokenCounter, notifier);
@@ -139,7 +104,7 @@ class RcaServiceFlowTest {
 
     @Test
     void completesAndReportsTheFailedSourceWhenLokiIsDown() {
-        var report = service.investigate("trace-1", "왜 알림이 늦었어?");
+        RcaReport report = service.investigate("trace-1", "왜 알림이 늦었어?");
 
         assertThat(report.analysis()).isEqualTo("원인 후보 1: Kafka consumer lag");
         assertThat(report.llmProvider()).isEqualTo("fake");
@@ -166,7 +131,7 @@ class RcaServiceFlowTest {
         assertThat(report.costUsd()).isEqualTo(0.0123);
 
         // 수집 범위: 트레이스 1 span, 메트릭은 1개 수집(누락 0), 컨텍스트 규모가 기록된다.
-        var cov = report.coverage();
+        RcaReport.Coverage cov = report.coverage();
         assertThat(cov).isNotNull();
         assertThat(cov.traceSpans()).isEqualTo(1);
         assertThat(cov.traceBytes()).isGreaterThan(0);
@@ -184,11 +149,11 @@ class RcaServiceFlowTest {
 
     @Test
     void collectsCandidateTracesWithinAnExplicitWindow() {
-        var base = Instant.parse("2026-07-20T10:00:00Z");
+        Instant base = Instant.parse("2026-07-20T10:00:00Z");
         // B-9: 창 기준 무조건 검색이 후보를 찾는다 — 선정 트레이스(trace-1)는 후보에서 빠져야 한다.
         server.stubFor(get(urlPathEqualTo("/api/search")).willReturn(aResponse().withStatus(200).withBody(
                 "{\"traces\":[{\"traceID\":\"trace-2\"},{\"traceID\":\"trace-1\"},{\"traceID\":\"trace-3\"}]}")));
-        for (var id : new String[] {"trace-2", "trace-3"}) {
+        for (String id : new String[] {"trace-2", "trace-3"}) {
             server.stubFor(get(urlPathEqualTo("/api/traces/" + id))
                     .willReturn(aResponse().withStatus(200).withBody("""
                             {"batches":[{"resource":{"attributes":[
@@ -198,8 +163,8 @@ class RcaServiceFlowTest {
                             """.formatted(id, id, nanos(base), nanos(base.plusSeconds(1))))));
         }
 
-        var window = new com.yogurtte.rca.collector.TimeWindow(base.minusSeconds(60), base.plusSeconds(60));
-        var scope = new com.yogurtte.rca.collector.Scope(window, List.of(), "trace-1");
+        com.yogurtte.rca.collector.TimeWindow window = new com.yogurtte.rca.collector.TimeWindow(base.minusSeconds(60), base.plusSeconds(60));
+        com.yogurtte.rca.collector.Scope scope = new com.yogurtte.rca.collector.Scope(window, List.of(), "trace-1");
         service.investigate(scope, "q", "rca", null);
 
         // 선정 1건 + 후보 2건(maxTraces=3)이 전부 컨텍스트에 실린다.
@@ -210,25 +175,25 @@ class RcaServiceFlowTest {
 
     @Test
     void trimsAnOversizedTraceToTheLongestSpans() {
-        var base = Instant.parse("2026-07-20T10:00:00Z");
-        var spans = new StringBuilder();
+        Instant base = Instant.parse("2026-07-20T10:00:00Z");
+        StringBuilder spans = new StringBuilder();
         for (int i = 0; i < 400; i++) {
             spans.append(i == 0 ? "" : ",");
             spans.append("{\"name\":\"span-with-a-deliberately-long-name-%d\",\"startTimeUnixNano\":\"%d\",\"endTimeUnixNano\":\"%d\"}"
                     .formatted(i, nanos(base), nanos(base.plusSeconds(i + 1))));
         }
-        var bigTrace = """
+        String bigTrace = """
                 {"batches":[{"resource":{"attributes":[
                     {"key":"service.name","value":{"stringValue":"content"}}]},
                   "scopeSpans":[{"spans":[%s]}]}]}
                 """.formatted(spans);
 
-        var properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
+        CollectProperties properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", List.of(), 100, 30, 3);  // 100 바이트 한도로 트리밍을 강제한다
-        var data = new com.yogurtte.rca.collector.CollectedData(
+        com.yogurtte.rca.collector.CollectedData data = new com.yogurtte.rca.collector.CollectedData(
                 "trace-2", bigTrace, null, null, null, null, null, List.of(), null);
 
-        var context = new ContextAssembler(properties, new ServiceGraphExtractor()).assemble(data, "q");
+        String context = new ContextAssembler(properties, new ServiceGraphExtractor()).assemble(data, "q");
 
         assertThat(context).contains("duration 상위 30개 span만");
         // duration 상위 30개는 399번부터 370번까지; 그보다 짧은 span은 전부 버려진다.

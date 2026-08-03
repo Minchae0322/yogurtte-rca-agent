@@ -7,7 +7,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -21,24 +20,25 @@ import com.yogurtte.rca.analyzer.ContextAssembler;
 import com.yogurtte.rca.analyzer.EvidenceExtractor;
 import com.yogurtte.rca.analyzer.PromptProperties;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
-import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.GrafanaConfig;
+import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.LokiClient;
 import com.yogurtte.rca.client.MimirClient;
 import com.yogurtte.rca.client.RawResponseStore;
 import com.yogurtte.rca.client.TempoClient;
 import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.Collector;
-import com.yogurtte.rca.llm.LlmClient;
 import com.yogurtte.rca.llm.LlmConfig;
 import com.yogurtte.rca.llm.LlmProperties;
-import com.yogurtte.rca.llm.LlmResult;
 import com.yogurtte.rca.llm.TokenCounter;
-import com.yogurtte.rca.notify.Notifier;
 import com.yogurtte.rca.report.Evidence;
 import com.yogurtte.rca.report.RcaReport;
 import com.yogurtte.rca.report.ReportProperties;
 import com.yogurtte.rca.service.RcaService;
+import com.yogurtte.rca.support.RecordingNotifier;
+import com.yogurtte.rca.support.ScriptedLlmClient;
+import com.yogurtte.rca.triage.plan.SurveyContextAssembler;
+import com.yogurtte.rca.triage.survey.Surveyor;
 
 /**
  * 자연어 한 줄로 시작하는 전체 흐름: 창 파싱 → 스윕 → 선정 → 심층 수집 → 분석.
@@ -48,49 +48,6 @@ import com.yogurtte.rca.service.RcaService;
  * 트레이스가 아예 생성되지 않는 장애가 실재하므로, 여기서 끊기면 그 문항들은 원리적으로 못 푼다.
  */
 class TriageFlowTest {
-
-    /** 탐색과 분석 두 번 불린다. 시스템 프롬프트로 어느 단계인지 구별해 다른 답을 준다. */
-    static class ScriptedLlmClient implements LlmClient {
-        final List<String> seenPrompts = new ArrayList<>();
-        final List<String> seenContexts = new ArrayList<>();
-        String triageAnswer = "";
-
-        @Override
-        public LlmResult analyze(String systemPrompt, String context) {
-            seenPrompts.add(systemPrompt);
-            seenContexts.add(context);
-            var isTriage = systemPrompt.contains("집계 데이터");
-            var text = isTriage ? triageAnswer : "원인 후보 1: MongoDB 다운으로 알림 저장 실패";
-            return new LlmResult(text, 100, 50, -1, -1, "fake-model", 1, 10, 0.001);
-        }
-
-        @Override
-        public String provider() {
-            return "fake";
-        }
-
-        String triageContext() {
-            return seenContexts.get(0);
-        }
-
-        String analysisContext() {
-            return seenContexts.get(1);
-        }
-    }
-
-    static class RecordingNotifier implements Notifier {
-        final List<RcaReport> sent = new ArrayList<>();
-
-        @Override
-        public void send(RcaReport report) {
-            sent.add(report);
-        }
-
-        @Override
-        public String channel() {
-            return "recording";
-        }
-    }
 
     /** 2026-07-28T05:00Z = 14:00 KST → "어젯밤"은 07-27T09:00Z ~ 07-27T21:00Z. */
     private static final Instant NOW = Instant.parse("2026-07-28T05:00:00Z");
@@ -105,7 +62,7 @@ class TriageFlowTest {
         server = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         server.start();
 
-        var base = Instant.parse("2026-07-27T17:31:00Z");
+        Instant base = Instant.parse("2026-07-27T17:31:00Z");
 
         // 에러 채널과 지연 채널을 따로 던진다. 어느 채널로 도달했는지가 후보에 남아야 한다.
         // 에러 채널: 정상 행 하나 + 깨진 행 하나(durationMs 33일 · startTime 0) — Tempo 실측 사례.
@@ -171,27 +128,28 @@ class TriageFlowTest {
                             {"name":"notification-consume","startTimeUnixNano":"%d","endTimeUnixNano":"%d"}]}]}]}
                         """.formatted(nanos(base), nanos(base.plusSeconds(30))))));
 
-        var endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "1");
-        var grafana = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
-        var rawStore = new GrafanaConfig().rawResponseStore(new ReportProperties(tempDir.toString()));
+        GrafanaProperties.Endpoint endpoint = new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "1");
+        GrafanaProperties grafana = new GrafanaProperties(endpoint, endpoint, endpoint, "tok", 3000, 10000);
+        RawResponseStore rawStore = new GrafanaConfig().rawResponseStore(new ReportProperties(tempDir.toString()));
 
-        var tempoClient = new GrafanaConfig().tempoClient(grafana, rawStore);
-        var lokiClient = new GrafanaConfig().lokiClient(grafana, rawStore);
-        var mimirClient = new GrafanaConfig().mimirClient(grafana, rawStore);
+        TempoClient tempoClient = new GrafanaConfig().tempoClient(grafana, rawStore);
+        LokiClient lokiClient = new GrafanaConfig().lokiClient(grafana, rawStore);
+        MimirClient mimirClient = new GrafanaConfig().mimirClient(grafana, rawStore);
 
-        var collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service",
-                "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30, 3);
-        var surveyProperties = new SurveyProperties("Asia/Seoul", 24, 48, "5m",
+        CollectProperties collectProperties = new CollectProperties(120, "content-service|auth-service|chat-service",
+                "service_name", 1000, "15s", List.of("mongodb_up"), 102400, 30, 0);
+        SurveyProperties surveyProperties = new SurveyProperties("Asia/Seoul", 24, 48, "5m",
                 "{ status = error }", "{ duration > %s && status != error }", "3s",
-                20, null, List.of("up", "mongodb_up"), "60s", "2m", "5m");
+                20, null, List.of("up", "mongodb_up"), "60s", "2m", "5m", true);
+        // max-traces 0 = 상한 없음. 운영 기본값과 같은 조건으로 흐름을 검증한다.
 
         llmClient = new ScriptedLlmClient();
         notifier = new RecordingNotifier();
-        var promptLoader = SystemPromptLoader.from(new PromptProperties(null));
-        var tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
+        SystemPromptLoader promptLoader = SystemPromptLoader.from(new PromptProperties(null));
+        TokenCounter tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
 
-        var graphExtractor = new com.yogurtte.rca.analyzer.ServiceGraphExtractor();
-        var rcaService = new RcaService(
+        com.yogurtte.rca.analyzer.ServiceGraphExtractor graphExtractor = new com.yogurtte.rca.analyzer.ServiceGraphExtractor();
+        RcaService rcaService = new RcaService(
                 new Collector(tempoClient, lokiClient, mimirClient, collectProperties),
                 new ContextAssembler(collectProperties, graphExtractor), new EvidenceExtractor(),
                 graphExtractor, promptLoader,
@@ -220,10 +178,10 @@ class TriageFlowTest {
                 ```
                 """;
 
-        var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
 
         // 탐색 기록이 분석과 분리되어 남는다.
-        var triage = report.triage();
+        RcaReport.Triage triage = report.triage();
         assertThat(triage).isNotNull();
         assertThat(triage.timeExpression()).contains("어젯밤");
         assertThat(triage.surveyStart()).isEqualTo(Instant.parse("2026-07-27T09:00:00Z"));
@@ -268,8 +226,8 @@ class TriageFlowTest {
                 ```
                 """;
 
-        var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
-        var triage = report.triage();
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        RcaReport.Triage triage = report.triage();
 
         assertThat(triage.planParsed()).isTrue();
         assertThat(triage.chosenIncidentIds()).containsExactly("INC-1");
@@ -281,6 +239,44 @@ class TriageFlowTest {
         assertThat(triage.chosenEnd()).isBefore(triage.surveyEnd());
         assertThat(triage.notes()).anyMatch(n -> n.contains("신호 시각에서 계산했다"));
 
+        assertThat(report.analysis()).startsWith("원인 후보 1");
+    }
+
+    @Test
+    void 후보를_둘_고르면_로그는_창별로_나눠_조회하고_합쳐서_넘긴다() {
+        // 합집합 창 하나로 긁으면 후보 사이의 빈 구간까지 딸려 온다. 로그는 점 사건이라
+        // 그 구간에 정보가 없다 — 메트릭은 반대라 합집합 창을 그대로 쓴다.
+        llmClient.triageAnswer = """
+                ```json
+                {"incidentIds":["INC-1","INC-2"],"services":[],
+                 "evidence":["두 구간 모두 의심"],"reason":"확신이 없어 둘 다 고른다",
+                 "dismissed":[]}
+                ```
+                """;
+
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+
+        assertThat(report.triage().chosenIncidentIds()).containsExactly("INC-1", "INC-2");
+
+        // 심층 로그 조회(direction 있음)가 창마다 한 번씩 — 그리고 그 창들이 서로 달라야 한다.
+        // 횟수만 세면 "한 창을 두 채널로 조회한 것"과 구별이 안 된다.
+        List<String> deepLogRanges = server.findAll(com.github.tomakehurst.wiremock.client.WireMock
+                        .getRequestedFor(urlPathEqualTo("/loki/api/v1/query_range"))
+                        .withQueryParam("direction",
+                                com.github.tomakehurst.wiremock.client.WireMock.equalTo("forward")))
+                .stream()
+                .map(r -> r.queryParameter("start").firstValue() + "~" + r.queryParameter("end").firstValue())
+                .distinct()
+                .toList();
+        assertThat(deepLogRanges).hasSize(2);
+
+        // 메트릭은 나누지 않는다 — 시계열이 조각나면 "그 사이에 회복했는가"를 잃는다.
+        // 스윕 2회(up · mongodb_up) + 심층 1회 = 3. 창별로 나눴다면 심층이 2회가 되어 4다.
+        server.verify(3, com.github.tomakehurst.wiremock.client.WireMock
+                .getRequestedFor(urlPathEqualTo("/api/v1/query_range")));
+
+        // 합쳐서 넘어가므로 하류(dedup·evidence·assembler)는 창을 몰라도 된다.
+        assertThat(llmClient.analysisContext()).contains("MongoTimeoutException");
         assertThat(report.analysis()).startsWith("원인 후보 1");
     }
 
@@ -305,8 +301,8 @@ class TriageFlowTest {
                 ```
                 """;
 
-        var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
-        var e = report.evidence();
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        Evidence e = report.evidence();
 
         assertThat(e).isNotNull();
         assertThat(e.investigatedTraceId()).isEqualTo("abc123");
@@ -342,6 +338,38 @@ class TriageFlowTest {
     }
 
     @Test
+    void 상한이_없으면_창_안_트레이스를_세_건_넘게_다_가져온다() {
+        // 상한 3이던 시절에는 "대표 1 + 후보 2"가 전부라, 정답이 4번째면 실리지 않았다.
+        // 순서에 의미가 없으므로(신호가 만들어진 순서일 뿐) 밀린 것이 정답일 수 있다.
+        server.stubFor(get(urlPathEqualTo("/api/search"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo("{}"))
+                .willReturn(aResponse().withStatus(200).withBody("""
+                        {"traces":[{"traceID":"cand1"},{"traceID":"cand2"},{"traceID":"cand3"},
+                                   {"traceID":"cand4"},{"traceID":"cand5"}]}
+                        """)));
+        Instant traceAt = Instant.parse("2026-07-27T17:31:00Z");
+        for (String id : List.of("cand1", "cand2", "cand3", "cand4", "cand5")) {
+            server.stubFor(get(urlPathEqualTo("/api/traces/" + id))
+                    .willReturn(aResponse().withStatus(200).withBody("""
+                            {"batches":[{"resource":{"attributes":[
+                                {"key":"service.name","value":{"stringValue":"chat-service"}}]},
+                              "scopeSpans":[{"spans":[{"name":"span-%s","startTimeUnixNano":"%d",
+                                "endTimeUnixNano":"%d"}]}]}]}
+                            """.formatted(id, nanos(traceAt), nanos(traceAt.plusSeconds(1))))));
+        }
+
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+
+        assertThat(report.analysis()).startsWith("원인 후보 1");
+        // 5건 전부 딥 페치된다 — 구 상한(3)이면 2건에서 끊겼다.
+        for (String id : List.of("cand1", "cand2", "cand3", "cand4", "cand5")) {
+            server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
+                    .getRequestedFor(urlPathEqualTo("/api/traces/" + id)));
+            assertThat(llmClient.analysisContext()).contains("span-" + id);
+        }
+    }
+
+    @Test
     void traceId가_없어도_창과_대상만으로_분석까지_간다() {
         // 컨슈머가 죽거나 파드가 0이면 이상 트레이스 자체가 만들어지지 않는다 (CH-2·AU-2).
         llmClient.triageAnswer = """
@@ -352,7 +380,7 @@ class TriageFlowTest {
                 ```
                 """;
 
-        var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
 
         assertThat(report.traceId()).isNull();
         assertThat(report.triage().traceId()).isNull();
@@ -373,8 +401,8 @@ class TriageFlowTest {
         // 나머지는 기록에 남아 되돌아갈 수 있다.
         llmClient.triageAnswer = "이상 없는 것 같습니다.";
 
-        var report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
-        var triage = report.triage();
+        RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
+        RcaReport.Triage triage = report.triage();
 
         assertThat(triage.planParsed()).isFalse();
         assertThat(triage.notes()).anyMatch(note -> note.contains("찾지 못해"));

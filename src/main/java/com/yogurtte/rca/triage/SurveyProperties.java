@@ -28,6 +28,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param logQuery             Loki 집계 LogQL. {@code %s}에 앱 셀렉터 값이 들어간다.
  * @param metricQueries        Mimir 집계 PromQL. <b>부재가 곧 신호</b>인 것들을 우선 넣는다 —
  *                             {@code up}이 0으로 꺾이는 것이 AU-2에서 유일한 도달 경로였다.
+ * @param includeRaw           탐색 LLM에게 <b>스윕 원본 JSON까지</b> 보일지. 기본 {@code true}(현행 baseline).
+ *                             <p><b>대조군 스위치다.</b> 탐색 LLM의 산출은 사실상 후보 번호 하나이고
+ *                             (창·서비스·traceId는 고른 후보에서 코드가 파생한다 — {@code TriagePlan.parse}),
+ *                             원본은 스윕 컨텍스트의 약 94%를 차지한다. 원본이 그 선택의 정확도에
+ *                             기여하는지는 <b>아직 측정되지 않았다.</b>
+ *                             <p>{@code false}면 후보 목록·무신호 목록만 싣는다. 두 팔의 결과가 같은
+ *                             후보를 고르면 원본 약 20,000 tok은 값을 하지 않는 것이다.
+ *                             <p>주의: 후보 생성 규칙이 버리는 것이 있다(신뢰 불가 트레이스 행 ·
+ *                             Mimir 시리즈 라벨). 지금은 원본이 그것을 메우고 있으므로,
+ *                             {@code false}에서 점수가 떨어져도 <b>원본 부재 탓인지 후보 부실 탓인지
+ *                             갈리지 않는다</b> — 해석에 이 한계를 명시할 것.
  */
 @ConfigurationProperties("rca.survey")
 public record SurveyProperties(
@@ -43,9 +54,13 @@ public record SurveyProperties(
         List<String> metricQueries,
         String clusterGap,
         String incidentPadExact,
-        String incidentPadBucket) {
+        String incidentPadBucket,
+        // Boolean이다 — 설정이 빠졌을 때 primitive면 조용히 false(대조군 B)가 되어,
+        // 어느 팔로 돌았는지 모른 채 회차가 기록된다.
+        Boolean includeRaw) {
 
     public SurveyProperties {
+        includeRaw = includeRaw == null || includeRaw;
         zone = blankTo(zone, "Asia/Seoul");
         defaultLookbackHours = defaultLookbackHours <= 0 ? 24 : defaultLookbackHours;
         maxWindowHours = maxWindowHours <= 0 ? 48 : maxWindowHours;
@@ -98,7 +113,7 @@ public record SurveyProperties(
         if (raw == null || raw.isBlank()) {
             return fallback;
         }
-        var text = raw.trim().toLowerCase();
+        String text = raw.trim().toLowerCase();
         try {
             if (text.endsWith("ms")) {
                 return Duration.ofMillis(Long.parseLong(text.substring(0, text.length() - 2)));

@@ -3,7 +3,9 @@ package com.yogurtte.rca.analyzer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
@@ -32,12 +34,12 @@ public class EvidenceExtractor {
     private static final int MAX_SERIES_PER_QUERY = 8;
 
     public Evidence extract(CollectedData data) {
-        var spans = TraceSpans.parse(data.traceJson());
-        var logs = new ArrayList<Evidence.LogLine>();
+        List<TraceSpans.Span> spans = TraceSpans.parse(data.traceJson());
+        ArrayList<Evidence.LogLine> logs = new ArrayList<>();
         collectLogLines(data.errorWarnLogsJson(), logs);
         collectLogLines(data.traceIdLogsJson(), logs);
 
-        var metrics = new ArrayList<Evidence.MetricSeries>();
+        ArrayList<Evidence.MetricSeries> metrics = new ArrayList<>();
         data.metricsJson().forEach((query, body) -> collectSeries(query, body, metrics));
 
         return new Evidence(
@@ -70,7 +72,7 @@ public class EvidenceExtractor {
         if (logs.size() <= MAX_LOG_SAMPLES) {
             return logs.stream().sorted(Comparator.comparing(Evidence.LogLine::at)).toList();
         }
-        var picked = new ArrayList<Evidence.LogLine>();
+        ArrayList<Evidence.LogLine> picked = new ArrayList<>();
         logs.stream().filter(l -> containsLevel(l.line())).limit(MAX_LOG_SAMPLES).forEach(picked::add);
         logs.stream().filter(l -> !containsLevel(l.line()))
                 .limit(Math.max(0, MAX_LOG_SAMPLES - picked.size())).forEach(picked::add);
@@ -83,21 +85,21 @@ public class EvidenceExtractor {
 
     /** Loki streams 응답: {@code data.result[].stream{라벨} + values[][ns, line]}. */
     private static void collectLogLines(String body, List<Evidence.LogLine> out) {
-        var result = readResult(body);
+        JsonNode result = readResult(body);
         if (result == null) {
             return;
         }
-        for (var stream : result) {
-            var service = stream.path("stream").path("service_name").asText("");
-            var values = stream.get("values");
+        for (JsonNode stream : result) {
+            String service = stream.path("stream").path("service_name").asText("");
+            JsonNode values = stream.get("values");
             if (values == null || !values.isArray()) {
                 continue;
             }
-            for (var value : values) {
+            for (JsonNode value : values) {
                 if (!value.isArray() || value.size() < 2) {
                     continue;
                 }
-                var nanos = parseLong(value.get(0).asText(null));
+                Long nanos = parseLong(value.get(0).asText(null));
                 out.add(new Evidence.LogLine(
                         nanos == null ? null : instantOfNanos(nanos),
                         service.isBlank() ? "?" : service,
@@ -111,35 +113,35 @@ public class EvidenceExtractor {
      * {@code up}이 0으로 꺾인 것이 유일한 신호였던 회차가 있고, 그 사실은 숫자로 남아야 한다.
      */
     private static void collectSeries(String query, String body, List<Evidence.MetricSeries> out) {
-        var result = readResult(body);
+        JsonNode result = readResult(body);
         if (result == null) {
             return;
         }
-        var seriesCount = 0;
-        for (var series : result) {
+        int seriesCount = 0;
+        for (JsonNode series : result) {
             if (seriesCount++ >= MAX_SERIES_PER_QUERY) {
                 break;
             }
-            var values = series.get("values");
+            JsonNode values = series.get("values");
             if (values == null || !values.isArray() || values.isEmpty()) {
                 continue;
             }
 
             Instant firstAt = null;
             Instant lastAt = null;
-            var min = Double.MAX_VALUE;
-            var max = -Double.MAX_VALUE;
-            var last = 0.0;
-            var zeroSpans = new ArrayList<String>();
+            double min = Double.MAX_VALUE;
+            double max = -Double.MAX_VALUE;
+            double last = 0.0;
+            ArrayList<String> zeroSpans = new ArrayList<>();
             Instant zeroFrom = null;
             Instant zeroTo = null;
 
-            for (var point : values) {
+            for (JsonNode point : values) {
                 if (!point.isArray() || point.size() < 2) {
                     continue;
                 }
-                var at = Instant.ofEpochSecond(point.get(0).asLong());
-                var raw = parseDouble(point.get(1).asText(null));
+                Instant at = Instant.ofEpochSecond(point.get(0).asLong());
+                Double raw = parseDouble(point.get(1).asText(null));
                 if (raw == null) {
                     continue;
                 }
@@ -175,11 +177,11 @@ public class EvidenceExtractor {
         if (metric == null || !metric.isObject() || metric.isEmpty()) {
             return "{}";
         }
-        var sb = new StringBuilder("{");
-        var first = true;
-        var fields = metric.fields();
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        Iterator<Map.Entry<String, JsonNode>> fields = metric.fields();
         while (fields.hasNext()) {
-            var field = fields.next();
+            Map.Entry<String, JsonNode> field = fields.next();
             if (!first) {
                 sb.append(", ");
             }
@@ -194,7 +196,7 @@ public class EvidenceExtractor {
             return null;
         }
         try {
-            var result = MAPPER.readTree(body).path("data").path("result");
+            JsonNode result = MAPPER.readTree(body).path("data").path("result");
             return result.isArray() ? result : null;
         } catch (Exception e) {
             return null;

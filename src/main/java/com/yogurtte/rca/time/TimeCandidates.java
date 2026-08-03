@@ -87,20 +87,20 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
 
     /** @param today 상대적 날짜 말("어제")을 해석할 기준 날짜 — 호출자의 표준시로 계산해 넘긴다. */
     public static TimeCandidates parse(String question, LocalDate today) {
-        var text = normalize(question == null ? "" : question.trim());
-        var consumed = new ArrayList<int[]>();
-        var range = findRange(text, consumed);
-        var night = findNight(text, consumed);
-        var time = range == null ? findTime(text, consumed) : null;
-        var date = findDate(text, today, consumed);
-        var daypart = findDaypart(text, consumed);
+        String text = normalize(question == null ? "" : question.trim());
+        ArrayList<int[]> consumed = new ArrayList<>();
+        RangeMatch range = findRange(text, consumed);
+        NightMatch night = findNight(text, consumed);
+        TimeMatch time = range == null ? findTime(text, consumed) : null;
+        DateMatch date = findDate(text, today, consumed);
+        DaypartMatch daypart = findDaypart(text, consumed);
         return new TimeCandidates(range, time, night, date, daypart, findRelative(text));
     }
 
     // ---- L1 ----
 
     private static String normalize(String text) {
-        for (var numeral : NUMERALS.entrySet()) {
+        for (Map.Entry<String, String> numeral : NUMERALS.entrySet()) {
             text = text.replaceAll(numeral.getKey() + "\\s*(?=시간|시(?!간)|분|일)", numeral.getValue());
         }
         return text.replaceAll("(\\d{1,2})\\s*시\\s*반", "$1시 30분");
@@ -109,10 +109,10 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
     // ---- L2 ----
 
     private static RangeMatch findRange(String text, List<int[]> consumed) {
-        var m = RANGE.matcher(text);
+        Matcher m = RANGE.matcher(text);
         while (m.find()) {
-            var start = timeAt(m, 0);
-            var end = timeAt(m, TIME_GROUPS);
+            LocalTime start = timeAt(m, 0);
+            LocalTime end = timeAt(m, TIME_GROUPS);
             if (start == null || end == null) {
                 continue;
             }
@@ -123,7 +123,7 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
     }
 
     private static NightMatch findNight(String text, List<int[]> consumed) {
-        var m = NIGHT.matcher(text);
+        Matcher m = NIGHT.matcher(text);
         if (m.find()) {
             consumed.add(new int[] {m.start(), m.end()});
             return new NightMatch(m.group());
@@ -133,12 +133,12 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
 
     /** 복수 시각이 구간 연결자 없이 나오면 첫 후보를 쓴다 — 상한 원칙상 어느 쪽이든 ±여유가 덮는다. */
     private static TimeMatch findTime(String text, List<int[]> consumed) {
-        var m = ABS_TIME.matcher(text);
+        Matcher m = ABS_TIME.matcher(text);
         while (m.find()) {
             if (inside(consumed, m.start())) {
                 continue;
             }
-            var time = timeAt(m, 0);
+            LocalTime time = timeAt(m, 0);
             if (time == null) {
                 continue;
             }
@@ -149,19 +149,19 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
     }
 
     private static DateMatch findDate(String text, LocalDate today, List<int[]> consumed) {
-        var iso = DATE_ISO.matcher(text);
+        Matcher iso = DATE_ISO.matcher(text);
         if (iso.find()) {
-            var date = dateOf(Integer.parseInt(iso.group(1)),
+            LocalDate date = dateOf(Integer.parseInt(iso.group(1)),
                     Integer.parseInt(iso.group(2)), Integer.parseInt(iso.group(3)));
             if (date != null) {
                 consumed.add(new int[] {iso.start(), iso.end()});
                 return new DateMatch(date, (int) (today.toEpochDay() - date.toEpochDay()), iso.group());
             }
         }
-        var kr = DATE_KR.matcher(text);
+        Matcher kr = DATE_KR.matcher(text);
         if (kr.find()) {
-            var year = kr.group(1) != null ? Integer.parseInt(kr.group(1)) : today.getYear();
-            var date = dateOf(year, Integer.parseInt(kr.group(2)), Integer.parseInt(kr.group(3)));
+            int year = kr.group(1) != null ? Integer.parseInt(kr.group(1)) : today.getYear();
+            LocalDate date = dateOf(year, Integer.parseInt(kr.group(2)), Integer.parseInt(kr.group(3)));
             if (date != null) {
                 if (kr.group(1) == null && date.isAfter(today)) {
                     date = date.minusYears(1); // 연도 없는 미래 날짜는 가장 가까운 과거로.
@@ -170,19 +170,19 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
                 return new DateMatch(date, (int) (today.toEpochDay() - date.toEpochDay()), kr.group());
             }
         }
-        var word = DATE_WORD.matcher(text);
+        Matcher word = DATE_WORD.matcher(text);
         while (word.find()) {
             if (inside(consumed, word.start())) {
                 continue; // "어제밤"의 "어제"를 다시 세지 않는다.
             }
-            var day = NamedDay.of(word.group());
+            NamedDay day = NamedDay.of(word.group());
             return new DateMatch(today.minusDays(day.daysAgo()), day.daysAgo(), word.group());
         }
         return null;
     }
 
     private static DaypartMatch findDaypart(String text, List<int[]> consumed) {
-        var m = DAYPART.matcher(text);
+        Matcher m = DAYPART.matcher(text);
         while (m.find()) {
             if (inside(consumed, m.start())) {
                 continue; // "14시"에 붙은 "오후", "어젯밤"의 "밤" 등 이미 소비된 표지.
@@ -193,17 +193,17 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
     }
 
     private static RelativeMatch findRelative(String text) {
-        var prefix = REL_PREFIX.matcher(text);
+        Matcher prefix = REL_PREFIX.matcher(text);
         if (prefix.find()) {
-            var duration = RelativeUnit.of(prefix.group(2)).duration(Long.parseLong(prefix.group(1)));
+            Duration duration = RelativeUnit.of(prefix.group(2)).duration(Long.parseLong(prefix.group(1)));
             return new RelativeMatch(duration, prefix.group().trim());
         }
-        var suffix = REL_SUFFIX.matcher(text);
+        Matcher suffix = REL_SUFFIX.matcher(text);
         if (suffix.find()) {
-            var duration = RelativeUnit.of(suffix.group(2)).duration(Long.parseLong(suffix.group(1)));
+            Duration duration = RelativeUnit.of(suffix.group(2)).duration(Long.parseLong(suffix.group(1)));
             // 표기는 "N단위 전" 꼴만 남긴다 — 안에/동안/이내는 창 의미가 같아 생략한다.
-            var amountAndUnit = text.substring(suffix.start(), suffix.end(2)).trim();
-            var marker = "전".equals(suffix.group(3)) ? " 전" : "";
+            String amountAndUnit = text.substring(suffix.start(), suffix.end(2)).trim();
+            String marker = "전".equals(suffix.group(3)) ? " 전" : "";
             return new RelativeMatch(duration, amountAndUnit + marker);
         }
         return null;
@@ -213,13 +213,13 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
 
     /** {@link #TIME_SRC}의 그룹 배치(표지·시·콜론분·시분)를 아는 유일한 곳. */
     private static LocalTime timeAt(Matcher m, int base) {
-        var hour = Integer.parseInt(m.group(base + 2));
-        var minuteText = m.group(base + 3) != null ? m.group(base + 3) : m.group(base + 4);
-        var minute = minuteText == null ? 0 : Integer.parseInt(minuteText);
+        int hour = Integer.parseInt(m.group(base + 2));
+        String minuteText = m.group(base + 3) != null ? m.group(base + 3) : m.group(base + 4);
+        int minute = minuteText == null ? 0 : Integer.parseInt(minuteText);
         if (hour > 23 || minute > 59) {
             return null; // 달력에 없는 시각은 후보로 세지 않는다.
         }
-        var meridiem = m.group(base + 1);
+        String meridiem = m.group(base + 1);
         if (meridiem != null) {
             hour = Meridiem.of(meridiem).adjust(hour);
         }
@@ -236,7 +236,7 @@ public record TimeCandidates(RangeMatch range, TimeMatch time, NightMatch night,
     }
 
     private static boolean inside(List<int[]> consumed, int position) {
-        for (var span : consumed) {
+        for (int[] span : consumed) {
             if (position >= span[0] && position < span[1]) {
                 return true;
             }

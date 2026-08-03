@@ -27,7 +27,7 @@ public class RawResponseStore {
         }
         try {
             Files.createDirectories(rawDir);
-            var file = rawDir.resolve("%s-%s-%s.json".formatted(traceId, TS.format(Instant.now()), sanitize(name)));
+            Path file = rawDir.resolve("%s-%s-%s.json".formatted(traceId, TS.format(Instant.now()), sanitize(name)));
             Files.writeString(file, body, StandardCharsets.UTF_8);
         } catch (IOException e) {
             // 원본 저장은 best-effort다; 이것 때문에 조사를 실패시키지 않는다.

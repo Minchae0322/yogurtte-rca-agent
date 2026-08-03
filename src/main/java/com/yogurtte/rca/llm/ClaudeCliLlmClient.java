@@ -7,13 +7,16 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -57,7 +60,7 @@ public class ClaudeCliLlmClient implements LlmClient {
             return -1L;
         }
         try {
-            var probe = analyze(OVERHEAD_PROBE, "");
+            LlmResult probe = analyze(OVERHEAD_PROBE, "");
             if (probe.numTurns() > 1) {
                 log.warn("오버헤드 프로브가 {}턴을 돌았다 — usage가 턴 누적이라 값을 쓸 수 없다", probe.numTurns());
                 return -1L;
@@ -84,7 +87,7 @@ public class ClaudeCliLlmClient implements LlmClient {
      */
     static File createSandbox() {
         try {
-            var dir = Files.createTempDirectory("rca-cli-sandbox-");
+            Path dir = Files.createTempDirectory("rca-cli-sandbox-");
             dir.toFile().deleteOnExit();
             log.info("claude CLI sandbox (레포 컨텍스트 격리): {}", dir);
             return dir.toFile();
@@ -97,8 +100,8 @@ public class ClaudeCliLlmClient implements LlmClient {
 
     @Override
     public LlmResult analyze(String systemPrompt, String context) {
-        var started = System.currentTimeMillis();
-        var prompt = systemPrompt + "\n\n---\n\n" + context;
+        long started = System.currentTimeMillis();
+        String prompt = systemPrompt + "\n\n---\n\n" + context;
 
         Process process;
         try {
@@ -112,9 +115,9 @@ public class ClaudeCliLlmClient implements LlmClient {
                     "failed to start claude CLI '" + command + "': " + e.getMessage(), e);
         }
 
-        var stderr = new StringBuilder();
-        var stderrReader = new Thread(() -> {
-            try (var reader = new BufferedReader(
+        StringBuilder stderr = new StringBuilder();
+        Thread stderrReader = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 reader.lines().forEach(line -> stderr.append(line).append('\n'));
             } catch (Exception ignored) {
@@ -127,10 +130,10 @@ public class ClaudeCliLlmClient implements LlmClient {
         String stdout;
         int exitCode;
         try {
-            try (var writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
+            try (OutputStreamWriter writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
                 writer.write(prompt);
             }
-            try (var reader = new BufferedReader(
+            try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 stdout = reader.lines().reduce(new StringBuilder(), StringBuilder::append, StringBuilder::append)
                         .toString();
@@ -158,29 +161,29 @@ public class ClaudeCliLlmClient implements LlmClient {
                     "claude CLI exited with code " + exitCode + "; stderr: " + stderr.toString().trim());
         }
 
-        var elapsed = System.currentTimeMillis() - started;
+        long elapsed = System.currentTimeMillis() - started;
         return parse(stdout, elapsed);
     }
 
     private LlmResult parse(String stdout, long elapsed) {
         try {
-            var root = MAPPER.readTree(stdout);
+            JsonNode root = MAPPER.readTree(stdout);
             if (root.path("is_error").asBoolean(false)) {
                 throw new IllegalStateException("claude CLI reported an error: " + root.path("result").asText());
             }
-            var text = root.has("result") ? root.get("result").asText() : stdout;
+            String text = root.has("result") ? root.get("result").asText() : stdout;
 
             // 일부 CLI 버전/출력 형태에는 usage가 없다 - 추측하지 말고 -1로 기록한다.
-            var usage = root.path("usage");
-            var outputTokens = usage.has("output_tokens") ? usage.get("output_tokens").asLong() : -1L;
+            JsonNode usage = root.path("usage");
+            long outputTokens = usage.has("output_tokens") ? usage.get("output_tokens").asLong() : -1L;
 
             // 큰 컨텍스트는 프롬프트 캐시로 들어가 input_tokens가 아니라 cache_* 필드에 잡힌다.
             // 셋을 합쳐야 실제 입력 토큰이 나온다(안 그러면 in=2처럼 실제보다 훨씬 작게 보인다).
             // 합산과 별개로 내역도 보존한다 - cache read는 신규 입력의 약 1/10 값이라, 합산만
             // 남기면 비용 편차가 컨텍스트 크기 탓인지 캐시 히트율 탓인지 사후에 가릴 수 없다.
-            var cacheRead = usage.has("cache_read_input_tokens")
+            long cacheRead = usage.has("cache_read_input_tokens")
                     ? usage.get("cache_read_input_tokens").asLong() : -1L;
-            var cacheCreation = usage.has("cache_creation_input_tokens")
+            long cacheCreation = usage.has("cache_creation_input_tokens")
                     ? usage.get("cache_creation_input_tokens").asLong() : -1L;
             long inputTokens = -1L;
             if (usage.has("input_tokens")) {
@@ -190,11 +193,11 @@ public class ClaudeCliLlmClient implements LlmClient {
             }
 
             // CLI는 이번 호출 비용을 달러로 알려준다. 없으면 -1.
-            var costUsd = root.has("total_cost_usd") ? root.get("total_cost_usd").asDouble() : -1.0;
+            double costUsd = root.has("total_cost_usd") ? root.get("total_cost_usd").asDouble() : -1.0;
 
             // 턴 수: 1이 아니면 CLI가 자체 도구 루프를 돌았다는 뜻이고, 그러면 usage가 마지막
             // 턴만 담고 비용은 전 턴 합계일 수 있다("단일 패스" 전제가 깨진 것). 반드시 기록한다.
-            var numTurns = root.has("num_turns") ? root.get("num_turns").asInt() : -1;
+            int numTurns = root.has("num_turns") ? root.get("num_turns").asInt() : -1;
 
             return new LlmResult(text, inputTokens, outputTokens, cacheRead, cacheCreation,
                     reportedModel(root), numTurns, elapsed, costUsd);
@@ -220,15 +223,15 @@ public class ClaudeCliLlmClient implements LlmClient {
      * {@code total_cost_usd}만 보조 모델 몫을 포함한다(실측상 본답변의 0.1% 미만).
      */
     private String reportedModel(com.fasterxml.jackson.databind.JsonNode root) {
-        var direct = root.path("model").asText(null);
+        String direct = root.path("model").asText(null);
         if (direct != null && !direct.isBlank()) {
             return direct;
         }
-        var modelUsage = root.path("modelUsage");
+        JsonNode modelUsage = root.path("modelUsage");
         if (modelUsage.isObject() && modelUsage.fieldNames().hasNext()) {
-            var used = new ArrayList<String>();
+            ArrayList<String> used = new ArrayList<>();
             modelUsage.fieldNames().forEachRemaining(used::add);
-            var matched = used.stream().filter(name -> name.startsWith(model)).findFirst();
+            Optional<String> matched = used.stream().filter(name -> name.startsWith(model)).findFirst();
             if (matched.isPresent()) {
                 if (used.size() > 1) {
                     log.debug("claude CLI가 보조 모델을 함께 사용했다: {} (본답변 {})", used, matched.get());

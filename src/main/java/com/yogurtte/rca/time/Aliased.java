@@ -28,8 +28,8 @@ public interface Aliased {
 
     /** 패턴이 매치한 토큰 → 어휘. 패턴을 어휘에서 생성하므로 실패는 불변식 위반이고, 그래서 던진다. */
     static <E extends Aliased> E byAlias(E[] values, String token) {
-        var normalized = token.toLowerCase().replaceAll("\\s+", " ");
-        for (var value : values) {
+        String normalized = token.toLowerCase().replaceAll("\\s+", " ");
+        for (E value : values) {
             if (value.aliases().contains(normalized)) {
                 return value;
             }

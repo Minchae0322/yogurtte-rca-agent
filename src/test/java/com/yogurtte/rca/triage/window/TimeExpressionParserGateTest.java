@@ -1,4 +1,4 @@
-package com.yogurtte.rca.triage;
+package com.yogurtte.rca.triage.window;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,6 +7,8 @@ import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import com.yogurtte.rca.triage.SurveyProperties;
+import com.yogurtte.rca.triage.TriageConfig;
 
 /**
  * B-26 투입 게이트 — 박제 문안 12개의 창이 파서 재작성 전후로 바뀌지 않음을 증명한다.
@@ -26,7 +28,7 @@ class TimeExpressionParserGateTest {
 
     private final TimeExpressionParser parser = new TriageConfig().timeExpressionParser(
             new SurveyProperties("Asia/Seoul", 24, 48, "5m", null, null, null, 20, null, List.of(),
-                    null, null, null));
+                    null, null, null, true));
 
     private record Pinned(String id, String question, int hours) {
     }
@@ -48,8 +50,8 @@ class TimeExpressionParserGateTest {
 
     @Test
     void 박제_문안_12개의_창과_해석_문자열이_불변이다() {
-        for (var pinned : PINNED) {
-            var resolved = parser.resolve(pinned.question(), null, null, NOW);
+        for (Pinned pinned : PINNED) {
+            TimeExpressionParser.Resolved resolved = parser.resolve(pinned.question(), null, null, NOW);
 
             assertThat(resolved.window().end()).as("%s 창 끝", pinned.id()).isEqualTo(NOW);
             assertThat(Duration.between(resolved.window().start(), NOW))

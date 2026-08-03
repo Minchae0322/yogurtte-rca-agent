@@ -25,7 +25,7 @@ public class DiscordNotifier implements Notifier {
     @Override
     public void send(RcaReport report) {
         try {
-            var saved = reportStore.save(report);
+            ReportStore.Saved saved = reportStore.save(report);
             log.info("report saved: {} (json: {})", saved.markdown(), saved.json());
         } catch (Exception e) {
             log.warn("failed to save report: {}", e.getMessage());

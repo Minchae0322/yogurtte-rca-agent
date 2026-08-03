@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /** 조립(설정 검증·ChatModel 생성)은 {@link LlmConfig}가 한다. */
@@ -18,11 +20,11 @@ public class AnthropicLlmClient implements LlmClient {
 
     @Override
     public LlmResult analyze(String systemPrompt, String context) {
-        var started = System.currentTimeMillis();
-        var response = chatModel.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(context))));
-        var elapsed = System.currentTimeMillis() - started;
+        long started = System.currentTimeMillis();
+        ChatResponse response = chatModel.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(context))));
+        long elapsed = System.currentTimeMillis() - started;
 
-        var usage = response.getMetadata().getUsage();
+        Usage usage = response.getMetadata().getUsage();
         // Spring AI의 promptTokens는 캐시 분해를 노출하지 않는다 - claude-cli 경로의 inputTokens와
         // 의미가 다르므로 provider를 섞어 토큰/비용을 비교하면 안 된다.
         return LlmResult.withoutCacheBreakdown(

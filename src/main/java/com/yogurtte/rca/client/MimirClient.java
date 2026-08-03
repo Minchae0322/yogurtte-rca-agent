@@ -21,7 +21,7 @@ public class MimirClient {
      */
     public String queryRange(String traceId, String promql, Instant start, Instant end, String step) {
         // LokiClient와 같은 이유: PromQL 레이블 매처의 { }가 URI 템플릿 문법과 겹친다.
-        var body = restClient.get()
+        String body = restClient.get()
                 .uri(builder -> builder.path("/api/v1/query_range")
                         .queryParam("query", "{promql}")
                         .queryParam("start", start.getEpochSecond())

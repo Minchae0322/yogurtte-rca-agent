@@ -51,8 +51,8 @@ public record ServiceGraph(List<Edge> edges) {
         if (edges.isEmpty()) {
             return "(추출된 엣지 없음)";
         }
-        var sb = new StringBuilder();
-        for (var edge : edges) {
+        StringBuilder sb = new StringBuilder();
+        for (Edge edge : edges) {
             sb.append(edge.source()).append(" --").append(edge.kind()).append("--> ").append(edge.target());
             if (!edge.detail().isEmpty()) {
                 sb.append(" (").append(edge.detail()).append(')');

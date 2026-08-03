@@ -15,7 +15,7 @@ public class TempoClient {
 
     /** GET {TEMPO_URL}/api/traces/{traceId}로 받은 원본 트레이스 JSON. */
     public String fetchTrace(String traceId) {
-        var body = restClient.get()
+        String body = restClient.get()
                 .uri("/api/traces/{traceId}", traceId)
                 .retrieve()
                 .body(String.class);
@@ -32,7 +32,7 @@ public class TempoClient {
      */
     public String search(String correlationId, String traceQl, Instant start, Instant end, int limit) {
         // LokiClient와 같은 이유: TraceQL의 { }가 URI 템플릿 문법과 겹쳐 바인딩 변수로 넘긴다.
-        var body = restClient.get()
+        String body = restClient.get()
                 .uri(builder -> builder.path("/api/search")
                         .queryParam("q", "{traceql}")
                         .queryParam("start", start.getEpochSecond())

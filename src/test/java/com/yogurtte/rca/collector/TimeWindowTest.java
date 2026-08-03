@@ -3,6 +3,7 @@ package com.yogurtte.rca.collector;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -11,10 +12,10 @@ class TimeWindowTest {
     /** 두 batch에 걸친 span 2개: 시간창은 가장 이른 시작 ~ 가장 늦은 종료를 padding 포함해 덮어야 한다. */
     @Test
     void derivesPaddedWindowFromEarliestStartAndLatestEnd() {
-        var start = Instant.parse("2026-07-20T10:00:00Z");
-        var end = Instant.parse("2026-07-20T10:00:03Z");
+        Instant start = Instant.parse("2026-07-20T10:00:00Z");
+        Instant end = Instant.parse("2026-07-20T10:00:03Z");
 
-        var traceJson = """
+        String traceJson = """
                 {"batches":[
                   {"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"content"}}]},
                    "scopeSpans":[{"spans":[
@@ -26,7 +27,7 @@ class TimeWindowTest {
                 """.formatted(nanos(start), nanos(start.plusSeconds(1)),
                 nanos(start.plusSeconds(2)), nanos(end));
 
-        var window = TimeWindow.fromTrace(traceJson, 120);
+        TimeWindow window = TimeWindow.fromTrace(traceJson, 120);
 
         assertThat(window).isNotNull();
         assertThat(window.start()).isEqualTo(start.minusSeconds(120));
@@ -43,9 +44,9 @@ class TimeWindowTest {
 
     @Test
     void fallbackWindowIsCenteredOnTheReferenceInstant() {
-        var now = Instant.parse("2026-07-20T10:30:00Z");
+        Instant now = Instant.parse("2026-07-20T10:30:00Z");
 
-        var window = TimeWindow.around(now, 120);
+        TimeWindow window = TimeWindow.around(now, 120);
 
         assertThat(window.start()).isEqualTo(now.minusSeconds(120));
         assertThat(window.end()).isEqualTo(now.plusSeconds(120));
@@ -53,8 +54,8 @@ class TimeWindowTest {
 
     @Test
     void parsesServiceNameAndDurationForSpanRanking() {
-        var base = Instant.parse("2026-07-20T10:00:00Z");
-        var traceJson = """
+        Instant base = Instant.parse("2026-07-20T10:00:00Z");
+        String traceJson = """
                 {"batches":[
                   {"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"chat"}}]},
                    "scopeSpans":[{"spans":[
@@ -64,12 +65,12 @@ class TimeWindowTest {
                 """.formatted(nanos(base), nanos(base.plusSeconds(1)),
                 nanos(base), nanos(base.plusSeconds(5)));
 
-        var spans = TraceSpans.parse(traceJson);
+        List<TraceSpans.Span> spans = TraceSpans.parse(traceJson);
         assertThat(spans).hasSize(2);
         assertThat(spans.get(0).service()).isEqualTo("chat");
 
         // 랭킹은 5초 span을 1초 span보다 위에 둔다.
-        var top = TraceSpans.topByDuration(spans, 1);
+        String top = TraceSpans.topByDuration(spans, 1);
         assertThat(top).contains("slow").doesNotContain("fast");
     }
 

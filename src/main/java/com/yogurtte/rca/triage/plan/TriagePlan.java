@@ -1,16 +1,18 @@
-package com.yogurtte.rca.triage;
+package com.yogurtte.rca.triage.plan;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yogurtte.rca.collector.Scope;
 import com.yogurtte.rca.collector.TimeWindow;
+import com.yogurtte.rca.triage.incident.Incident;
 
 /**
  * 2단계 — 스윕 결과를 보고 <b>어디를 깊게 볼지</b> 고른 결과.
@@ -62,28 +64,28 @@ public record TriagePlan(
      */
     public static TriagePlan parse(String llmText, TimeWindow surveyWindow,
                                    List<Incident> incidents, Padding padding) {
-        var notes = new ArrayList<String>();
-        var json = extractJson(llmText);
+        ArrayList<String> notes = new ArrayList<>();
+        String json = extractJson(llmText);
         if (json == null) {
             notes.add("LLM 응답에서 JSON 계획을 찾지 못해 스윕 창 전체를 분석 범위로 사용했다.");
             return fallback(surveyWindow, incidents, padding, notes);
         }
 
         try {
-            var node = MAPPER.readTree(json);
-            var services = readStrings(node.get("services"));
-            var evidence = readStrings(node.get("evidence"));
-            var reason = readText(node.get("reason"));
-            var chosenIds = readStrings(node.get("incidentIds"));
-            var dismissedIds = readDismissed(node.get("dismissed"));
+            JsonNode node = MAPPER.readTree(json);
+            List<String> services = readStrings(node.get("services"));
+            List<String> evidence = readStrings(node.get("evidence"));
+            String reason = readText(node.get("reason"));
+            List<String> chosenIds = readStrings(node.get("incidentIds"));
+            List<String> dismissedIds = readDismissed(node.get("dismissed"));
 
-            var chosen = resolve(incidents, chosenIds);
+            List<Incident> chosen = resolve(incidents, chosenIds);
 
             // 후보를 골랐으면 창을 코드가 계산한다 — 모델이 쓴 시각을 쓰지 않는다.
             if (!chosen.isEmpty() && padding != null) {
-                var window = Incident.unionWindow(chosen, padding.exact(), padding.bucket(), surveyWindow);
-                var services2 = services.isEmpty() ? resourcesOf(chosen) : services;
-                var traceId = firstTraceId(chosen);
+                TimeWindow window = Incident.unionWindow(chosen, padding.exact(), padding.bucket(), surveyWindow);
+                List<String> services2 = services.isEmpty() ? resourcesOf(chosen) : services;
+                String traceId = firstTraceId(chosen);
                 if (chosenIds.size() != chosen.size()) {
                     notes.add("모델이 지목한 후보 중 목록에 없는 것이 있어 무시했다: " + chosenIds);
                 }
@@ -94,11 +96,11 @@ public record TriagePlan(
             }
 
             // 후보를 안 골랐으면 구 경로 — 모델이 준 시각을 쓴다.
-            var window = readWindow(node, surveyWindow, notes);
+            TimeWindow window = readWindow(node, surveyWindow, notes);
             if (!incidents.isEmpty()) {
                 notes.add("모델이 후보를 지목하지 않아 응답의 windowStart/windowEnd를 사용했다.");
             }
-            var traceId = readText(node.get("traceId"));
+            String traceId = readText(node.get("traceId"));
             return new TriagePlan(window, services, traceId, reason, evidence, true, notes,
                     List.of(), dismissedIds);
         } catch (Exception e) {
@@ -121,10 +123,10 @@ public record TriagePlan(
             return new TriagePlan(surveyWindow, List.of(), null, null, List.of(), false, notes,
                     List.of(), List.of());
         }
-        var strongest = incidents.stream()
+        Incident strongest = incidents.stream()
                 .max(Comparator.comparingInt(i -> i.signals().size()))
                 .orElseThrow();
-        var window = strongest.window(padding.exact(), padding.bucket(), surveyWindow);
+        TimeWindow window = strongest.window(padding.exact(), padding.bucket(), surveyWindow);
         notes.add("신호가 가장 많은 후보 %s 로 떨어졌다 (%s ~ %s). 나머지 후보는 기록에 남는다."
                 .formatted(strongest.id(), window.start(), window.end()));
         return new TriagePlan(window, resourcesOf(List.of(strongest)),
@@ -143,6 +145,18 @@ public record TriagePlan(
         return chosen.stream().map(Incident::resource).distinct().filter(r -> !"?".equals(r)).toList();
     }
 
+    /**
+     * 고른 후보들이 물고 있는 traceId <b>전부</b>. 하나를 대표로 뽑지 않는다 — 후보에 트레이스가
+     * 셋이면 어느 것이 원인인지는 <b>전문을 봐야</b> 알고, 순서에는 아무 의미가 없다(신호가
+     * 만들어진 순서일 뿐이다).
+     *
+     * <p>{@code Scope.traceId}는 여전히 첫 번째가 들어가지만 그것은 <b>리포트 식별자</b>일
+     * 뿐이고, 수집은 이 목록 전체에 대해 동등하게 일어난다.
+     */
+    public static List<String> traceIdsOf(List<Incident> chosen) {
+        return chosen.stream().flatMap(i -> i.traceIds().stream()).distinct().toList();
+    }
+
     private static String firstTraceId(List<Incident> chosen) {
         return chosen.stream().flatMap(i -> i.traceIds().stream()).findFirst().orElse(null);
     }
@@ -152,14 +166,14 @@ public record TriagePlan(
         if (node == null || !node.isArray()) {
             return List.of();
         }
-        var out = new ArrayList<String>();
+        ArrayList<String> out = new ArrayList<>();
         node.forEach(child -> {
             if (child.isTextual()) {
                 out.add(child.asText());
                 return;
             }
-            var id = readText(child.get("incidentId"));
-            var why = readText(child.get("why"));
+            String id = readText(child.get("incidentId"));
+            String why = readText(child.get("why"));
             if (id != null) {
                 out.add(why == null ? id : id + " — " + why);
             }
@@ -172,14 +186,14 @@ public record TriagePlan(
      * 분석이 보는 데이터가 어긋나 판단 과정을 추적할 수 없게 된다.
      */
     private static TimeWindow readWindow(JsonNode node, TimeWindow surveyWindow, List<String> notes) {
-        var start = readInstant(node.get("windowStart"));
-        var end = readInstant(node.get("windowEnd"));
+        Instant start = readInstant(node.get("windowStart"));
+        Instant end = readInstant(node.get("windowEnd"));
         if (start == null || end == null || !start.isBefore(end)) {
             notes.add("계획에 유효한 windowStart/windowEnd가 없어 스윕 창을 그대로 사용했다.");
             return surveyWindow;
         }
-        var clampedStart = start.isBefore(surveyWindow.start()) ? surveyWindow.start() : start;
-        var clampedEnd = end.isAfter(surveyWindow.end()) ? surveyWindow.end() : end;
+        Instant clampedStart = start.isBefore(surveyWindow.start()) ? surveyWindow.start() : start;
+        Instant clampedEnd = end.isAfter(surveyWindow.end()) ? surveyWindow.end() : end;
         if (!clampedStart.equals(start) || !clampedEnd.equals(end)) {
             notes.add("좁힌 창이 스윕 창을 벗어나 잘라냈다: " + start + "~" + end
                     + " → " + clampedStart + "~" + clampedEnd);
@@ -195,17 +209,17 @@ public record TriagePlan(
         if (text == null || text.isBlank()) {
             return null;
         }
-        var fenced = FENCED_JSON.matcher(text);
+        Matcher fenced = FENCED_JSON.matcher(text);
         if (fenced.find()) {
             return fenced.group(1);
         }
-        var open = text.indexOf('{');
-        var close = text.lastIndexOf('}');
+        int open = text.indexOf('{');
+        int close = text.lastIndexOf('}');
         return (open >= 0 && close > open) ? text.substring(open, close + 1) : null;
     }
 
     private static Instant readInstant(JsonNode node) {
-        var raw = readText(node);
+        String raw = readText(node);
         try {
             return raw == null ? null : Instant.parse(raw);
         } catch (Exception e) {
@@ -217,7 +231,7 @@ public record TriagePlan(
         if (node == null || node.isNull()) {
             return null;
         }
-        var text = node.asText(null);
+        String text = node.asText(null);
         return (text == null || text.isBlank() || "null".equals(text)) ? null : text;
     }
 
@@ -225,9 +239,9 @@ public record TriagePlan(
         if (node == null || !node.isArray()) {
             return List.of();
         }
-        var values = new ArrayList<String>();
+        ArrayList<String> values = new ArrayList<>();
         node.forEach(child -> {
-            var text = readText(child);
+            String text = readText(child);
             if (text != null) {
                 values.add(text);
             }

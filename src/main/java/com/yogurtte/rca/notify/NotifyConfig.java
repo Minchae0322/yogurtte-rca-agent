@@ -22,7 +22,7 @@ public class NotifyConfig {
     @Bean
     @ConditionalOnProperty(name = "rca.notify.channel", havingValue = "slack")
     public SlackNotifier slackNotifier(ReportStore reportStore, NotifyProperties properties) {
-        var slack = properties.slack();
+        NotifyProperties.Webhook slack = properties.slack();
         if (slack == null || slack.webhookUrl() == null || slack.webhookUrl().isBlank()) {
             throw new IllegalStateException("rca.notify.channel=slack requires SLACK_WEBHOOK_URL");
         }
@@ -32,7 +32,7 @@ public class NotifyConfig {
     @Bean
     @ConditionalOnProperty(name = "rca.notify.channel", havingValue = "discord")
     public DiscordNotifier discordNotifier(ReportStore reportStore, NotifyProperties properties) {
-        var discord = properties.discord();
+        NotifyProperties.Webhook discord = properties.discord();
         if (discord == null || discord.webhookUrl() == null || discord.webhookUrl().isBlank()) {
             throw new IllegalStateException("rca.notify.channel=discord requires DISCORD_WEBHOOK_URL");
         }

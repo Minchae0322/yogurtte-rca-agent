@@ -47,13 +47,13 @@ public class TokenCounter {
         if (client == null) {
             return -1L;
         }
-        var target = (model == null || model.isBlank()) ? fallbackModel : model;
+        String target = (model == null || model.isBlank()) ? fallbackModel : model;
         try {
-            var body = Map.of(
+            Map<String, Object> body = Map.of(
                     "model", target,
                     "system", systemPrompt == null ? "" : systemPrompt,
                     "messages", List.of(Map.of("role", "user", "content", context == null ? "" : context)));
-            var response = client.post()
+            JsonNode response = client.post()
                     .uri(ENDPOINT)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)

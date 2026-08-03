@@ -14,8 +14,8 @@ public record TimeWindow(Instant start, Instant end) {
         if (spans.isEmpty()) {
             return null;
         }
-        var minStart = spans.stream().mapToLong(TraceSpans.Span::startNanos).min().orElseThrow();
-        var maxEnd = spans.stream().mapToLong(TraceSpans.Span::endNanos).max().orElseThrow();
+        long minStart = spans.stream().mapToLong(TraceSpans.Span::startNanos).min().orElseThrow();
+        long maxEnd = spans.stream().mapToLong(TraceSpans.Span::endNanos).max().orElseThrow();
 
         return new TimeWindow(
                 toInstant(minStart).minusSeconds(paddingSeconds),

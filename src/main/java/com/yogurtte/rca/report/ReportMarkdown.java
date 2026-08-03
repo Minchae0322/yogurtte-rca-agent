@@ -10,7 +10,7 @@ final class ReportMarkdown {
     }
 
     static String render(RcaReport report) {
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
         sb.append("# RCA Report — `")
                 .append(report.traceId() == null || report.traceId().isBlank() ? "traceId 없음" : report.traceId())
@@ -40,7 +40,7 @@ final class ReportMarkdown {
             sb.append(" · cost $%.4f".formatted(report.costUsd()));
         }
         sb.append(" |\n");
-        var t = report.timings();
+        Timings t = report.timings();
         sb.append("| elapsed | total ").append(report.totalElapsedMs()).append("ms")
                 .append(" (tempo ").append(t.tempoMs()).append(" · loki ").append(t.lokiMs())
                 .append(" · mimir ").append(t.mimirMs()).append(" · assemble ").append(t.assembleMs())
@@ -49,7 +49,7 @@ final class ReportMarkdown {
         renderTriage(sb, report.triage());
 
         sb.append("## 수집 범위 (Coverage)\n\n");
-        var c = report.coverage();
+        RcaReport.Coverage c = report.coverage();
         if (c == null) {
             sb.append("(없음)\n\n");
         } else {
@@ -57,6 +57,10 @@ final class ReportMarkdown {
                     .append(" (").append(c.windowSeconds()).append("s)\n");
             sb.append("- **trace**: %,dB / %d spans%s\n"
                     .formatted(c.traceBytes(), c.traceSpans(), c.traceTrimmed() ? " (상위 span만)" : ""));
+            if (c.candidateTraces() > 0) {
+                sb.append("- **창 안 후보 트레이스**: %d건 / %,dB\n"
+                        .formatted(c.candidateTraces(), c.candidateTraceBytes()));
+            }
             sb.append("- **logs**: errwarn=%,dB · traceId=%,dB\n"
                     .formatted(c.errorWarnLogBytes(), c.traceIdLogBytes()));
             sb.append("- **metrics**: %d 수집 / %,dB".formatted(c.metricsCollected().size(), c.metricsBytes()));
@@ -144,8 +148,8 @@ final class ReportMarkdown {
      * 조사할 때 프로브로 잰 값을 쓰고, 그게 없을 때만 추정으로 떨어졌음을 <b>표시한다</b>.
      */
     private static void renderTokenAxis(StringBuilder sb, RcaReport report, RcaReport.Coverage c) {
-        var overhead = c.overheadTokens();
-        var stages = new StringBuilder();
+        long overhead = c.overheadTokens();
+        StringBuilder stages = new StringBuilder();
         long total = 0;
 
         if (report.triage() != null) {
@@ -192,7 +196,7 @@ final class ReportMarkdown {
         if (overhead < 0) {
             return "측정 안 됨";
         }
-        var value = in - overhead;
+        long value = in - overhead;
         return value < 0 ? "⚠ 이상값(오버헤드 초과)" : "%,d".formatted(value);
     }
 
@@ -223,6 +227,8 @@ final class ReportMarkdown {
                     .append(" |\n");
         }
         sb.append("| 계획 파싱 | ").append(t.planParsed() ? "성공" : "**실패 — fallback 적용**").append(" |\n");
+        sb.append("| 스윕 컨텍스트 | ").append(t.rawIncluded() ? "후보 + 원본 (A)" : "**후보만 — 원본 제외 (B)**")
+                .append(" |\n");
         sb.append("| prompt | `").append(nz(t.promptSource())).append("` |\n");
         sb.append("| tokens | in ").append(t.inputTokens()).append(" / out ").append(t.outputTokens());
         if (t.costUsd() >= 0) {

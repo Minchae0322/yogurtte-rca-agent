@@ -32,25 +32,25 @@ public class ServiceGraphExtractor {
     /** 선정 트레이스 + 창 안 후보(B-9) 전부에서 뽑는다. 같은 엣지는 트레이스를 넘어 누적되므로
      *  후보가 있으면 이것이 곧 그래프 merge다 — "여러 서비스가 같은 인프라를 쓴다"는 여기서 나온다. */
     public ServiceGraph extract(CollectedData data) {
-        var spans = new ArrayList<>(TraceSpans.parse(data.traceJson()));
+        ArrayList<TraceSpans.Span> spans = new ArrayList<>(TraceSpans.parse(data.traceJson()));
         data.candidateTraceJsons().values().forEach(json -> spans.addAll(TraceSpans.parse(json)));
         return fromSpans(spans);
     }
 
     public ServiceGraph fromSpans(List<TraceSpans.Span> spans) {
-        var byId = new LinkedHashMap<String, TraceSpans.Span>();
+        LinkedHashMap<String, TraceSpans.Span> byId = new LinkedHashMap<>();
         spans.forEach(span -> byId.put(span.spanId(), span));
 
-        var builders = new LinkedHashMap<String, EdgeBuilder>();
-        for (var span : spans) {
-            var edge = classify(span, byId);
+        LinkedHashMap<String, EdgeBuilder> builders = new LinkedHashMap<>();
+        for (TraceSpans.Span span : spans) {
+            EdgeBuilder edge = classify(span, byId);
             if (edge == null) {
                 continue;  // 내부 span — 엣지가 아니다. 원본 트레이스에는 그대로 남는다.
             }
             builders.computeIfAbsent(edge.key(), k -> edge).accumulate(span);
         }
 
-        var edges = builders.values().stream()
+        List<ServiceGraph.Edge> edges = builders.values().stream()
                 .map(EdgeBuilder::build)
                 .sorted(Comparator.comparing(ServiceGraph.Edge::kind)
                         .thenComparing(ServiceGraph.Edge::source)
@@ -67,23 +67,23 @@ public class ServiceGraphExtractor {
      * 아웃바운드 HTTP CLIENT span의 {@code client.name}이 그때도 남는 유일한 단서다.
      */
     private static EdgeBuilder classify(TraceSpans.Span span, Map<String, TraceSpans.Span> byId) {
-        var a = span.attributes();
-        var service = span.service().isBlank() ? "?" : span.service();
+        Map<String, String> a = span.attributes();
+        String service = span.service().isBlank() ? "?" : span.service();
 
-        var messagingSystem = a.get("messaging.system");
+        String messagingSystem = a.get("messaging.system");
         if (messagingSystem != null) {
-            var operation = a.getOrDefault("messaging.operation", "");
+            String operation = a.getOrDefault("messaging.operation", "");
             // receive의 토픽은 destination이 아니라 messaging.source.name에 온다 (실측 — CH-1).
-            var topic = "receive".equals(operation)
+            String topic = "receive".equals(operation)
                     ? a.getOrDefault("messaging.source.name", "?")
                     : a.getOrDefault("messaging.destination.name", a.getOrDefault("messaging.destination", "?"));
-            var node = messagingSystem + "/" + topic;
+            String node = messagingSystem + "/" + topic;
             return "receive".equals(operation)
                     ? new EdgeBuilder("messaging", node, service, "", operation)
                     : new EdgeBuilder("messaging", service, node, "", operation);
         }
 
-        var dbSystem = a.get("db.system");
+        String dbSystem = a.get("db.system");
         if (dbSystem != null) {
             return new EdgeBuilder("db", service, dbSystem, "", a.getOrDefault("db.operation", ""));
         }
@@ -91,24 +91,24 @@ public class ServiceGraphExtractor {
         // jdbc.* 는 OTel 컨벤션이 아니라 datasource-micrometer의 관례다. datasource.name은
         // 스키마명이 아니라 앱이 지은 풀 설정 이름이다 (chat의 datasource 이름이 "content"인 실측).
         if (a.containsKey("jdbc.datasource.driver") || a.containsKey("jdbc.datasource.name")) {
-            var driver = a.getOrDefault("jdbc.datasource.driver", "");
-            var kind = driver.toLowerCase().contains("mysql") ? "mysql"
+            String driver = a.getOrDefault("jdbc.datasource.driver", "");
+            String kind = driver.toLowerCase().contains("mysql") ? "mysql"
                     : driver.isEmpty() ? "jdbc" : driver;
-            var target = kind + "/" + a.getOrDefault("jdbc.datasource.name", "?");
+            String target = kind + "/" + a.getOrDefault("jdbc.datasource.name", "?");
             return new EdgeBuilder("jdbc", service, target, a.getOrDefault("jdbc.datasource.pool", ""), "");
         }
 
-        var clientName = a.get("client.name");
+        String clientName = a.get("client.name");
         if (clientName != null) {
             return new EdgeBuilder("service", service, clientName, "", "");
         }
 
-        var parent = byId.get(span.parentSpanId());
+        TraceSpans.Span parent = byId.get(span.parentSpanId());
         if (parent != null && !parent.service().equals(span.service())) {
             return new EdgeBuilder("service", parent.service(), service, "", "");
         }
 
-        var peerService = a.get("peer.service");
+        String peerService = a.get("peer.service");
         if (peerService != null) {
             // 여기 도달한 peer.service는 정체를 모르는 값이다. 버리지 않고 원본 속성째 넘긴다.
             return new EdgeBuilder("unclassified", service, "peer:" + peerService, "", "").withAttributes(a);
@@ -157,7 +157,7 @@ public class ServiceGraphExtractor {
                 }
             });
             events.addAll(span.eventNames());
-            var operation = span.attributes().getOrDefault("messaging.operation",
+            String operation = span.attributes().getOrDefault("messaging.operation",
                     span.attributes().getOrDefault("db.operation", ""));
             if (!operation.isEmpty()) {
                 operations.add(operation);
@@ -170,13 +170,13 @@ public class ServiceGraphExtractor {
         }
 
         private static List<String> errorsOf(TraceSpans.Span span) {
-            var a = span.attributes();
-            var out = new ArrayList<String>();
-            var exception = a.getOrDefault("exception", "");
+            Map<String, String> a = span.attributes();
+            ArrayList<String> out = new ArrayList<>();
+            String exception = a.getOrDefault("exception", "");
             if (!exception.isEmpty() && !"none".equals(exception)) {
                 out.add(truncate(exception));
             }
-            var error = a.getOrDefault("error", "");
+            String error = a.getOrDefault("error", "");
             if (!error.isEmpty()) {
                 out.add(truncate(error));
             }

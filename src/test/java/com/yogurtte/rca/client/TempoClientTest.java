@@ -31,7 +31,7 @@ class TempoClientTest {
         server.start();
         WireMock.configureFor("localhost", server.port());
 
-        var properties = new GrafanaProperties(
+        GrafanaProperties properties = new GrafanaProperties(
                 new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "12345"),
                 new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "12345"),
                 new GrafanaProperties.Endpoint("http://localhost:" + server.port(), "12345"),
@@ -47,7 +47,7 @@ class TempoClientTest {
 
     @Test
     void fetchesTraceByIdWithBasicAuth() {
-        var body = "{\"batches\":[]}";
+        String body = "{\"batches\":[]}";
         server.stubFor(get(urlPathEqualTo("/api/traces/abc123"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -55,7 +55,7 @@ class TempoClientTest {
 
         assertThat(client.fetchTrace("abc123")).isEqualTo(body);
 
-        var expected = "Basic " + Base64.getEncoder()
+        String expected = "Basic " + Base64.getEncoder()
                 .encodeToString("12345:secret-token".getBytes(StandardCharsets.UTF_8));
         server.verify(getRequestedFor(urlPathEqualTo("/api/traces/abc123"))
                 .withHeader("Authorization", equalTo(expected)));

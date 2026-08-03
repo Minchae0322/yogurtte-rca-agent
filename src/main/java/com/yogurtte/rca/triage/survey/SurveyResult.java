@@ -1,12 +1,14 @@
-package com.yogurtte.rca.triage;
+package com.yogurtte.rca.triage.survey;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yogurtte.rca.collector.TimeWindow;
 import com.yogurtte.rca.report.Evidence;
@@ -53,15 +55,14 @@ public record SurveyResult(
      * 했나"를 판단하려면 그때 무엇이 보였는지가 있어야 한다.
      */
     public List<Evidence.TraceHit> traceHits() {
-        var hits = new ArrayList<Evidence.TraceHit>();
-        parseHits(traceSearchJson, Evidence.TraceHit.CHANNEL_ERROR, hits);
-        parseHits(slowTraceSearchJson, Evidence.TraceHit.CHANNEL_SLOW, hits);
-        return dedupeKeepingFirstChannel(hits);
+        return dedupeKeepingFirstChannel(Stream.concat(
+                parseHits(traceSearchJson, Evidence.TraceHit.CHANNEL_ERROR).stream(),
+                parseHits(slowTraceSearchJson, Evidence.TraceHit.CHANNEL_SLOW).stream()).toList());
     }
 
     /** 에러 채널이 먼저 담기므로, 같은 traceId가 양쪽에 있으면 <b>에러 쪽 기록을 남긴다.</b> */
     private static List<Evidence.TraceHit> dedupeKeepingFirstChannel(List<Evidence.TraceHit> hits) {
-        var seen = new LinkedHashMap<String, Evidence.TraceHit>();
+        LinkedHashMap<String, Evidence.TraceHit> seen = new LinkedHashMap<>();
         hits.forEach(hit -> seen.putIfAbsent(hit.traceId(), hit));
         return List.copyOf(seen.values());
     }
@@ -74,39 +75,43 @@ public record SurveyResult(
      * {@code /api/traces/{id}}로 받으면 멀쩡하다). 버리면 그 트레이스에 도달할 길이 없어지므로
      * {@code trusted=false}로 남기고 <b>정렬과 창 계산에서만 뺀다.</b>
      */
-    private void parseHits(String json, String channel, List<Evidence.TraceHit> out) {
+    private List<Evidence.TraceHit> parseHits(String json, String channel) {
         if (json == null || json.isBlank()) {
-            return;
+            return List.of();
         }
         try {
-            var traces = MAPPER.readTree(json).path("traces");
+            JsonNode traces = MAPPER.readTree(json).path("traces");
             if (!traces.isArray()) {
-                return;
+                return List.of();
             }
-            var windowSeconds = window == null ? Long.MAX_VALUE
+            long windowSeconds = window == null ? Long.MAX_VALUE
                     : Duration.between(window.start(), window.end()).getSeconds();
-
-            traces.forEach(node -> {
-                var durationMs = node.path("durationMs").asLong(0L);
-                var startNanos = parseLong(node.path("startTimeUnixNano").asText(null));
-                var startedAt = (startNanos == null || startNanos <= 0L) ? null
-                        : Instant.ofEpochSecond(startNanos / 1_000_000_000L, startNanos % 1_000_000_000L);
-
-                // 창보다 긴 duration은 물리적으로 불가능하다 — 창 안에서 검색한 결과이므로.
-                var durationSane = durationMs >= 0 && durationMs / 1000 <= windowSeconds;
-
-                out.add(new Evidence.TraceHit(
-                        node.path("traceID").asText(""),
-                        node.path("rootServiceName").asText(""),
-                        node.path("rootTraceName").asText(""),
-                        durationMs,
-                        channel,
-                        startedAt,
-                        startedAt != null && durationSane));
-            });
+            return StreamSupport.stream(traces.spliterator(), false)
+                    .map(node -> toHit(node, channel, windowSeconds))
+                    .toList();
         } catch (Exception e) {
             // 파싱 실패는 후보 0건으로 떨어진다. 조사를 멈추지 않는다.
+            return List.of();
         }
+    }
+
+    private static Evidence.TraceHit toHit(JsonNode node, String channel, long windowSeconds) {
+        long durationMs = node.path("durationMs").asLong(0L);
+        Long startNanos = parseLong(node.path("startTimeUnixNano").asText(null));
+        Instant startedAt = (startNanos == null || startNanos <= 0L) ? null
+                : Instant.ofEpochSecond(startNanos / 1_000_000_000L, startNanos % 1_000_000_000L);
+
+        // 창보다 긴 duration은 물리적으로 불가능하다 — 창 안에서 검색한 결과이므로.
+        boolean durationSane = durationMs >= 0 && durationMs / 1000 <= windowSeconds;
+
+        return new Evidence.TraceHit(
+                node.path("traceID").asText(""),
+                node.path("rootServiceName").asText(""),
+                node.path("rootTraceName").asText(""),
+                durationMs,
+                channel,
+                startedAt,
+                startedAt != null && durationSane);
     }
 
     private static Long parseLong(String raw) {

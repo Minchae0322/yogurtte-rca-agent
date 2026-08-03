@@ -38,13 +38,13 @@ public class ReportStore {
     public Saved save(RcaReport report) throws IOException {
         Files.createDirectories(dir);
         // 탐색으로 시작한 조사는 traceId가 없을 수 있다 — 트레이스가 생성되지 않는 장애가 실재한다.
-        var key = (report.traceId() == null || report.traceId().isBlank()) ? "scan" : report.traceId();
-        var base = "%s-%s".formatted(key, TS.format(Instant.now()));
+        String key = (report.traceId() == null || report.traceId().isBlank()) ? "scan" : report.traceId();
+        String base = "%s-%s".formatted(key, TS.format(Instant.now()));
 
-        var json = dir.resolve(base + ".json");
+        Path json = dir.resolve(base + ".json");
         Files.writeString(json, mapper.writeValueAsString(report), StandardCharsets.UTF_8);
 
-        var markdown = dir.resolve(base + ".md");
+        Path markdown = dir.resolve(base + ".md");
         Files.writeString(markdown, ReportMarkdown.render(report), StandardCharsets.UTF_8);
 
         return new Saved(json, markdown);

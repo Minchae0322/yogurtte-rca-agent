@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 
@@ -18,11 +20,11 @@ public class OpenAiLlmClient implements LlmClient {
 
     @Override
     public LlmResult analyze(String systemPrompt, String context) {
-        var started = System.currentTimeMillis();
-        var response = chatModel.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(context))));
-        var elapsed = System.currentTimeMillis() - started;
+        long started = System.currentTimeMillis();
+        ChatResponse response = chatModel.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(context))));
+        long elapsed = System.currentTimeMillis() - started;
 
-        var usage = response.getMetadata().getUsage();
+        Usage usage = response.getMetadata().getUsage();
         return LlmResult.withoutCacheBreakdown(
                 response.getResult().getOutput().getText(),
                 usage == null || usage.getPromptTokens() == null ? -1 : usage.getPromptTokens(),

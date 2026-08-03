@@ -1,4 +1,4 @@
-package com.yogurtte.rca.triage;
+package com.yogurtte.rca.triage.window;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -10,8 +10,12 @@ import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 
 import com.yogurtte.rca.collector.TimeWindow;
+import com.yogurtte.rca.error.ErrorCode;
+import com.yogurtte.rca.error.RestApiException;
 import com.yogurtte.rca.time.Confidence;
+import com.yogurtte.rca.time.DayPart;
 import com.yogurtte.rca.time.TimeCandidates;
+import com.yogurtte.rca.triage.SurveyProperties;
 
 /**
  * 자연어 시간 표현 → 조회 시간창 (B-26 · 결함 22에서 재작성).
@@ -56,18 +60,17 @@ public class TimeExpressionParser {
     /**
      * 요청에 명시적 from/to가 있으면 그것이 우선한다. 없으면 질문 문장에서 찾는다.
      *
-     * @throws InvalidTimeWindowException from/to가 절반만 오거나 순서가 뒤집힌 경우.
-     *                                    구 파서는 조용히 무시하고 질문 파싱으로 떨어져
-     *                                    <b>오늘 창을 조사하고도 눈치채지 못했다</b> (결함 22 —
-     *                                    과거 데이터 재조사가 정확히 이 경로를 탄다).
+     * @throws RestApiException from/to가 절반만 오거나({@code INVALID_TIME_WINDOW_INCOMPLETE})
+     *                          미래이거나({@code ..._FUTURE}) 순서가 뒤집힌({@code ..._REVERSED}) 경우.
+     *                          거부 문구는 {@link ErrorCode}가 가지고 있다.
      */
     public Resolved resolve(String question, Instant from, Instant to, Instant now) {
         if (from != null || to != null) {
             return explicitWindow(from, to, now);
         }
 
-        var today = ZonedDateTime.ofInstant(now, zone).toLocalDate();
-        var found = TimeCandidates.parse(question, today);
+        LocalDate today = ZonedDateTime.ofInstant(now, zone).toLocalDate();
+        TimeCandidates found = TimeCandidates.parse(question, today);
 
         // 구체적인 것이 이긴다. 이 순서가 곧 우선순위다.
         if (found.range() != null) {
@@ -94,27 +97,25 @@ public class TimeExpressionParser {
 
     private Resolved explicitWindow(Instant from, Instant to, Instant now) {
         if (from == null || to == null) {
-            throw new InvalidTimeWindowException(
-                    "from/to는 함께 지정해야 한다 — 하나만 주면 무시된 채 질문 파싱으로 떨어져 "
-                            + "의도치 않은 창을 조사하게 된다 (받은 값: from=%s, to=%s)".formatted(from, to));
+            throw RestApiException.of(ErrorCode.INVALID_TIME_WINDOW_INCOMPLETE, from, to);
         }
         if (!from.isBefore(now)) {
-            throw new InvalidTimeWindowException("from이 현재 이후다: from=%s, now=%s".formatted(from, now));
+            throw RestApiException.of(ErrorCode.INVALID_TIME_WINDOW_FUTURE, from, now);
         }
-        var cut = to.isAfter(now);
-        var end = cut ? now : to;
+        boolean cut = to.isAfter(now);
+        Instant end = cut ? now : to;
         if (!from.isBefore(end)) {
-            throw new InvalidTimeWindowException("from이 to보다 늦거나 같다: from=%s, to=%s".formatted(from, to));
+            throw RestApiException.of(ErrorCode.INVALID_TIME_WINDOW_REVERSED, from, to);
         }
         return clamp(new TimeWindow(from, end),
                 "명시적 from/to" + (cut ? " (미래 end → now로 잘림)" : ""), Confidence.EXACT);
     }
 
     private Resolved combineRange(TimeCandidates found, LocalDate today, Instant now) {
-        var range = found.range();
-        var base = baseDate(found, today);
-        var start = base.atTime(range.start()).atZone(zone);
-        var end = base.atTime(range.end()).atZone(zone);
+        TimeCandidates.RangeMatch range = found.range();
+        LocalDate base = baseDate(found, today);
+        ZonedDateTime start = base.atTime(range.start()).atZone(zone);
+        ZonedDateTime end = base.atTime(range.end()).atZone(zone);
         if (!end.isAfter(start)) {
             end = end.plusDays(1); // 23시~02시처럼 자정을 넘는 구간.
         }
@@ -131,39 +132,33 @@ public class TimeExpressionParser {
     }
 
     private Resolved combineTime(TimeCandidates found, LocalDate today, Instant now) {
-        var time = found.time();
-        var point = baseDate(found, today).atTime(time.time()).atZone(zone).toInstant();
+        TimeCandidates.TimeMatch time = found.time();
+        Instant point = baseDate(found, today).atTime(time.time()).atZone(zone).toInstant();
         if (!found.hasExplicitDate() && point.isAfter(now)) {
             point = point.minus(Duration.ofDays(1)); // 가장 가까운 과거의 그 시각.
         }
-        var start = point.minus(POINT_PADDING);
+        Instant start = point.minus(POINT_PADDING);
         if (!start.isBefore(now)) {
             return fallback(now, "절대 시각 '" + time.text() + "'이 미래");
         }
-        var prefix = "";
-        if (found.night() != null) {
-            prefix = found.night().text() + " ";
-        } else if (found.date() != null) {
-            prefix = found.date().text() + " ";
-        }
         return clamp(new TimeWindow(start, cutFuture(point.plus(POINT_PADDING), start, now)),
-                "절대 시각 '" + prefix + time.text() + "' → "
+                "절대 시각 '" + datePrefix(found) + time.text() + "' → "
                         + MINUTE.format(ZonedDateTime.ofInstant(point, zone)) + " " + zone
                         + " ±" + POINT_PADDING.toMinutes() + "분 (추정 창)", Confidence.APPROX);
     }
 
     private Resolved combineNight(TimeCandidates found, LocalDate today, Instant now) {
-        var start = today.minusDays(1).atTime(18, 0).atZone(zone).toInstant();
-        var end = today.atTime(6, 0).atZone(zone).toInstant();
+        Instant start = today.minusDays(1).atTime(18, 0).atZone(zone).toInstant();
+        Instant end = today.atTime(6, 0).atZone(zone).toInstant();
         return clamp(new TimeWindow(start, cutFuture(end, start, now)),
                 found.night().text() + " (어제 18:00~오늘 06:00 " + zone + ")", Confidence.EXACT);
     }
 
     private Resolved combineDaypart(TimeCandidates found, LocalDate today, Instant now) {
-        var part = found.daypart().part();
-        var base = found.date() != null ? found.date().date() : today;
-        var start = part.startOn(base, zone);
-        var end = part.endOn(base, zone);
+        DayPart part = found.daypart().part();
+        LocalDate base = found.date() != null ? found.date().date() : today;
+        Instant start = part.startOn(base, zone);
+        Instant end = part.endOn(base, zone);
         if (found.date() == null && start.isAfter(now)) {
             base = base.minusDays(1); // "저녁에"를 낮에 물으면 어제 저녁이다.
             start = part.startOn(base, zone);
@@ -178,17 +173,28 @@ public class TimeExpressionParser {
     }
 
     private Resolved combineDate(TimeCandidates found, LocalDate today, Instant now) {
-        var date = found.date();
+        TimeCandidates.DateMatch date = found.date();
         if (date.daysAgo() == 0) {
             return clamp(new TimeWindow(today.atStartOfDay(zone).toInstant(), now),
                     "오늘 00:00~현재 " + zone, Confidence.EXACT);
         }
-        var start = date.date().atStartOfDay(zone);
+        ZonedDateTime start = date.date().atStartOfDay(zone);
         return clamp(new TimeWindow(start.toInstant(), start.plusDays(1).toInstant()),
                 date.text() + " (하루 전체 " + zone + ")", Confidence.EXACT);
     }
 
     // ---- 공통 ----
+
+    /** 시각 앞에 붙는 날짜 수식어. "어젯밤 11시"의 "어젯밤"이 "어제"보다 구체적이라 먼저다. */
+    private static String datePrefix(TimeCandidates found) {
+        if (found.night() != null) {
+            return found.night().text() + " ";
+        }
+        if (found.date() != null) {
+            return found.date().text() + " ";
+        }
+        return "";
+    }
 
     private LocalDate baseDate(TimeCandidates found, LocalDate today) {
         if (found.date() != null) {
@@ -207,8 +213,8 @@ public class TimeExpressionParser {
     }
 
     private Resolved fallback(Instant now, String note) {
-        var lookback = Duration.ofHours(properties.defaultLookbackHours());
-        var reason = note == null
+        Duration lookback = Duration.ofHours(properties.defaultLookbackHours());
+        String reason = note == null
                 ? "시간 표현 없음 → 기본 최근 " + properties.defaultLookbackHours() + "시간"
                 : note + " → 기본 최근 " + properties.defaultLookbackHours() + "시간";
         return clamp(new TimeWindow(now.minus(lookback), now), reason, Confidence.FALLBACK);
@@ -219,8 +225,8 @@ public class TimeExpressionParser {
      * 앞을 남기면 정작 봐야 할 구간이 잘려나간다.
      */
     private Resolved clamp(TimeWindow window, String expression, Confidence confidence) {
-        var max = Duration.ofHours(properties.maxWindowHours());
-        var span = Duration.between(window.start(), window.end());
+        Duration max = Duration.ofHours(properties.maxWindowHours());
+        Duration span = Duration.between(window.start(), window.end());
         if (span.compareTo(max) <= 0) {
             return new Resolved(window, expression, confidence);
         }

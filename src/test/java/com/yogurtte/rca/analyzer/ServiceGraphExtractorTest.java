@@ -3,8 +3,10 @@ package com.yogurtte.rca.analyzer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -22,10 +24,10 @@ class ServiceGraphExtractorTest {
     @Test
     void 같은_엣지의_span들이_한_줄로_접히고_에러와_이벤트가_실린다() {
         // 23 span짜리 트레이스: JDBC 세부 span 19개가 전부 같은 엣지다.
-        var graph = extract("/traces/trace-jdbc-rollback.json");
+        ServiceGraph graph = extract("/traces/trace-jdbc-rollback.json");
 
         assertThat(graph.edges()).hasSize(1);
-        var edge = graph.edges().get(0);
+        ServiceGraph.Edge edge = graph.edges().get(0);
         assertThat(edge.kind()).isEqualTo("jdbc");
         assertThat(edge.source()).isEqualTo("content-service");
         assertThat(edge.target()).isEqualTo("mysql/content");
@@ -40,9 +42,9 @@ class ServiceGraphExtractorTest {
     void peer_service가_DB_이름이어도_자기_참조_엣지가_생기지_않는다() {
         // peer.service=content인 span이 트레이스당 수십 개다 — content-service가 아니라
         // MySQL 데이터베이스 이름이다. 표준 키를 먼저 보므로 전부 jdbc로 분류되어야 한다.
-        for (var fixture : new String[] {"/traces/trace-jdbc-rollback.json",
+        for (String fixture : new String[] {"/traces/trace-jdbc-rollback.json",
                 "/traces/trace-client-call-refused.json", "/traces/trace-kafka-publish-receive-dlq.json"}) {
-            var graph = extract(fixture);
+            ServiceGraph graph = extract(fixture);
             assertThat(graph.edges())
                     .as(fixture)
                     .noneMatch(e -> e.source().equals(e.target()))
@@ -54,17 +56,17 @@ class ServiceGraphExtractorTest {
     void 상대_서비스가_죽어_트레이스에_없어도_아웃바운드_호출이_엣지로_나온다() {
         // 66→28 span 전부가 content-service다 — auth-service는 다운이라 트레이스에 합류하지 못했다.
         // client.name 규칙(판별 ④)이 없으면 이 엣지는 조용히 사라진다(검증에서 실제로 사라졌다).
-        var graph = extract("/traces/trace-client-call-refused.json");
+        ServiceGraph graph = extract("/traces/trace-client-call-refused.json");
 
         assertThat(graph.edges()).extracting(ServiceGraph.Edge::kind)
                 .containsExactlyInAnyOrder("db", "jdbc", "service");
 
-        var auth = edgeOfKind(graph, "service");
+        ServiceGraph.Edge auth = edgeOfKind(graph, "service");
         assertThat(auth.source()).isEqualTo("content-service");
         assertThat(auth.target()).isEqualTo("auth-service");
         assertThat(auth.errors()).anySatisfy(e -> assertThat(e).contains("Connection refused"));
 
-        var redis = edgeOfKind(graph, "db");
+        ServiceGraph.Edge redis = edgeOfKind(graph, "db");
         assertThat(redis.target()).isEqualTo("redis");
         assertThat(redis.calls()).isEqualTo(4);
         assertThat(redis.operations()).contains("GET");
@@ -72,8 +74,8 @@ class ServiceGraphExtractorTest {
 
     @Test
     void 카프카_엣지는_방향까지_나오고_receive_토픽명은_source_name에서_온다() {
-        var graph = extract("/traces/trace-kafka-publish-receive-dlq.json");
-        var messaging = graph.edges().stream().filter(e -> "messaging".equals(e.kind())).toList();
+        ServiceGraph graph = extract("/traces/trace-kafka-publish-receive-dlq.json");
+        List<ServiceGraph.Edge> messaging = graph.edges().stream().filter(e -> "messaging".equals(e.kind())).toList();
 
         // publish는 서비스 → 토픽, receive는 토픽 → 서비스.
         assertThat(messaging).anySatisfy(e -> {
@@ -98,7 +100,7 @@ class ServiceGraphExtractorTest {
 
     @Test
     void 관계_속성이_없는_트레이스는_빈_그래프다() {
-        var graph = extractor.fromSpans(TraceSpans.parse("""
+        ServiceGraph graph = extractor.fromSpans(TraceSpans.parse("""
                 {"batches":[{"resource":{"attributes":[
                     {"key":"service.name","value":{"stringValue":"chat"}}]},
                   "scopeSpans":[{"spans":[
@@ -117,7 +119,7 @@ class ServiceGraphExtractorTest {
     }
 
     private static String readFixture(String path) {
-        try (var in = ServiceGraphExtractorTest.class.getResourceAsStream(path)) {
+        try (InputStream in = ServiceGraphExtractorTest.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

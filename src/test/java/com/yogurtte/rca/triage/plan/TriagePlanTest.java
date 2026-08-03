@@ -1,4 +1,4 @@
-package com.yogurtte.rca.triage;
+package com.yogurtte.rca.triage.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,7 +15,7 @@ class TriagePlanTest {
 
     @Test
     void 코드블록_안의_계획을_읽는다() {
-        var text = """
+        String text = """
                 ## 1. 판단
                 02:31 무렵 chat-service 에러가 급증했다.
 
@@ -32,7 +32,7 @@ class TriagePlanTest {
                 ```
                 """;
 
-        var plan = TriagePlan.parse(text, SURVEY);
+        TriagePlan plan = TriagePlan.parse(text, SURVEY);
 
         assertThat(plan.parsed()).isTrue();
         assertThat(plan.window().start()).isEqualTo(Instant.parse("2026-07-27T17:29:00Z"));
@@ -46,12 +46,12 @@ class TriagePlanTest {
     @Test
     void traceId가_null이어도_계획은_유효하다() {
         // 컨슈머 전멸·파드 부재처럼 이상 트레이스가 생성되지 않는 장애가 실재한다.
-        var text = """
+        String text = """
                 {"windowStart":"2026-07-27T17:00:00Z","windowEnd":"2026-07-27T18:00:00Z",
                  "services":[],"traceId":null,"evidence":[],"reason":"up이 끊긴 구간"}
                 """;
 
-        var plan = TriagePlan.parse(text, SURVEY);
+        TriagePlan plan = TriagePlan.parse(text, SURVEY);
 
         assertThat(plan.parsed()).isTrue();
         assertThat(plan.traceId()).isNull();
@@ -61,11 +61,11 @@ class TriagePlanTest {
 
     @Test
     void 스윕_창을_벗어난_구간은_잘라내고_기록을_남긴다() {
-        var text = """
+        String text = """
                 {"windowStart":"2026-07-26T00:00:00Z","windowEnd":"2026-07-28T00:00:00Z"}
                 """;
 
-        var plan = TriagePlan.parse(text, SURVEY);
+        TriagePlan plan = TriagePlan.parse(text, SURVEY);
 
         assertThat(plan.window()).isEqualTo(SURVEY);
         assertThat(plan.notes()).anyMatch(note -> note.contains("잘라냈다"));
@@ -73,7 +73,7 @@ class TriagePlanTest {
 
     @Test
     void 계획을_못_읽어도_조사를_멈추지_않는다() {
-        var plan = TriagePlan.parse("JSON을 안 내고 그냥 줄글로 답했다", SURVEY);
+        TriagePlan plan = TriagePlan.parse("JSON을 안 내고 그냥 줄글로 답했다", SURVEY);
 
         assertThat(plan.parsed()).isFalse();
         assertThat(plan.window()).isEqualTo(SURVEY);
@@ -83,11 +83,11 @@ class TriagePlanTest {
 
     @Test
     void 창이_뒤집혀_있으면_스윕_창을_쓴다() {
-        var text = """
+        String text = """
                 {"windowStart":"2026-07-27T18:00:00Z","windowEnd":"2026-07-27T17:00:00Z"}
                 """;
 
-        var plan = TriagePlan.parse(text, SURVEY);
+        TriagePlan plan = TriagePlan.parse(text, SURVEY);
 
         assertThat(plan.window()).isEqualTo(SURVEY);
         assertThat(plan.notes()).anyMatch(note -> note.contains("유효한 windowStart/windowEnd가 없어"));

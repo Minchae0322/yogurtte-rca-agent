@@ -4,6 +4,7 @@ import java.time.ZoneId;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.yogurtte.rca.triage.window.TimeExpressionParser;
 
 @Configuration(proxyBeanMethods = false)
 public class TriageConfig {

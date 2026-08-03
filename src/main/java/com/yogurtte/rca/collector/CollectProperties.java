@@ -11,6 +11,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                 {@code app} 라벨은 <b>Loki에 존재하지 않고</b>, {@code application}은
  *                 Micrometer common tag라 메트릭 전용이다 — 둘 중 하나를 쓰면 매칭 스트림이
  *                 0개가 되어 조용히 빈 결과가 나온다 (2026-07-26~27 조사 6회가 그 상태였다).
+ * @param maxTraces 전문 수집할 트레이스 수 상한. <b>0 이하면 상한 없음</b>(창 안의 것을 전부).
+ *                  <p>상한을 두면 <b>정답 트레이스가 순위에 밀려 안 실릴 수 있다</b> — 상한이 3이던
+ *                  시절에는 대표 1건 + 후보 2건이 전부였고, 어느 것이 원인인지는 전문을 봐야 아는데
+ *                  순서에는 아무 의미가 없었다(신호가 만들어진 순서).
+ *                  <p>대신 컨텍스트가 트레이스 수에 비례해 늘어난다 — 각 트레이스는
+ *                  {@code maxTraceBytes}로 개별 절삭되지만 <b>합계에는 상한이 없다.</b>
+ *                  실측 기준 트레이스 1건이 14KB 안팎이므로 100건이면 약 1.4MB다.
  */
 @ConfigurationProperties("rca.collect")
 public record CollectProperties(
@@ -94,8 +101,8 @@ public record CollectProperties(
         if (services == null || services.isEmpty()) {
             return apps;
         }
-        var known = List.of(apps.split("\\|"));
-        var filtered = services.stream().filter(known::contains).distinct().toList();
+        List<String> known = List.of(apps.split("\\|"));
+        List<String> filtered = services.stream().filter(known::contains).distinct().toList();
         return filtered.isEmpty() ? apps : String.join("|", filtered);
     }
 }

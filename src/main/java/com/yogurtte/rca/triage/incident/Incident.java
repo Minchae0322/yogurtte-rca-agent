@@ -1,4 +1,4 @@
-package com.yogurtte.rca.triage;
+package com.yogurtte.rca.triage.incident;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -7,10 +7,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import com.yogurtte.rca.collector.TimeWindow;
 
@@ -45,15 +46,9 @@ public record Incident(
     }
 
     static Incident of(String id, List<Signal> signals) {
-        var first = signals.get(0);
-        var traceIds = new LinkedHashSet<String>();
-        signals.stream()
-                .filter(s -> s.channel() == Signal.Channel.TEMPO)
-                .map(Signal::ref)
-                .filter(ref -> ref != null && !ref.isBlank())
-                .forEach(traceIds::add);
+        Signal first = signals.get(0);
         return new Incident(id, first.resource(), first.signature(), first.channel(),
-                List.copyOf(signals), List.copyOf(traceIds), List.of());
+                List.copyOf(signals), tempoRefs(signals).distinct().toList(), List.of());
     }
 
     Incident withRelated(List<String> ids) {
@@ -83,33 +78,32 @@ public record Incident(
      * 덧대는 방식(추측을 추측으로 보정)은 이 계산이 대신한다.
      */
     public TimeWindow window(Duration exactPad, Duration bucketPad, TimeWindow sweep) {
-        var pad = precision() == Signal.Precision.EXACT ? exactPad : bucketPad;
-        var start = firstAt().minus(pad);
-        var end = lastAt().plus(pad);
+        Duration pad = precision() == Signal.Precision.EXACT ? exactPad : bucketPad;
+        Instant start = firstAt().minus(pad);
+        Instant end = lastAt().plus(pad);
         if (sweep == null) {
             return new TimeWindow(start, end);
         }
-        var clampedStart = start.isBefore(sweep.start()) ? sweep.start() : start;
-        var clampedEnd = end.isAfter(sweep.end()) ? sweep.end() : end;
+        Instant clampedStart = start.isBefore(sweep.start()) ? sweep.start() : start;
+        Instant clampedEnd = end.isAfter(sweep.end()) ? sweep.end() : end;
         return clampedStart.isBefore(clampedEnd) ? new TimeWindow(clampedStart, clampedEnd) : sweep;
     }
 
     /** 여러 후보를 함께 고른 경우의 창 — 합집합이다. 한 장애가 상·하류에 걸칠 수 있다. */
     public static TimeWindow unionWindow(List<Incident> chosen, Duration exactPad,
                                          Duration bucketPad, TimeWindow sweep) {
-        Instant start = null;
-        Instant end = null;
-        for (var incident : chosen) {
-            var w = incident.window(exactPad, bucketPad, sweep);
-            start = (start == null || w.start().isBefore(start)) ? w.start() : start;
-            end = (end == null || w.end().isAfter(end)) ? w.end() : end;
+        List<TimeWindow> windows = chosen.stream().map(i -> i.window(exactPad, bucketPad, sweep)).toList();
+        if (windows.isEmpty()) {
+            return sweep;
         }
-        return (start == null || !start.isBefore(end)) ? sweep : new TimeWindow(start, end);
+        Instant start = windows.stream().map(TimeWindow::start).min(Comparator.naturalOrder()).orElseThrow();
+        Instant end = windows.stream().map(TimeWindow::end).max(Comparator.naturalOrder()).orElseThrow();
+        return start.isBefore(end) ? new TimeWindow(start, end) : sweep;
     }
 
     /** 컨텍스트에 넣을 한 덩어리. 원본 JSON은 따로 그대로 실린다. */
     public String describe() {
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
         sb.append("## ").append(id).append("  ").append(resource);
         if (!"?".equals(signature)) {
             sb.append("  |  ").append(signature);
@@ -130,10 +124,8 @@ public record Incident(
         return sb.toString();
     }
 
-    static List<String> idsOf(List<Incident> incidents) {
-        var ids = new ArrayList<String>();
-        incidents.forEach(i -> ids.add(i.id()));
-        return ids;
+    public static List<String> idsOf(List<Incident> incidents) {
+        return incidents.stream().map(Incident::id).toList();
     }
 
     // ---- 태생: 신호 → 장애 후보 여러 개. 하나로 접지 않는다 ----
@@ -165,23 +157,24 @@ public record Incident(
         }
 
         // ① 라벨로 먼저 가른다 — 시간이 들어가지 않으므로 인터리빙에 면역이다.
-        var byKey = new LinkedHashMap<String, List<Signal>>();
-        signals.forEach(s -> byKey.computeIfAbsent(s.key(), k -> new ArrayList<>()).add(s));
+        LinkedHashMap<String, List<Signal>> byKey = signals.stream().collect(Collectors.groupingBy(
+                Signal::key, LinkedHashMap::new, Collectors.toList()));
 
         // ② 같은 키 안에서만 시간으로 끊는다.
-        var groups = new ArrayList<List<Signal>>();
-        byKey.values().forEach(group -> groups.addAll(splitByGap(group, gap)));
+        List<List<Signal>> groups = byKey.values().stream()
+                .flatMap(group -> splitByGap(group, gap).stream())
+                .toList();
 
         // ③ traceId를 공유하면 병합한다.
-        var merged = mergeByTraceLink(groups);
+        List<List<Signal>> merged = mergeByTraceLink(groups);
 
         // 시각 순으로 번호를 매긴다.
-        merged.sort(Comparator.comparing(group -> group.stream()
-                .map(Signal::from).min(Comparator.naturalOrder()).orElse(Instant.EPOCH)));
-        var incidents = new ArrayList<Incident>();
-        for (var i = 0; i < merged.size(); i++) {
-            incidents.add(Incident.of("INC-" + (i + 1), merged.get(i)));
-        }
+        List<List<Signal>> ordered = merged.stream()
+                .sorted(Comparator.comparing(Incident::startOf))
+                .toList();
+        List<Incident> incidents = IntStream.range(0, ordered.size())
+                .mapToObj(i -> Incident.of("INC-" + (i + 1), ordered.get(i)))
+                .toList();
 
         // ④ 시간이 겹치는 다른 후보를 표시한다. 병합이 아니다.
         return linkRelated(incidents);
@@ -194,26 +187,22 @@ public record Incident(
      * 점이 아니라 구간이므로, 시작 시각만 비교하면 긴 구간 신호를 잘라먹는다.
      */
     private static List<List<Signal>> splitByGap(List<Signal> signals, Duration gap) {
-        var sorted = new ArrayList<>(signals);
-        sorted.sort(Comparator.comparing(Signal::from));
-
-        var out = new ArrayList<List<Signal>>();
-        var current = new ArrayList<Signal>();
+        List<Signal> sorted = signals.stream().sorted(Comparator.comparing(Signal::from)).toList();
+        ArrayList<List<Signal>> groups = new ArrayList<>();
+        List<Signal> current = null;
         Instant reach = null;
 
-        for (var s : sorted) {
-            if (reach != null && s.from().isAfter(reach.plus(gap))) {
-                out.add(List.copyOf(current));
+        // 새 묶음을 만드는 즉시 groups에 넣는다 — 루프 끝에서 남은 것을 따로 흘려보낼 필요가 없다.
+        for (Signal signal : sorted) {
+            if (current == null || signal.from().isAfter(reach.plus(gap))) {
                 current = new ArrayList<>();
-                reach = null;
+                groups.add(current);
+                reach = signal.to();
             }
-            current.add(s);
-            reach = (reach == null || s.to().isAfter(reach)) ? s.to() : reach;
+            current.add(signal);
+            reach = signal.to().isAfter(reach) ? signal.to() : reach;
         }
-        if (!current.isEmpty()) {
-            out.add(List.copyOf(current));
-        }
-        return out;
+        return groups.stream().map(List::copyOf).toList();
     }
 
     /**
@@ -224,55 +213,68 @@ public record Incident(
      * 영향받는다"</i> 를 코드에 심는 것이 된다 — 그건 채점 대상인 정답 구조다.
      */
     private static List<List<Signal>> mergeByTraceLink(List<List<Signal>> groups) {
-        var out = new ArrayList<List<Signal>>();
-        var outIds = new ArrayList<Set<String>>();
-        for (var group : groups) {
-            var ids = traceIdsOf(group);
-            var mergedInto = -1;
-            if (!ids.isEmpty()) {
-                for (var i = 0; i < out.size(); i++) {
-                    if (!Collections.disjoint(outIds.get(i), ids)) {
-                        mergedInto = i;
-                        break;
-                    }
-                }
-            }
-            if (mergedInto >= 0) {
-                var combined = new ArrayList<>(out.get(mergedInto));
-                combined.addAll(group);
-                out.set(mergedInto, List.copyOf(combined));
-                var combinedIds = new HashSet<>(outIds.get(mergedInto));
-                combinedIds.addAll(ids);
-                outIds.set(mergedInto, combinedIds);
-            } else {
-                out.add(group);
-                outIds.add(ids);
-            }
+        ArrayList<Cluster> clusters = new ArrayList<>();
+        for (List<Signal> group : groups) {
+            Set<String> ids = tempoRefs(group).collect(Collectors.toSet());
+            clusters.stream()
+                    .filter(cluster -> cluster.sharesTraceWith(ids))
+                    .findFirst()
+                    .ifPresentOrElse(cluster -> cluster.absorb(group, ids),
+                            () -> clusters.add(new Cluster(group, ids)));
         }
-        return out;
+        return clusters.stream().map(Cluster::signals).toList();
     }
 
-    private static Set<String> traceIdsOf(List<Signal> signals) {
+    /**
+     * 병합 중인 군집 하나. traceId 집합을 신호와 <b>같은 객체가</b> 들고 있다 —
+     * 신호 리스트와 id 리스트를 인덱스로 맞추던 구조에선 한쪽만 갱신하면 조용히 어긋난다.
+     */
+    private static final class Cluster {
+
+        private final List<Signal> signals = new ArrayList<>();
+        private final Set<String> traceIds = new HashSet<>();
+
+        Cluster(List<Signal> signals, Set<String> traceIds) {
+            absorb(signals, traceIds);
+        }
+
+        /** traceId가 없는 군집은 아무와도 이어지지 않는다 — 시간 근접만으로는 병합하지 않는다. */
+        boolean sharesTraceWith(Set<String> ids) {
+            return !ids.isEmpty() && !Collections.disjoint(traceIds, ids);
+        }
+
+        void absorb(List<Signal> more, Set<String> ids) {
+            signals.addAll(more);
+            traceIds.addAll(ids);
+        }
+
+        List<Signal> signals() {
+            return List.copyOf(signals);
+        }
+    }
+
+    /** 신호 묶음이 딸고 있는 traceId들. 빈 값·비-Tempo 채널은 여기서 걸러진다. */
+    private static Stream<String> tempoRefs(List<Signal> signals) {
         return signals.stream()
                 .filter(s -> s.channel() == Signal.Channel.TEMPO)
                 .map(Signal::ref)
-                .filter(ref -> ref != null && !ref.isBlank())
-                .collect(Collectors.toSet());
+                .filter(ref -> ref != null && !ref.isBlank());
+    }
+
+    /** 신호 묶음의 시작 시각 — 후보 번호를 시각 순으로 매기는 기준. */
+    private static Instant startOf(List<Signal> signals) {
+        return signals.stream().map(Signal::from).min(Comparator.naturalOrder()).orElse(Instant.EPOCH);
     }
 
     /** 시간이 겹치는 다른 후보를 서로 가리키게 한다. 상·하류에 걸친 장애를 모델이 묶을 수 있게. */
     private static List<Incident> linkRelated(List<Incident> incidents) {
-        var out = new ArrayList<Incident>();
-        for (var incident : incidents) {
-            var related = new ArrayList<String>();
-            for (var other : incidents) {
-                if (!other.id().equals(incident.id()) && overlaps(incident, other)) {
-                    related.add(other.id());
-                }
-            }
-            out.add(incident.withRelated(related));
-        }
-        return List.copyOf(out);
+        return incidents.stream()
+                .map(incident -> incident.withRelated(incidents.stream()
+                        .filter(other -> !other.id().equals(incident.id()))
+                        .filter(other -> overlaps(incident, other))
+                        .map(Incident::id)
+                        .toList()))
+                .toList();
     }
 
     private static boolean overlaps(Incident a, Incident b) {

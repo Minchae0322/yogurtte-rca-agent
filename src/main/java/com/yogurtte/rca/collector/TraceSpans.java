@@ -46,7 +46,7 @@ public final class  TraceSpans {
     }
 
     public static List<Span> parse(String traceJson) {
-        var spans = new ArrayList<Span>();
+        ArrayList<Span> spans = new ArrayList<>();
         if (traceJson == null || traceJson.isBlank()) {
             return spans;
         }
@@ -58,27 +58,27 @@ public final class  TraceSpans {
         }
 
         // Tempo는 "batches"로 응답한다; 일부 버전/내보내기는 OTLP 이름인 "resourceSpans"를 쓴다.
-        var batches = root.has("batches") ? root.get("batches") : root.get("resourceSpans");
+        JsonNode batches = root.has("batches") ? root.get("batches") : root.get("resourceSpans");
         if (batches == null || !batches.isArray()) {
             return spans;
         }
 
-        for (var batch : batches) {
-            var service = serviceName(batch);
-            var scopeSpans = batch.has("scopeSpans")
+        for (JsonNode batch : batches) {
+            String service = serviceName(batch);
+            JsonNode scopeSpans = batch.has("scopeSpans")
                     ? batch.get("scopeSpans")
                     : batch.get("instrumentationLibrarySpans");
             if (scopeSpans == null || !scopeSpans.isArray()) {
                 continue;
             }
-            for (var scope : scopeSpans) {
-                var spanArray = scope.get("spans");
+            for (JsonNode scope : scopeSpans) {
+                JsonNode spanArray = scope.get("spans");
                 if (spanArray == null || !spanArray.isArray()) {
                     continue;
                 }
-                for (var span : spanArray) {
-                    var start = span.path("startTimeUnixNano").asLong(0L);
-                    var end = span.path("endTimeUnixNano").asLong(0L);
+                for (JsonNode span : spanArray) {
+                    long start = span.path("startTimeUnixNano").asLong(0L);
+                    long end = span.path("endTimeUnixNano").asLong(0L);
                     if (start <= 0) {
                         continue;
                     }
@@ -94,10 +94,10 @@ public final class  TraceSpans {
 
     /** 가장 긴 span N개를 압축된 텍스트로 렌더링한다. 원본 트레이스가 너무 커서 통째로 못 넣을 때 사용. */
     public static String topByDuration(List<Span> spans, int limit) {
-        var sorted = new ArrayList<>(spans);
+        ArrayList<Span> sorted = new ArrayList<>(spans);
         sorted.sort((a, b) -> Long.compare(b.durationNanos(), a.durationNanos()));
 
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
         sorted.stream().limit(limit).forEach(span -> sb
                 .append(String.format("%.2fms", span.durationMillis()))
                 .append("  ")
@@ -109,17 +109,17 @@ public final class  TraceSpans {
     }
 
     private static Map<String, String> attributesOf(JsonNode span) {
-        var map = new LinkedHashMap<String, String>();
-        var attributes = span.path("attributes");
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        JsonNode attributes = span.path("attributes");
         if (!attributes.isArray()) {
             return map;
         }
-        for (var attribute : attributes) {
-            var key = attribute.path("key").asText("");
+        for (JsonNode attribute : attributes) {
+            String key = attribute.path("key").asText("");
             if (key.isEmpty()) {
                 continue;
             }
-            var value = attribute.path("value");
+            JsonNode value = attribute.path("value");
             if (value.hasNonNull("stringValue")) {
                 map.put(key, value.get("stringValue").asText(""));
             } else if (value.hasNonNull("intValue")) {
@@ -134,13 +134,13 @@ public final class  TraceSpans {
     }
 
     private static List<String> eventNamesOf(JsonNode span) {
-        var events = span.path("events");
+        JsonNode events = span.path("events");
         if (!events.isArray() || events.isEmpty()) {
             return List.of();
         }
-        var names = new ArrayList<String>();
-        for (var event : events) {
-            var name = event.path("name").asText("");
+        ArrayList<String> names = new ArrayList<>();
+        for (JsonNode event : events) {
+            String name = event.path("name").asText("");
             if (!name.isEmpty()) {
                 names.add(name);
             }
@@ -149,9 +149,9 @@ public final class  TraceSpans {
     }
 
     private static String serviceName(JsonNode batch) {
-        var attributes = batch.path("resource").path("attributes");
+        JsonNode attributes = batch.path("resource").path("attributes");
         if (attributes.isArray()) {
-            for (var attribute : attributes) {
+            for (JsonNode attribute : attributes) {
                 if ("service.name".equals(attribute.path("key").asText())) {
                     return attribute.path("value").path("stringValue").asText("");
                 }

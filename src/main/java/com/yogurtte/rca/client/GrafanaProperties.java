@@ -26,12 +26,12 @@ public record GrafanaProperties(
 
     /** 소스마다 RestClient 하나: Basic 인증(인스턴스ID:토큰) + 연결/읽기 타임아웃. */
     public RestClient restClient(Endpoint endpoint) {
-        var factory = new SimpleClientHttpRequestFactory();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-        var credentials = endpoint.user() + ":" + (token == null ? "" : token);
-        var basic = "Basic " + Base64.getEncoder()
+        String credentials = endpoint.user() + ":" + (token == null ? "" : token);
+        String basic = "Basic " + Base64.getEncoder()
                 .encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
         return RestClient.builder()

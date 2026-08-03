@@ -16,7 +16,7 @@ class ReportMarkdownTest {
 
     @Test
     void 탐색_근거와_관측값_원문이_리포트에_함께_실린다() {
-        var markdown = ReportMarkdown.render(sample());
+        String markdown = ReportMarkdown.render(sample());
 
         // 탐색: 무엇을 왜 골랐는지 + 고르지 않은 후보까지
         assertThat(markdown).contains("## 탐색 (Triage)");
@@ -33,6 +33,9 @@ class ReportMarkdownTest {
         assertThat(markdown).contains("mongodb_up");
         // 0으로 꺾인 구간은 굵게 — 부재가 결정적 신호인 장애가 있다.
         assertThat(markdown).contains("**2026-07-27T17:31:00Z ~ 2026-07-27T17:32:00Z**");
+
+        // 후보 트레이스가 컨텍스트를 얼마나 먹었는지 — 상한이 풀리면 여기서 커진다
+        assertThat(markdown).contains("**창 안 후보 트레이스**: 2건 / 28,288B");
 
         // 원본으로 되짚어갈 경로
         assertThat(markdown).contains("reports/raw/abc123-*.json");
@@ -51,15 +54,16 @@ class ReportMarkdownTest {
 
     @Test
     void 오버헤드를_못_재면_추정임을_드러낸다() {
-        var base = sample();
-        var c = base.coverage();
-        var noProbe = new RcaReport.Coverage(
+        RcaReport base = sample();
+        RcaReport.Coverage c = base.coverage();
+        RcaReport.Coverage noProbe = new RcaReport.Coverage(
                 c.windowStart(), c.windowEnd(), c.windowSeconds(), c.traceBytes(), c.traceSpans(),
-                c.traceTrimmed(), c.errorWarnLogBytes(), c.traceIdLogBytes(), c.metricsBytes(),
+                c.traceTrimmed(), c.candidateTraces(), c.candidateTraceBytes(),
+                c.errorWarnLogBytes(), c.traceIdLogBytes(), c.metricsBytes(),
                 c.metricsCollected(), c.metricsMissing(), c.promptChars(), c.contextChars(),
                 c.contextTokens(), -1);
 
-        var markdown = ReportMarkdown.render(new RcaReport(
+        String markdown = ReportMarkdown.render(new RcaReport(
                 base.traceId(), base.question(), base.mode(), base.startedAt(), base.llmProvider(),
                 base.llmModel(), base.llmTurns(), base.promptSource(), base.analysis(),
                 base.inputTokens(), base.outputTokens(), base.cacheReadTokens(),
@@ -73,7 +77,7 @@ class ReportMarkdownTest {
 
     @Test
     void traceId가_없어도_렌더링이_깨지지_않는다() {
-        var markdown = ReportMarkdown.render(new RcaReport(
+        String markdown = ReportMarkdown.render(new RcaReport(
                 null, "어젯밤에 알림이 안 왔어요", "rca", Instant.parse("2026-07-28T05:00:00Z"),
                 "fake", "m", 1, "p", "분석 본문", 1, 1, -1, -1, 0.0, 10,
                 new Timings(1, 1, 1, 1, 1), 100, null, null,
@@ -85,9 +89,9 @@ class ReportMarkdownTest {
     }
 
     private static RcaReport sample() {
-        var base = Instant.parse("2026-07-27T17:31:00Z");
+        Instant base = Instant.parse("2026-07-27T17:31:00Z");
 
-        var triage = new RcaReport.Triage(
+        RcaReport.Triage triage = new RcaReport.Triage(
                 "어젯밤 (어제 18:00~오늘 06:00 Asia/Seoul)", "EXACT",
                 Instant.parse("2026-07-27T09:00:00Z"), Instant.parse("2026-07-27T21:00:00Z"),
                 Instant.parse("2026-07-27T17:29:00Z"), Instant.parse("2026-07-27T17:40:00Z"),
@@ -100,9 +104,9 @@ class ReportMarkdownTest {
                 "prompts/triage-prompt.md", "## 1. 판단 ...", 43_025, 2_264, 0.3585, 31_500, 2_200, 1200, 4300,
                 List.of("Metric 'up'이 이 창에서 시리즈 0건이다."),
                 List.of("## INC-1  chat-service\n- 구간: … \n"), List.of("INC-1"),
-                List.of("INC-2 — 시각이 증상과 불일치"));
+                List.of("INC-2 — 시각이 증상과 불일치"), true);
 
-        var evidence = new Evidence("abc123", "abc123", 30,
+        Evidence evidence = new Evidence("abc123", "abc123", 30,
                 List.of(new Evidence.SpanRecord("chat-service", "notification-consume", 30000.0, base)),
                 412,
                 List.of(new Evidence.LogLine(base, "chat-service",
@@ -111,13 +115,13 @@ class ReportMarkdownTest {
                         base.minusSeconds(60), base.plusSeconds(120), 0, 1, 1,
                         List.of("2026-07-27T17:31:00Z ~ 2026-07-27T17:32:00Z"))));
 
-        var coverage = new RcaReport.Coverage(
+        RcaReport.Coverage coverage = new RcaReport.Coverage(
                 Instant.parse("2026-07-27T17:29:00Z"), Instant.parse("2026-07-27T17:40:00Z"), 660,
-                24_619, 30, false, 3_912, 3_913, 8_100,
+                24_619, 30, false, 2, 28_288, 3_912, 3_913, 8_100,
                 List.of("mongodb_up"), List.of("up"), 1_200, 40_981, -1, 21_247);
 
         // 검증(2026-07-31)에서 실측한 형태 그대로의 엣지 — receive는 토픽 → 서비스 방향이다.
-        var graph = new ServiceGraph(List.of(new ServiceGraph.Edge(
+        ServiceGraph graph = new ServiceGraph(List.of(new ServiceGraph.Edge(
                 "messaging", "kafka/user.notifications", "chat-service", "", 4, 30108.2,
                 List.of("receive"), List.of("MongoSocketOpenException: Connection refused"), List.of(), Map.of())));
 

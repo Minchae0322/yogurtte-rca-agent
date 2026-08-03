@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 
 import jakarta.annotation.PostConstruct;
 
@@ -21,8 +22,10 @@ import com.yogurtte.rca.collector.CollectProperties;
 import com.yogurtte.rca.collector.CollectedData;
 import com.yogurtte.rca.collector.Collector;
 import com.yogurtte.rca.collector.Scope;
+import com.yogurtte.rca.collector.TimeWindow;
 import com.yogurtte.rca.collector.TraceSpans;
 import com.yogurtte.rca.llm.LlmClient;
+import com.yogurtte.rca.llm.LlmResult;
 import com.yogurtte.rca.llm.TokenCounter;
 import com.yogurtte.rca.notify.Notifier;
 import com.yogurtte.rca.report.RcaReport;
@@ -65,7 +68,7 @@ public class RcaService {
      * 생성되지 않는 장애에서 파이프라인이 끊긴다.
      */
     public RcaReport investigate(Scope scope, String question, String mode, RcaReport.Triage triage) {
-        var normalizedMode = (mode == null || mode.isBlank()) ? "rca" : mode;
+        String normalizedMode = (mode == null || mode.isBlank()) ? "rca" : mode;
         MDC.put("traceId", scope.correlationId());
         try {
             return run(scope, question, normalizedMode, triage);
@@ -75,22 +78,22 @@ public class RcaService {
     }
 
     private RcaReport run(Scope scope, String question, String mode, RcaReport.Triage triage) {
-        var startedAt = Instant.now();
-        var overallStart = System.currentTimeMillis();
+        Instant startedAt = Instant.now();
+        long overallStart = System.currentTimeMillis();
         log.info("investigating mode={} traceId={} services={} question={}",
                 mode, scope.traceId(), scope.services(), question);
 
-        var data = collector.collect(scope);
+        CollectedData data = collector.collect(scope);
 
-        var assembleStart = System.currentTimeMillis();
-        var context = assembler.assemble(data, question);
-        var assembleMs = System.currentTimeMillis() - assembleStart;
+        long assembleStart = System.currentTimeMillis();
+        String context = assembler.assemble(data, question);
+        long assembleMs = System.currentTimeMillis() - assembleStart;
         log.info("context assembled: {} chars, {} collection failures", context.length(), data.failures().size());
 
-        var prompt = promptLoader.load(mode);
+        SystemPromptLoader.Loaded prompt = promptLoader.load(mode);
         log.info("system prompt: {}", prompt.source());
 
-        var llmResult = llmClient.analyze(prompt.text(), context);
+        LlmResult llmResult = llmClient.analyze(prompt.text(), context);
         log.info("llm answered: model={} turns={} in={} (cacheRead={} cacheCreate={}) out={} cost={} {}ms",
                 llmResult.model(), llmResult.numTurns(), llmResult.inputTokens(),
                 llmResult.cacheReadTokens(), llmResult.cacheCreationTokens(), llmResult.outputTokens(),
@@ -101,20 +104,20 @@ public class RcaService {
         }
 
         // 개선 지표: CLI 오버헤드가 섞인 llmResult.inputTokens()가 아니라, 내가 만든 입력만 직접 잰다.
-        var contextTokens = tokenCounter.count(llmResult.model(), prompt.text(), context);
+        long contextTokens = tokenCounter.count(llmResult.model(), prompt.text(), context);
 
         // 오버헤드는 상수가 아니다(하루 만에 20% 이동 실측) — 문서에 박힌 값을 소급해 빼면 틀린다.
         // 본 호출 직후 같은 조건으로 재서, contextTokens 계산이 이 회차 안에서 닫히게 한다.
-        var overheadTokens = llmClient.overheadTokens();
+        long overheadTokens = llmClient.overheadTokens();
 
-        var timings = new Timings(
+        Timings timings = new Timings(
                 data.stepMillis().getOrDefault("tempoMs", 0L),
                 data.stepMillis().getOrDefault("lokiMs", 0L),
                 data.stepMillis().getOrDefault("mimirMs", 0L),
                 assembleMs,
                 llmResult.elapsedMs());
 
-        var report = new RcaReport(
+        RcaReport report = new RcaReport(
                 data.traceId(),
                 question,
                 mode,
@@ -145,15 +148,15 @@ public class RcaService {
     /** 이번 조사가 실제로 읽은 데이터 범위를 집계한다. */
     private RcaReport.Coverage coverage(CollectedData data, String context, String systemPrompt,
                                         long contextTokens, long overheadTokens) {
-        var window = data.window();
-        var spans = TraceSpans.parse(data.traceJson()).size();
-        var traceBytes = utf8Bytes(data.traceJson());
+        TimeWindow window = data.window();
+        int spans = TraceSpans.parse(data.traceJson()).size();
+        int traceBytes = utf8Bytes(data.traceJson());
 
-        var collected = new ArrayList<>(data.metricsJson().keySet());
-        var missing = collectProperties.metricQueries().stream()
+        ArrayList<String> collected = new ArrayList<>(data.metricsJson().keySet());
+        List<String> missing = collectProperties.metricQueries().stream()
                 .filter(query -> !data.metricsJson().containsKey(query))
                 .toList();
-        var metricsBytes = data.metricsJson().values().stream().mapToInt(RcaService::utf8Bytes).sum();
+        int metricsBytes = data.metricsJson().values().stream().mapToInt(RcaService::utf8Bytes).sum();
 
         return new RcaReport.Coverage(
                 window == null ? null : window.start(),
@@ -162,6 +165,8 @@ public class RcaService {
                 traceBytes,
                 spans,
                 traceBytes > collectProperties.maxTraceBytes(),
+                data.candidateTraceJsons().size(),
+                data.candidateTraceJsons().values().stream().mapToInt(RcaService::utf8Bytes).sum(),
                 utf8Bytes(data.errorWarnLogsJson()),
                 utf8Bytes(data.traceIdLogsJson()),
                 metricsBytes,

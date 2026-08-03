@@ -82,7 +82,9 @@ public record RcaReport(
             List<String> surveyFailures,
             List<String> incidentCandidates,
             List<String> chosenIncidentIds,
-            List<String> dismissedIncidentIds) {
+            List<String> dismissedIncidentIds,
+            /** 탐색 LLM이 스윕 원본 JSON까지 봤는지. 대조군 A/B를 사후에 가르는 유일한 기록이다. */
+            boolean rawIncluded) {
 
         public Triage {
             incidentCandidates = incidentCandidates == null ? List.of() : List.copyOf(incidentCandidates);
@@ -96,6 +98,10 @@ public record RcaReport(
      * 필요하므로 소스별 크기와 컨텍스트 규모를 함께 기록한다.
      *
      * @param traceTrimmed     트레이스가 크기 한도를 넘어 상위 span만 넣었는지
+     * @param candidateTraces  창 안 후보 트레이스 건수 (B-9). <b>대표 트레이스는 제외</b>
+     * @param candidateTraceBytes 후보 트레이스 JSON 합계. {@code max-traces} 상한이 풀리면
+     *                         컨텍스트가 여기서 커지는데, 이 값이 없으면 총 {@code contextChars}만
+     *                         부풀어 보이고 <b>어느 절이 범인인지 못 짚는다.</b>
      * @param metricsBytes     메트릭 응답 JSON 크기. 이게 없으면 컨텍스트의 약 11%가 미분류로 남는다.
      * @param metricsCollected 시리즈가 잡힌 메트릭 쿼리
      * @param metricsMissing   비었거나 실패해 빠진 메트릭 쿼리
@@ -115,6 +121,8 @@ public record RcaReport(
             int traceBytes,
             int traceSpans,
             boolean traceTrimmed,
+            int candidateTraces,
+            int candidateTraceBytes,
             int errorWarnLogBytes,
             int traceIdLogBytes,
             int metricsBytes,

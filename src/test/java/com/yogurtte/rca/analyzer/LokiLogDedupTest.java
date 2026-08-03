@@ -3,6 +3,7 @@ package com.yogurtte.rca.analyzer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
@@ -21,7 +22,7 @@ class LokiLogDedupTest {
 
     @Test
     void 두_채널에_겹친_레코드만_접히고_고유_줄은_남는다() {
-        var result = LokiLogDedup.fold(errWarn, traceId);
+        LokiLogDedup.Result result = LokiLogDedup.fold(errWarn, traceId);
 
         assertThat(result.folded()).isEqualTo(4);
         // 겹친 ERROR 줄(varchar 위반 지문)은 빠지고, traceId 채널에만 있던 INFO 줄은 남는다.
@@ -32,9 +33,9 @@ class LokiLogDedupTest {
 
     @Test
     void 겹침이_없으면_원문_문자열_그대로_반환한다() {
-        var other = lokiJson("999", "다른 줄");
+        String other = lokiJson("999", "다른 줄");
 
-        var result = LokiLogDedup.fold(errWarn, other);
+        LokiLogDedup.Result result = LokiLogDedup.fold(errWarn, other);
 
         assertThat(result.folded()).isZero();
         assertThat(result.json()).isSameAs(other);
@@ -43,10 +44,10 @@ class LokiLogDedupTest {
     @Test
     void 같은_줄이라도_timestamp가_다르면_별개_레코드로_보고_접지_않는다() {
         // 재시도로 같은 문구가 다른 시각에 찍히면 정당한 두 레코드다.
-        var first = lokiJson("100", "connection refused");
-        var retry = lokiJson("200", "connection refused");
+        String first = lokiJson("100", "connection refused");
+        String retry = lokiJson("200", "connection refused");
 
-        var result = LokiLogDedup.fold(first, retry);
+        LokiLogDedup.Result result = LokiLogDedup.fold(first, retry);
 
         assertThat(result.folded()).isZero();
         assertThat(result.json()).isSameAs(retry);
@@ -63,7 +64,7 @@ class LokiLogDedupTest {
     @Test
     void 전부_겹치면_빈_result가_되고_스트림도_남지_않는다() {
         // errwarn ⊇ traceId인 경우 — traceId 채널의 전 줄이 접힌다.
-        var result = LokiLogDedup.fold(traceId, errWarn);
+        LokiLogDedup.Result result = LokiLogDedup.fold(traceId, errWarn);
 
         assertThat(result.folded()).isEqualTo(4);
         assertThat(result.json()).contains("\"result\":[]");
@@ -77,7 +78,7 @@ class LokiLogDedupTest {
     }
 
     private static String fixture(String path) {
-        try (var in = LokiLogDedupTest.class.getResourceAsStream(path)) {
+        try (InputStream in = LokiLogDedupTest.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

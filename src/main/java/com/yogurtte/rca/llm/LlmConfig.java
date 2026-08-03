@@ -25,11 +25,11 @@ public class LlmConfig {
     @Bean
     @ConditionalOnProperty(name = "rca.llm.provider", havingValue = "claude-cli", matchIfMissing = true)
     public ClaudeCliLlmClient claudeCliLlmClient(LlmProperties properties) {
-        var cli = properties.claudeCli();
-        var command = cli == null || isBlank(cli.command()) ? "claude" : cli.command();
-        var model = cli == null || isBlank(cli.model()) ? ClaudeCliLlmClient.DEFAULT_MODEL : cli.model();
-        var timeoutSeconds = cli == null ? 120 : cli.timeoutSeconds();
-        var probeOverhead = cli == null || cli.probeOverhead();
+        LlmProperties.ClaudeCli cli = properties.claudeCli();
+        String command = cli == null || isBlank(cli.command()) ? "claude" : cli.command();
+        String model = cli == null || isBlank(cli.model()) ? ClaudeCliLlmClient.DEFAULT_MODEL : cli.model();
+        long timeoutSeconds = cli == null ? 120 : cli.timeoutSeconds();
+        boolean probeOverhead = cli == null || cli.probeOverhead();
 
         log.info("claude CLI model pinned: {} · overhead probe: {}", model, probeOverhead ? "on" : "off");
         return new ClaudeCliLlmClient(command, model, timeoutSeconds, probeOverhead,
@@ -39,11 +39,11 @@ public class LlmConfig {
     @Bean
     @ConditionalOnProperty(name = "rca.llm.provider", havingValue = "anthropic")
     public AnthropicLlmClient anthropicLlmClient(LlmProperties properties) {
-        var anthropic = properties.anthropic();
+        LlmProperties.Anthropic anthropic = properties.anthropic();
         if (anthropic == null || isBlank(anthropic.apiKey())) {
             throw new IllegalStateException("rca.llm.provider=anthropic requires ANTHROPIC_API_KEY");
         }
-        var chatModel = AnthropicChatModel.builder()
+        AnthropicChatModel chatModel = AnthropicChatModel.builder()
                 .anthropicApi(AnthropicApi.builder().apiKey(anthropic.apiKey()).build())
                 .defaultOptions(AnthropicChatOptions.builder()
                         .model(anthropic.model())
@@ -56,11 +56,11 @@ public class LlmConfig {
     @Bean
     @ConditionalOnProperty(name = "rca.llm.provider", havingValue = "openai")
     public OpenAiLlmClient openAiLlmClient(LlmProperties properties) {
-        var openai = properties.openai();
+        LlmProperties.OpenAi openai = properties.openai();
         if (openai == null || isBlank(openai.apiKey())) {
             throw new IllegalStateException("rca.llm.provider=openai requires OPENAI_API_KEY");
         }
-        var chatModel = OpenAiChatModel.builder()
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder().apiKey(openai.apiKey()).build())
                 .defaultOptions(OpenAiChatOptions.builder().model(openai.model()).build())
                 .build();
@@ -70,16 +70,16 @@ public class LlmConfig {
     /** API 키가 없으면 카운팅 비활성으로 조립된다 — {@code coverage.contextTokens}는 -1로 남는다. */
     @Bean
     public TokenCounter tokenCounter(LlmProperties properties) {
-        var anthropic = properties.anthropic();
-        var apiKey = anthropic == null ? null : anthropic.apiKey();
-        var cli = properties.claudeCli();
-        var fallbackModel = cli == null || isBlank(cli.model()) ? ClaudeCliLlmClient.DEFAULT_MODEL : cli.model();
+        LlmProperties.Anthropic anthropic = properties.anthropic();
+        String apiKey = anthropic == null ? null : anthropic.apiKey();
+        LlmProperties.ClaudeCli cli = properties.claudeCli();
+        String fallbackModel = cli == null || isBlank(cli.model()) ? ClaudeCliLlmClient.DEFAULT_MODEL : cli.model();
 
         if (isBlank(apiKey)) {
             log.info("token counting 비활성 (ANTHROPIC_API_KEY 없음) — coverage.contextTokens는 -1로 기록된다");
             return new TokenCounter(null, fallbackModel);
         }
-        var client = RestClient.builder()
+        RestClient client = RestClient.builder()
                 .baseUrl("https://api.anthropic.com")
                 .defaultHeader("x-api-key", apiKey)
                 .defaultHeader("anthropic-version", "2023-06-01")

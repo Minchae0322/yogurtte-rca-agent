@@ -34,7 +34,7 @@ class CollectPropertiesTest {
 
     @Test
     void 헤더와_예외줄과_스택프레임을_모두_잡는다() {
-        var regex = Pattern.compile(CollectProperties.ERROR_LINE_PATTERN);
+        Pattern regex = Pattern.compile(CollectProperties.ERROR_LINE_PATTERN);
 
         assertThat(regex.matcher(HEADER).find()).isTrue();
         assertThat(regex.matcher(EXCEPTION_LINE).find()).isTrue();
@@ -45,7 +45,7 @@ class CollectPropertiesTest {
     @Test
     void 평범한_INFO_로그는_잡지_않는다() {
         // 양이 예외 건수에 비례해야 한다. INFO를 오탐하면 1시간 2,300줄이 전부 들어온다.
-        var regex = Pattern.compile(CollectProperties.ERROR_LINE_PATTERN);
+        Pattern regex = Pattern.compile(CollectProperties.ERROR_LINE_PATTERN);
 
         assertThat(regex.matcher(ORDINARY_INFO).find()).isFalse();
     }
@@ -54,7 +54,7 @@ class CollectPropertiesTest {
     void 패턴을_백틱_문자열로_넘긴다() {
         // LogQL의 큰따옴표 문자열은 이스케이프를 해석해 \. 를 두 번 겹쳐 써야 하고,
         // 그 자리에서 정규식이 조용히 깨진다.
-        var query = properties.errorWarnQuery();
+        String query = properties.errorWarnQuery();
 
         assertThat(query).isEqualTo(
                 "{service_name=~\"content-service|auth-service|chat-service\"} "
@@ -63,7 +63,7 @@ class CollectPropertiesTest {
 
     @Test
     void 탐색이_좁혀준_서비스만_본다() {
-        var query = properties.errorWarnQuery(List.of("auth-service"));
+        String query = properties.errorWarnQuery(List.of("auth-service"));
 
         assertThat(query).startsWith("{service_name=~\"auth-service\"}");
     }
@@ -71,7 +71,7 @@ class CollectPropertiesTest {
     @Test
     void 설정에_없는_서비스명은_버린다() {
         // LLM이 지어낸 이름이 셀렉터에 들어가면 매칭 스트림이 0개가 되어 조용히 빈 결과가 된다.
-        var query = properties.errorWarnQuery(List.of("payment-service"));
+        String query = properties.errorWarnQuery(List.of("payment-service"));
 
         assertThat(query).startsWith("{service_name=~\"content-service|auth-service|chat-service\"}");
     }
