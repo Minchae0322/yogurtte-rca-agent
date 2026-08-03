@@ -45,8 +45,12 @@ public record TriagePlan(
         dismissedIncidentIds = dismissedIncidentIds == null ? List.of() : List.copyOf(dismissedIncidentIds);
     }
 
+    /**
+     * 창과 대상만 넘긴다. <b>트레이스 목록은 {@code withCandidates}로 따로 실린다</b> —
+     * 여기서 하나를 골라 넣으면 그것이 곧 대표가 되고, 그 선택에는 근거가 없다.
+     */
     public Scope toScope() {
-        return new Scope(window, services, traceId);
+        return new Scope(window, services, List.of());
     }
 
     /**
@@ -150,8 +154,8 @@ public record TriagePlan(
      * 셋이면 어느 것이 원인인지는 <b>전문을 봐야</b> 알고, 순서에는 아무 의미가 없다(신호가
      * 만들어진 순서일 뿐이다).
      *
-     * <p>{@code Scope.traceId}는 여전히 첫 번째가 들어가지만 그것은 <b>리포트 식별자</b>일
-     * 뿐이고, 수집은 이 목록 전체에 대해 동등하게 일어난다.
+     * <p>수집은 이 목록 <b>전체</b>에 대해 동등하게 일어난다 — {@code Scope}에 대표 자리가
+     * 없다.
      */
     public static List<String> traceIdsOf(List<Incident> chosen) {
         return chosen.stream().flatMap(i -> i.traceIds().stream()).distinct().toList();

@@ -201,7 +201,8 @@ class TriageFlowTest {
         server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/traces/abc123")));
 
-        assertThat(report.traceId()).isEqualTo("abc123");
+        // 조사 이름은 창 기준이다 — 이 조사는 트레이스 하나에 관한 것이 아니다.
+        assertThat(report.traceId()).startsWith("scan-");
         assertThat(report.analysis()).startsWith("원인 후보 1");
         assertThat(notifier.sent).hasSize(1);
 
@@ -243,9 +244,11 @@ class TriageFlowTest {
     }
 
     @Test
-    void 후보를_둘_고르면_로그는_창별로_나눠_조회하고_합쳐서_넘긴다() {
-        // 합집합 창 하나로 긁으면 후보 사이의 빈 구간까지 딸려 온다. 로그는 점 사건이라
-        // 그 구간에 정보가 없다 — 메트릭은 반대라 합집합 창을 그대로 쓴다.
+    void 후보를_둘_골라도_창이_겹치면_로그를_한_번만_조회한다() {
+        // 창 분할의 목적은 후보 사이의 **빈 구간**을 안 긁는 것이다. 두 후보의 창이 겹치면
+        // 나눌 것이 없고, 나누면 같은 구간을 두 번 긁는다 — AP-1 회차 3에서 실제로 그랬다
+        // (같은 5분 버킷 후보 둘 → 창이 완전히 같아져 로그 38.6KB가 107KB로).
+        // 떨어진 창을 실제로 나누는지는 ScopeWindowsTest가 격리해서 본다.
         llmClient.triageAnswer = """
                 ```json
                 {"incidentIds":["INC-1","INC-2"],"services":[],
@@ -258,8 +261,7 @@ class TriageFlowTest {
 
         assertThat(report.triage().chosenIncidentIds()).containsExactly("INC-1", "INC-2");
 
-        // 심층 로그 조회(direction 있음)가 창마다 한 번씩 — 그리고 그 창들이 서로 달라야 한다.
-        // 횟수만 세면 "한 창을 두 채널로 조회한 것"과 구별이 안 된다.
+        // 두 후보의 창이 겹치므로 한 구간으로 접혀야 한다 — 같은 구간을 두 번 긁으면 안 된다.
         List<String> deepLogRanges = server.findAll(com.github.tomakehurst.wiremock.client.WireMock
                         .getRequestedFor(urlPathEqualTo("/loki/api/v1/query_range"))
                         .withQueryParam("direction",
@@ -268,7 +270,7 @@ class TriageFlowTest {
                 .map(r -> r.queryParameter("start").firstValue() + "~" + r.queryParameter("end").firstValue())
                 .distinct()
                 .toList();
-        assertThat(deepLogRanges).hasSize(2);
+        assertThat(deepLogRanges).hasSize(1);
 
         // 메트릭은 나누지 않는다 — 시계열이 조각나면 "그 사이에 회복했는가"를 잃는다.
         // 스윕 2회(up · mongodb_up) + 심층 1회 = 3. 창별로 나눴다면 심층이 2회가 되어 4다.
@@ -334,7 +336,7 @@ class TriageFlowTest {
         });
 
         // 원본 응답으로 되짚어갈 경로가 함께 남는다.
-        assertThat(e.rawPrefix()).isEqualTo("abc123");
+        assertThat(e.rawPrefix()).startsWith("scan-");
     }
 
     @Test
@@ -382,7 +384,8 @@ class TriageFlowTest {
 
         RcaReport report = triageService.diagnose("어젯밤에 댓글 알림이 안 왔어요", null, null, "rca", NOW);
 
-        assertThat(report.traceId()).isNull();
+        // 탐색을 거친 조사는 트레이스 하나에 관한 것이 아니므로 창 기준 이름을 쓴다.
+        assertThat(report.traceId()).startsWith("scan-");
         assertThat(report.triage().traceId()).isNull();
         assertThat(report.analysis()).startsWith("원인 후보 1");
 
@@ -390,9 +393,7 @@ class TriageFlowTest {
         // "트레이스가 안 만들어지는 장애"에서도 같은 창의 다른 서비스 트레이스가 근거가 된다 (CH-2·AU-2).
         server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/traces/abc123")));
-        assertThat(report.collectionFailures()).anyMatch(f -> f.contains("대표 traceId가 없다"));
-        assertThat(llmClient.analysisContext()).contains("대표 traceId가 없다");
-        assertThat(llmClient.analysisContext()).contains("창 안 후보 트레이스").contains("notification-consume");
+        assertThat(llmClient.analysisContext()).contains("# 트레이스 (Tempo").contains("notification-consume");
     }
 
     @Test

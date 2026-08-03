@@ -23,7 +23,7 @@ class ContextAssemblerTest {
 
     @Test
     void 두_로그_절에_겹친_레코드는_한_번만_실리고_표식이_남는다() {
-        CollectedData data = new CollectedData("6a68c522cb16f0a29c2c4bd0a86df613", null, null,
+        CollectedData data = new CollectedData("6a68c522cb16f0a29c2c4bd0a86df613", null,
                 fixture("/loki/varchar-errwarn.json"), fixture("/loki/varchar-traceid.json"),
                 Map.of(), Map.of(), List.of(), Map.of());
 

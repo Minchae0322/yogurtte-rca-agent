@@ -12,6 +12,7 @@ import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
+import com.yogurtte.rca.collector.Scope;
 import com.yogurtte.rca.collector.TimeWindow;
 import com.yogurtte.rca.llm.LlmClient;
 import com.yogurtte.rca.llm.LlmResult;
@@ -152,9 +153,10 @@ public class TriageService {
                     .distinct()
                     .toList();
 
-            return rcaService.investigate(
-                    plan.toScope().withCandidates(candidates).withWindows(candidateWindows),
-                    question, mode, record);
+            Scope scope = plan.toScope()
+                    .withCandidates(candidates)
+                    .withWindows(candidateWindows);
+            return rcaService.investigate(scope, question, mode, record);
         } finally {
             MDC.remove("traceId");
         }

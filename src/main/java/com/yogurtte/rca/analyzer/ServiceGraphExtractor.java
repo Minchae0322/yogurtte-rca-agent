@@ -29,11 +29,11 @@ public class ServiceGraphExtractor {
     private static final int MAX_ERRORS_PER_EDGE = 5;
     private static final int MAX_ERROR_LENGTH = 300;
 
-    /** 선정 트레이스 + 창 안 후보(B-9) 전부에서 뽑는다. 같은 엣지는 트레이스를 넘어 누적되므로
-     *  후보가 있으면 이것이 곧 그래프 merge다 — "여러 서비스가 같은 인프라를 쓴다"는 여기서 나온다. */
+    /** 수집한 트레이스 전부에서 뽑는다. 같은 엣지는 트레이스를 넘어 누적되므로 이것이 곧
+     *  그래프 merge다 — "여러 서비스가 같은 인프라를 쓴다"는 여기서 나온다. */
     public ServiceGraph extract(CollectedData data) {
-        ArrayList<TraceSpans.Span> spans = new ArrayList<>(TraceSpans.parse(data.traceJson()));
-        data.candidateTraceJsons().values().forEach(json -> spans.addAll(TraceSpans.parse(json)));
+        ArrayList<TraceSpans.Span> spans = new ArrayList<>();
+        data.traceJsons().values().forEach(json -> spans.addAll(TraceSpans.parse(json)));
         return fromSpans(spans);
     }
 

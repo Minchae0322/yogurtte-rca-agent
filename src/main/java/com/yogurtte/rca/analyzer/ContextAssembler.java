@@ -32,7 +32,7 @@ public class ContextAssembler {
         StringBuilder sb = new StringBuilder();
 
         sb.append("# 조사 대상\n");
-        sb.append("traceId: ").append(data.traceId()).append('\n');
+        sb.append("조사 ID: ").append(data.correlationId()).append('\n');
         sb.append("질문: ").append(question == null || question.isBlank() ? "(없음)" : question).append('\n');
         if (data.window() != null) {
             sb.append("조회 시간창: ").append(data.window().start()).append(" ~ ").append(data.window().end())
@@ -55,14 +55,16 @@ public class ContextAssembler {
             sb.append(graph.toText()).append('\n');
         }
 
-        sb.append("# 트레이스 (Tempo)\n");
-        sb.append(traceSection(data.traceJson())).append("\n\n");
-
-        if (!data.candidateTraceJsons().isEmpty()) {
-            sb.append("# 창 안 후보 트레이스 (").append(data.candidateTraceJsons().size()).append("건)\n");
-            sb.append("조사 창 안에서 함께 수집한 다른 트레이스다. 선정 트레이스만으로 증상이 "
-                    + "설명되지 않으면 여기서 대조하라 — 정상 트레이스와의 차이 자체가 근거가 될 수 있다.\n");
-            data.candidateTraceJsons().forEach((id, json) -> sb
+        // 대표를 세우지 않는다 — 어느 것이 원인인지는 전문을 봐야 알고, 하나를 앞세우면
+        // 그 선택이 분석의 초점을 끌어간다(AP-1 회차 3 실측).
+        sb.append("# 트레이스 (Tempo · ").append(data.traceJsons().size()).append("건)\n");
+        if (data.traceJsons().isEmpty()) {
+            sb.append("(수집 실패 - 트레이스 없음)\n\n");
+        } else {
+            sb.append("앞쪽이 탐색이 지목한 것, 뒤가 같은 창에서 함께 수집한 것이다. "
+                    + "**순서는 우선순위가 아니라 수집 순서다** — 어느 것이 원인인지는 전문을 보고 판단하라. "
+                    + "정상 트레이스와의 차이 자체가 근거가 될 수 있다.\n");
+            data.traceJsons().forEach((id, json) -> sb
                     .append("## traceId ").append(id).append('\n')
                     .append(traceSection(json)).append("\n\n"));
         }

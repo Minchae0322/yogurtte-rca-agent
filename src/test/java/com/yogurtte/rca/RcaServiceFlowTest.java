@@ -164,11 +164,11 @@ class RcaServiceFlowTest {
         }
 
         com.yogurtte.rca.collector.TimeWindow window = new com.yogurtte.rca.collector.TimeWindow(base.minusSeconds(60), base.plusSeconds(60));
-        com.yogurtte.rca.collector.Scope scope = new com.yogurtte.rca.collector.Scope(window, List.of(), "trace-1");
+        com.yogurtte.rca.collector.Scope scope = new com.yogurtte.rca.collector.Scope(window, List.of(), List.of("trace-1"));
         service.investigate(scope, "q", "rca", null);
 
-        // 선정 1건 + 후보 2건(maxTraces=3)이 전부 컨텍스트에 실린다.
-        assertThat(llmClient.seenContext).contains("# 창 안 후보 트레이스 (2건)");
+        // 지목 1건 + 창 후보 2건(maxTraces=3)이 한 절에 동등하게 실린다 — 대표가 없다.
+        assertThat(llmClient.seenContext).contains("# 트레이스 (Tempo · 3건)");
         assertThat(llmClient.seenContext).contains("candidate-span-trace-2").contains("candidate-span-trace-3");
         assertThat(llmClient.seenContext).contains("notify");
     }
@@ -191,7 +191,7 @@ class RcaServiceFlowTest {
         CollectProperties properties = new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
                 1000, "15s", List.of(), 100, 30, 3);  // 100 바이트 한도로 트리밍을 강제한다
         com.yogurtte.rca.collector.CollectedData data = new com.yogurtte.rca.collector.CollectedData(
-                "trace-2", bigTrace, null, null, null, null, null, List.of(), null);
+                "trace-2", null, null, null, null, java.util.Map.of("trace-2", bigTrace), List.of(), null);
 
         String context = new ContextAssembler(properties, new ServiceGraphExtractor()).assemble(data, "q");
 

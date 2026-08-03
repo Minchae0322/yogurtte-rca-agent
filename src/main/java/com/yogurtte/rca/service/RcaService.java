@@ -80,8 +80,8 @@ public class RcaService {
     private RcaReport run(Scope scope, String question, String mode, RcaReport.Triage triage) {
         Instant startedAt = Instant.now();
         long overallStart = System.currentTimeMillis();
-        log.info("investigating mode={} traceId={} services={} question={}",
-                mode, scope.traceId(), scope.services(), question);
+        log.info("investigating mode={} traceIds={} services={} question={}",
+                mode, scope.traceIds(), scope.services(), question);
 
         CollectedData data = collector.collect(scope);
 
@@ -118,7 +118,7 @@ public class RcaService {
                 llmResult.elapsedMs());
 
         RcaReport report = new RcaReport(
-                data.traceId(),
+                data.correlationId(),
                 question,
                 mode,
                 startedAt,
@@ -149,8 +149,9 @@ public class RcaService {
     private RcaReport.Coverage coverage(CollectedData data, String context, String systemPrompt,
                                         long contextTokens, long overheadTokens) {
         TimeWindow window = data.window();
-        int spans = TraceSpans.parse(data.traceJson()).size();
-        int traceBytes = utf8Bytes(data.traceJson());
+        int spans = data.traceJsons().values().stream()
+                .mapToInt(json -> TraceSpans.parse(json).size()).sum();
+        int traceBytes = data.traceJsons().values().stream().mapToInt(RcaService::utf8Bytes).sum();
 
         ArrayList<String> collected = new ArrayList<>(data.metricsJson().keySet());
         List<String> missing = collectProperties.metricQueries().stream()
@@ -165,8 +166,8 @@ public class RcaService {
                 traceBytes,
                 spans,
                 traceBytes > collectProperties.maxTraceBytes(),
-                data.candidateTraceJsons().size(),
-                data.candidateTraceJsons().values().stream().mapToInt(RcaService::utf8Bytes).sum(),
+                data.traceJsons().size(),
+                traceBytes,
                 utf8Bytes(data.errorWarnLogsJson()),
                 utf8Bytes(data.traceIdLogsJson()),
                 metricsBytes,

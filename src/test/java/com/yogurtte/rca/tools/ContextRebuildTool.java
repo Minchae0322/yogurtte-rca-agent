@@ -152,12 +152,11 @@ class ContextRebuildTool {
 
         return Optional.of(new CollectedData(
                 traceId,
-                trace.get(),
                 window,
                 latestBefore(rawFiles, traceId, "loki-error-warn", reportStamp).orElse(null),
                 latestBefore(rawFiles, traceId, "loki-trace-id", reportStamp).orElse(null),
                 metrics,
-                null,
+                new LinkedHashMap<>(java.util.Map.of(traceId, trace.get())),
                 failures,
                 null));
     }

@@ -55,7 +55,7 @@ class TriagePlanTest {
 
         assertThat(plan.parsed()).isTrue();
         assertThat(plan.traceId()).isNull();
-        assertThat(plan.toScope().hasTraceId()).isFalse();
+        assertThat(plan.toScope().hasTraceIds()).isFalse();
         assertThat(plan.toScope().window()).isEqualTo(plan.window());
     }
 
@@ -92,4 +92,5 @@ class TriagePlanTest {
         assertThat(plan.window()).isEqualTo(SURVEY);
         assertThat(plan.notes()).anyMatch(note -> note.contains("유효한 windowStart/windowEnd가 없어"));
     }
+
 }

@@ -60,27 +60,29 @@ public class Collector {
         LinkedHashMap<String, Long> timings = new LinkedHashMap<>();
         LinkedHashMap<String, String> metrics = new LinkedHashMap<>();
 
-        // --- Tempo ---
-        String traceJson = null;
+        // --- Tempo: 탐색이 지목한 트레이스 전부. 대표를 세우지 않는다 ---
+        LinkedHashMap<String, String> traces = new LinkedHashMap<>();
         long started = System.currentTimeMillis();
-        if (scope.hasTraceId()) {
-            try {
-                traceJson = tempoClient.fetchTrace(scope.traceId());
-            } catch (Exception e) {
-                failures.add("Tempo trace fetch failed: " + describe(e));
-                log.warn("tempo fetch failed for {}: {}", scope.traceId(), e.toString());
+        if (scope.hasTraceIds()) {
+            for (String id : scope.traceIds()) {
+                try {
+                    traces.put(id, tempoClient.fetchTrace(id));
+                } catch (Exception e) {
+                    failures.add("Tempo trace fetch failed (" + id + "): " + describe(e));
+                    log.warn("tempo fetch failed for {}: {}", id, e.toString());
+                }
             }
         } else {
-            failures.add("이 조사에는 대표 traceId가 없다 — 탐색이 트레이스를 찾지 못했거나 "
+            failures.add("이 조사에는 지목된 traceId가 없다 — 탐색이 트레이스를 찾지 못했거나 "
                     + "트레이스가 생성되지 않는 장애다. 트레이스 부재 자체를 근거로 쓸 것.");
         }
         timings.put("tempoMs", System.currentTimeMillis() - started);
 
-        TimeWindow window = resolveWindow(scope, traceJson, failures);
+        TimeWindow window = resolveWindow(scope, traces.values().stream().findFirst().orElse(null), failures);
 
-        // --- B-9: 창 안 후보 트레이스 N건 ---
+        // --- B-9: 창 안 후보 트레이스로 남은 자리를 채운다 ---
         started = System.currentTimeMillis();
-        LinkedHashMap<String, String> candidateTraces = collectCandidates(scope, window, failures);
+        collectCandidates(scope, window, traces, failures);
         timings.put("tempoCandidatesMs", System.currentTimeMillis() - started);
 
         // --- Loki: 후보별 창마다 조회하고 스트림을 합친다 ---
@@ -104,10 +106,10 @@ public class Collector {
                         + describe(e));
                 log.warn("loki error/warn query failed for {}: {}", correlationId, e.toString());
             }
-            if (scope.hasTraceId()) {
+            if (scope.hasTraceIds()) {
                 try {
                     traceIdParts.add(lokiClient.queryRange(correlationId, "trace-id" + suffix,
-                            properties.traceIdQuery(scope.traceId(), scope.services()),
+                            properties.traceIdQuery(scope.traceIds(), scope.services()),
                             w.start(), w.end(), properties.logLimit()));
                 } catch (Exception e) {
                     failures.add("Loki traceId log query failed (" + w.start() + "~" + w.end() + "): "
@@ -139,37 +141,34 @@ public class Collector {
         }
         timings.put("mimirMs", System.currentTimeMillis() - started);
 
-        return new CollectedData(scope.traceId(), traceJson, window, errorWarnLogs, traceIdLogs,
-                metrics, candidateTraces, failures, timings);
+        return new CollectedData(correlationId, window, errorWarnLogs, traceIdLogs,
+                metrics, traces, failures, timings);
     }
 
     /**
-     * 창 안의 다른 트레이스를 최대 {@code maxTraces - 1}건 딥 페치한다 (B-9).
+     * 창 안의 다른 트레이스로 남은 자리를 채운다 (B-9). {@code traces}에 이어 붙인다.
      *
      * <p><b>탐색을 거친 조사(창이 명시된 Scope)에서만 동작한다.</b> traceId로 직접 들어오는
      * v0 경로는 후보 없이 기존과 동일하다 — baseline 경로를 바꾸면 두 진입점의 점수 비교가
      * 무너진다.
      *
-     * <p>후보 출처는 둘이다: ① 탐색 스윕이 찾은 이상 트레이스(error·slow 채널, Scope에 실려 옴)
-     * ② 자리가 남으면 창 기준 무조건 검색 — <b>정답이 정상 트레이스인 문항</b>은 ①로는 절대
-     * 오지 않기 때문이다.
+     * <p>검색 TraceQL이 {@code {}} 인 것은 <b>정답이 정상 트레이스인 문항</b>이 실재하기
+     * 때문이다 (AU-2: *"정상 요청에 auth 호출 span이 없다"* 가 요건이라 error/slow 채널
+     * 어디에도 안 걸린다).
      */
-    private LinkedHashMap<String, String> collectCandidates(Scope scope, TimeWindow window,
-                                                            ArrayList<String> failures) {
-        LinkedHashMap<String, String> candidates = new LinkedHashMap<>();
+    private void collectCandidates(Scope scope, TimeWindow window,
+                                   LinkedHashMap<String, String> traces, ArrayList<String> failures) {
         if (scope.window() == null) {
-            return candidates;
+            return;
         }
         // max-traces <= 0 이면 상한 없음. 창 안 트레이스를 전부 딥 페치한다.
         boolean unbounded = properties.maxTraces() <= 0;
-        int slots = unbounded ? Integer.MAX_VALUE
-                : properties.maxTraces() - (scope.hasTraceId() ? 1 : 0);
+        int slots = unbounded ? Integer.MAX_VALUE : properties.maxTraces() - traces.size();
         if (slots <= 0) {
-            return candidates;
+            return;
         }
 
-        LinkedHashSet<String> ids = new LinkedHashSet<>(scope.candidateTraceIds());
-        ids.remove(scope.traceId());
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
         // 로그와 같은 이유로 창별로 검색한다 — 합집합 창으로 훑으면 후보 사이 빈 구간의
         // 무관한 트레이스가 상한을 차지한다.
         List<TimeWindow> searchWindows = scope.logWindows(window);
@@ -183,30 +182,28 @@ public class Collector {
                         // ponytail: 상한 없음 = 한 번에 SEARCH_SCAN_LIMIT까지. 이보다 트레이스가
                         // 많은 창이 실제로 나오면 페이지네이션을 붙인다.
                         unbounded ? SEARCH_SCAN_LIMIT : properties.maxTraces() * 2);
-                ids.addAll(traceIdsOf(body));
-                ids.remove(scope.traceId());
+                traceIdsOf(body).stream().filter(id -> !traces.containsKey(id)).forEach(ids::add);
             } catch (Exception e) {
-                failures.add("Tempo 후보 검색 실패 — 후보 트레이스는 탐색이 넘긴 것뿐이다: " + describe(e));
+                failures.add("Tempo 후보 검색 실패 — 트레이스는 탐색이 지목한 것뿐이다: " + describe(e));
                 log.warn("tempo candidate search failed for {}: {}", scope.correlationId(), e.toString());
             }
         }
 
+        int added = 0;
         for (String id : ids) {
-            if (candidates.size() >= slots) {
+            if (added >= slots) {
                 break;
             }
             try {
-                candidates.put(id, tempoClient.fetchTrace(id));
+                traces.put(id, tempoClient.fetchTrace(id));
+                added++;
             } catch (Exception e) {
                 failures.add("후보 트레이스 " + id + " 수집 실패: " + describe(e));
                 log.warn("candidate trace fetch failed for {}: {}", id, e.toString());
             }
         }
-        if (!candidates.isEmpty()) {
-            log.info("candidate traces collected: {} of {} ids (slots={})",
-                    candidates.size(), ids.size(), slots);
-        }
-        return candidates;
+        log.info("traces collected: {} (지목 {} + 창 후보 {} · slots={})",
+                traces.size(), traces.size() - added, added, slots);
     }
 
     /**

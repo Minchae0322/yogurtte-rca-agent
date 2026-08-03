@@ -34,7 +34,10 @@ public class EvidenceExtractor {
     private static final int MAX_SERIES_PER_QUERY = 8;
 
     public Evidence extract(CollectedData data) {
-        List<TraceSpans.Span> spans = TraceSpans.parse(data.traceJson());
+        // 수집한 트레이스 전부에서 뽑는다 — 대표를 세우지 않으므로 span도 한 트레이스에
+        // 한정하지 않는다. duration 상위가 어느 트레이스에서 왔든 증거다.
+        ArrayList<TraceSpans.Span> spans = new ArrayList<>();
+        data.traceJsons().values().forEach(json -> spans.addAll(TraceSpans.parse(json)));
         ArrayList<Evidence.LogLine> logs = new ArrayList<>();
         collectLogLines(data.errorWarnLogsJson(), logs);
         collectLogLines(data.traceIdLogsJson(), logs);
@@ -43,8 +46,9 @@ public class EvidenceExtractor {
         data.metricsJson().forEach((query, body) -> collectSeries(query, body, metrics));
 
         return new Evidence(
-                data.traceId(),
-                data.traceId() == null || data.traceId().isBlank() ? "scan" : data.traceId(),
+                data.traceJsons().keySet().stream().findFirst().orElse(null),
+                data.correlationId() == null || data.correlationId().isBlank()
+                        ? "scan" : data.correlationId(),
                 spans.size(),
                 topSpans(spans),
                 logs.size(),

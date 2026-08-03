@@ -89,7 +89,13 @@ public record CollectProperties(
     }
 
     public String traceIdQuery(String traceId, List<String> services) {
-        return "{%s=~\"%s\"} |= \"%s\"".formatted(appLabel, appsPattern(services), traceId);
+        return traceIdQuery(List.of(traceId), services);
+    }
+
+    /** 여러 traceId를 한 번에 — 대표를 뽑지 않으므로 지목된 것 전부가 대상이다. */
+    public String traceIdQuery(List<String> traceIds, List<String> services) {
+        String ids = String.join("|", traceIds);
+        return "{%s=~\"%s\"} |~ \"%s\"".formatted(appLabel, appsPattern(services), ids);
     }
 
     /**

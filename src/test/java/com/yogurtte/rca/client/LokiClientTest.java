@@ -79,6 +79,6 @@ class LokiClientTest {
                 .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} "
                         + "|~ `ERROR|WARN|Exception|Caused by|\\.java:[0-9]+\\)`");
         assertThat(properties.traceIdQuery("abc123"))
-                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |= \"abc123\"");
+                .isEqualTo("{service_name=~\"content-service|auth-service|chat-service\"} |~ \"abc123\"");
     }
 }
