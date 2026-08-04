@@ -28,17 +28,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param logQuery             Loki 집계 LogQL. {@code %s}에 앱 셀렉터 값이 들어간다.
  * @param metricQueries        Mimir 집계 PromQL. <b>부재가 곧 신호</b>인 것들을 우선 넣는다 —
  *                             {@code up}이 0으로 꺾이는 것이 AU-2에서 유일한 도달 경로였다.
- * @param includeRaw           탐색 LLM에게 <b>스윕 원본 JSON까지</b> 보일지. 기본 {@code true}(현행 baseline).
- *                             <p><b>대조군 스위치다.</b> 탐색 LLM의 산출은 사실상 후보 번호 하나이고
- *                             (창·서비스·traceId는 고른 후보에서 코드가 파생한다 — {@code TriagePlan.parse}),
- *                             원본은 스윕 컨텍스트의 약 94%를 차지한다. 원본이 그 선택의 정확도에
- *                             기여하는지는 <b>아직 측정되지 않았다.</b>
- *                             <p>{@code false}면 후보 목록·무신호 목록만 싣는다. 두 팔의 결과가 같은
- *                             후보를 고르면 원본 약 20,000 tok은 값을 하지 않는 것이다.
- *                             <p>주의: 후보 생성 규칙이 버리는 것이 있다(신뢰 불가 트레이스 행 ·
- *                             Mimir 시리즈 라벨). 지금은 원본이 그것을 메우고 있으므로,
- *                             {@code false}에서 점수가 떨어져도 <b>원본 부재 탓인지 후보 부실 탓인지
- *                             갈리지 않는다</b> — 해석에 이 한계를 명시할 것.
+ * @param includeRaw           탐색 LLM에게 <b>스윕 원본 JSON까지</b> 보일지.
+ *                             <b>기본 {@code false}</b> — 후보 목록·무신호 목록만 싣는다 (2026-08-04 전환).
+ *                             <p>탐색 LLM의 산출은 사실상 후보 번호 하나이고 (창·서비스·traceId는
+ *                             고른 후보에서 코드가 파생한다 — {@code TriagePlan.parse}), 원본은
+ *                             스윕 컨텍스트의 약 94%를 차지했다.
+ *                             <p><b>A/B 실측으로 전환했다.</b> 같은 창을 {@code from/to}로 고정해 두 팔을
+ *                             돌린 결과 탐색 산출이 <b>완전히 일치</b>했다 — 선택 INC-7~15 · 기각 INC-1~6 ·
+ *                             좁힌 창 · 대표 traceId · 대상 서비스, 그리고 분석 컨텍스트 431,206 vs
+ *                             431,204자. 탐색 컨텍스트 토큰은 32,424 → 5,576 (<b>-82.8%</b>).
+ *                             <p>우려했던 <i>"기각 품질이 원본에 기대고 있다"</i>는 반증됐다 —
+ *                             {@code false} 팔이 원본 통계 없이 <i>"동반 지연 트레이스 0건"</i> ·
+ *                             <i>"kafka_brokers·lag 이상 0건"</i>으로 같은 후보를 쳐냈다.
+ *                             <p>⚠ N=1이고 창 하나다. 트레이스가 아예 없는 문항(CH-2·AU-2)에서는
+ *                             미검증이다. 되돌림은 {@code RCA_SURVEY_INCLUDE_RAW=true} 한 줄이다.
  */
 @ConfigurationProperties("rca.survey")
 public record SurveyProperties(
@@ -59,12 +62,12 @@ public record SurveyProperties(
         // 지표마다 0의 의미가 반대다 — up·mongodb_up은 0이 곧 다운이지만
         // kafka_consumergroup_lag·websocket_active_users는 0이 정상(안 밀림/접속 없음)이다.
         List<String> zeroIsAbnormal,
-        // Boolean이다 — 설정이 빠졌을 때 primitive면 조용히 false(대조군 B)가 되어,
-        // 어느 팔로 돌았는지 모른 채 회차가 기록된다.
+        // Boolean으로 남긴다 — 기본이 false가 된 뒤에도 "설정을 안 준 것"과 "false를 준 것"을
+        // 구분해야 팔을 바꿔 돌린 회차를 나중에 식별할 수 있다. 리포트의 rawIncluded가 그 기록이다.
         Boolean includeRaw) {
 
     public SurveyProperties {
-        includeRaw = includeRaw == null || includeRaw;
+        includeRaw = includeRaw != null && includeRaw;
         zone = blankTo(zone, "Asia/Seoul");
         defaultLookbackHours = defaultLookbackHours <= 0 ? 24 : defaultLookbackHours;
         maxWindowHours = maxWindowHours <= 0 ? 48 : maxWindowHours;

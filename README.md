@@ -190,6 +190,9 @@ LLM은 **두 번, 서로 다른 프롬프트로** 불립니다. 두 프롬프트
 | `analyzer` | `ContextAssembler` · `EvidenceExtractor` |
 | `report` | `RcaReport` = 분석 + `Triage`(선정 근거) + `Evidence`(관측값) |
 
+**전체 흐름을 그림으로 한 번에** — 단계 A~Z · LLM 두 호출의 경계 · **토큰이 어디서 부풀어 오르나**
+→ **[docs/workflow.md](docs/workflow.md)**
+
 **어떤 쿼리가 실제로 나가는지, 컨텍스트에 무엇이 들어가는지, 리포트에 무엇이 남는지**는
 → **[docs/architecture.md](docs/architecture.md)** (시퀀스 다이어그램 · 소스별 쿼리 · 알려진 공백)
 

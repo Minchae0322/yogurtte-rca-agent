@@ -139,15 +139,25 @@ rca:
       - "min_over_time(kafka_brokers[5m])"
       - "max_over_time(kafka_consumergroup_lag[5m])"
       - "max_over_time(websocket_active_users[5m])"
-    # 대조군 스위치. true(기본) = 후보 + 원본, false = 후보만.
+    # 대조군 스위치. true = 후보 + 원본, false(기본) = 후보만.
     #
     # 탐색 LLM의 산출은 사실상 후보 번호 하나다 — 창·서비스·traceId는 고른 후보에서 코드가
-    # 파생한다(TriagePlan.parse). 그런데 원본이 스윕 컨텍스트의 약 94%(실측 38,445B 중 36KB)를
-    # 차지하고, 그 20,000 tok이 선택 정확도에 기여하는지는 아직 측정되지 않았다.
+    # 파생한다(TriagePlan.parse). 그런데 원본이 스윕 컨텍스트의 약 94%를 차지했다.
     #
-    # ⚠ false에서 나빠져도 원인이 갈리지 않는다 — 원본 부재 탓인지, 후보 지문이 부실한 탓인지
-    # (Mimir 시리즈 라벨·신뢰 불가 트레이스 행이 후보에서 빠진다). 해석에 이 한계를 명시할 것.
-    include-raw: ${RCA_SURVEY_INCLUDE_RAW:true}
+    # 기본값을 false로 뒤집었다 (2026-08-04). A/B 실측 — 같은 창(01:52:02Z 기준 1시간)을
+    # from/to로 고정해 두 팔을 돌렸고, 탐색 산출이 **완전히 일치**했다:
+    #   선택 INC-7~15 · 기각 INC-1~6 · 좁힌 창 01:35:00~01:52:02.949Z · 대표 traceId · 대상 서비스
+    #   → 분석 컨텍스트 431,206 vs 431,204자(2자 차이), 1순위 원인도 같은 Redis 다운
+    # 절감: 탐색 컨텍스트 58,712 → 6,381자(-89.1%), 컨텍스트 토큰 32,424 → 5,576(-82.8%),
+    #       탐색 $0.4740 → $0.2176, 총 $2.9991 → $2.7001(-10.0% · 분석이 87%라 상한이 낮다)
+    #
+    # 우려했던 "기각 품질이 원본에 기대고 있다"는 반증됐다 — B팔은 원본 통계 없이
+    # "동반 지연 트레이스 0건" · "kafka_brokers·lag 이상 0건" · "chat·auth 신호 전무"로 기각했다.
+    #
+    # ⚠ N=1이고 창 하나다. 트레이스가 아예 없는 문항(CH-2·AU-2)에서는 미검증이고,
+    # 창을 from/to로 고정해 TimeExpressionParser는 이 테스트를 타지 않았다.
+    # 되돌리려면 이 한 줄 또는 RCA_SURVEY_INCLUDE_RAW=true.
+    include-raw: ${RCA_SURVEY_INCLUDE_RAW:false}
     # B-30: 0이 "이상"인 지표만 여기 둔다. 목록에 없는 지표는 0 구간을 후보 신호로 만들지 않는다.
     # 지표마다 0의 뜻이 반대다 — up·mongodb_up·kafka_brokers는 0이 곧 다운이지만,
     # kafka_consumergroup_lag는 0이 "안 밀림"(정상)이고 websocket_active_users는 "접속 없음"이다.

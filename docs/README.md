@@ -232,6 +232,8 @@ AU-2는 트레이스 완전 무신호에서 메트릭 단절만으로 정답 도
 | 항목 단위 점수표 | [scoring/summary.md](scoring/summary.md) |
 | 문항별 앵커 요건 + 채널 감사 | [scoring/anchors-사용안함.md](scoring/anchors-사용안함.md)(회차 1) · [toy-content `chaos/anchors-v2.md`](../../toy-content/docs/chaos/anchors-v2.md)(회차 2~, 자연어 입력) |
 | 채점 루브릭 v3 | [scoring/rubric-v3.md](scoring/rubric-v3.md) (v2 소항목안은 [보류](scoring/rubric-v2-사용안함.md)) |
+| **전체 흐름 그림 + 단계 A~Z + 토큰 해부** | **[workflow.md](workflow.md)** |
+| **토큰 절감 대기열** | **[round-5/](round-5/README.md)** — 스택트레이스 접기 |
 | 토큰·비용 측정 기준 | [measurement.md](measurement.md) |
 | 회차 1 토큰 실측 | [round-1-input-tokens.md](round-1-input-tokens.md) |
 

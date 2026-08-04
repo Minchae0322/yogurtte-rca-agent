@@ -301,8 +301,9 @@ api → service → collector(client) + analyzer → llm → notify → report
 | 앵커 요건 (회차 1까지 · 보존) | [scoring/anchors-사용안함.md](docs/scoring/anchors-사용안함.md) |
 | **채점 항목을 어떻게 정했나** | [scoring/rubric-v3.md](docs/scoring/rubric-v3.md) - 탐색부터 원인 분석까지 |
 | **대외용 종합 보고서** | [scoring/report.md](docs/scoring/report.md) - 장애 상황 + 채점 항목 + 결과 |
+| **에이전트가 어떻게 도는가 (그림·단계 A~Z·토큰 해부)** | [docs/workflow.md](docs/workflow.md) |
 | **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) - 토큰·비용 측정 기준 |
-| **다음 회차에 뭘 고칠 건가** | [docs/round-3/](docs/round-3/README.md) - 변경 대기열 (회차별 `round-N/`) |
+| **다음 회차에 뭘 고칠 건가** | 점수 [docs/round-4/](docs/round-4/README.md) · **토큰 [docs/round-5/](docs/round-5/README.md)** - 변경 대기열 (회차별 `round-N/`) |
 | 전체 계획과 진입 게이트 | [docs/strategy.md](docs/strategy.md) |
 | 관측 파이프라인 구성·한계 | [docs/monitoring.md](docs/monitoring.md) |
 | 왜 그렇게 결정했나 | [docs/decisions/](docs/decisions/README.md) |
