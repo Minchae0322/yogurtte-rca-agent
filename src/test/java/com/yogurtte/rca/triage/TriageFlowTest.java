@@ -151,7 +151,9 @@ class TriageFlowTest {
         com.yogurtte.rca.analyzer.ServiceGraphExtractor graphExtractor = new com.yogurtte.rca.analyzer.ServiceGraphExtractor();
         RcaService rcaService = new RcaService(
                 new Collector(tempoClient, lokiClient, mimirClient, collectProperties),
-                new ContextAssembler(collectProperties, graphExtractor), new EvidenceExtractor(),
+                new ContextAssembler(collectProperties, graphExtractor,
+                        com.yogurtte.rca.analyzer.LogFoldProperties.off(),
+                        com.yogurtte.rca.analyzer.TraceCompactProperties.off()), new EvidenceExtractor(),
                 graphExtractor, promptLoader,
                 collectProperties, llmClient, tokenCounter, notifier);
 

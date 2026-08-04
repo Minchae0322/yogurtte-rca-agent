@@ -69,10 +69,14 @@ class ContextRebuildTool {
         // 셀렉터 값은 재구성에 영향이 없다(어셈블은 이미 받은 JSON을 붙일 뿐).
         // 조사 당시 설정과 같아야 하는 것은 maxTraceBytes·topSpans뿐이다.
         // maxTraces=1: 과거 조사엔 후보 수집(B-9)이 없었다 — 재구성이 그때 입력과 같아야 한다.
+        // 로그 접기(B-34)는 끈다 — 과거 회차는 접기 이전 텍스트를 봤고, 접어서 재조립하면
+        // contextChars 일치 검증이 통째로 깨진다. 접기의 효과는 LogFoldMeasureTool이 따로 잰다.
         ContextAssembler assembler = new ContextAssembler(new CollectProperties(
                 120, "content-service|auth-service|chat-service", "service_name", 1000, "15s",
                 List.of(), MAX_TRACE_BYTES, TOP_SPANS, 1, METRIC_SUMMARY),
-                new com.yogurtte.rca.analyzer.ServiceGraphExtractor());
+                new com.yogurtte.rca.analyzer.ServiceGraphExtractor(),
+                com.yogurtte.rca.analyzer.LogFoldProperties.off(),
+                com.yogurtte.rca.analyzer.TraceCompactProperties.off());
 
         ArrayList<Path> reports = new ArrayList<>();
         try (Stream<Path> stream = Files.list(REPORTS)) {

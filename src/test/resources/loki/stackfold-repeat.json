@@ -1,0 +1,210 @@
+{
+  "status": "success",
+  "data": {
+    "resultType": "streams",
+    "result": [
+      {
+        "stream": {
+          "service_name": "auth-service",
+          "container": "auth-service",
+          "detected_level": "error"
+        },
+        "values": [
+          [
+            "1785759558000000000",
+            "java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because \"this.size\" is null"
+          ],
+          [
+            "1785759558001000000",
+            "\tat com.example.toyauth.app.user.controller.dto.FollowCondition$FollowingSearch.limit(FollowCondition.java:25)"
+          ],
+          [
+            "1785759558002000000",
+            "\tat com.example.toyauth.app.follow.repository.querydsl.impl.FollowRepositoryCustomImpl.findFollowingsByUserId(FollowRepositoryCustomImpl.java:35)"
+          ],
+          [
+            "1785759558003000000",
+            "\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759558004000000",
+            "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759558005000000",
+            "\tat org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759558006000000",
+            "\tat reactor.core.publisher.MonoFlatMap$FlatMapMain.onNext(MonoFlatMap.java:158) ~[reactor-core-3.7.7.jar!/:3.7.7]"
+          ],
+          [
+            "1785759558007000000",
+            "\tat net.javacrumbs.shedlock.spring.aop.MethodProxyScheduledLockAdvisor$LockingInterceptor.invoke(MethodProxyScheduledLockAdvisor.java:74) ~[shedlock-spring-5.16.0.jar!/:5.16.0]"
+          ],
+          [
+            "1785759558008000000",
+            "\tat com.example.toyauth.app.exp.service.ExpGrantService.grant(ExpGrantService.java:88)"
+          ],
+          [
+            "1785759558009000000",
+            "\tat io.lettuce.core.protocol.CommandWrapper.complete(CommandWrapper.java:65) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759558010000000",
+            "\tat io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:442) ~[netty-transport-4.1.118.Final.jar!/:4.1.118.Final]"
+          ],
+          [
+            "1785759558011000000",
+            "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+          ],
+          [
+            "1785759558012000000",
+            "\tat io.lettuce.core.internal.Futures.awaitOrCancel(Futures.java:246) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759558013000000",
+            "\tat io.lettuce.core.LettuceFutures.awaitOrCancel(LettuceFutures.java:74) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759558014000000",
+            "\t... 14 common frames omitted"
+          ],
+          [
+            "1785759560000000000",
+            "java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because \"this.size\" is null"
+          ],
+          [
+            "1785759560001000000",
+            "\tat com.example.toyauth.app.user.controller.dto.FollowCondition$FollowingSearch.limit(FollowCondition.java:25)"
+          ],
+          [
+            "1785759560002000000",
+            "\tat com.example.toyauth.app.follow.repository.querydsl.impl.FollowRepositoryCustomImpl.findFollowingsByUserId(FollowRepositoryCustomImpl.java:35)"
+          ],
+          [
+            "1785759560003000000",
+            "\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759560004000000",
+            "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759560005000000",
+            "\tat org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759560006000000",
+            "\tat reactor.core.publisher.MonoFlatMap$FlatMapMain.onNext(MonoFlatMap.java:158) ~[reactor-core-3.7.7.jar!/:3.7.7]"
+          ],
+          [
+            "1785759560007000000",
+            "\tat net.javacrumbs.shedlock.spring.aop.MethodProxyScheduledLockAdvisor$LockingInterceptor.invoke(MethodProxyScheduledLockAdvisor.java:74) ~[shedlock-spring-5.16.0.jar!/:5.16.0]"
+          ],
+          [
+            "1785759560008000000",
+            "\tat com.example.toyauth.app.exp.service.ExpGrantService.grant(ExpGrantService.java:88)"
+          ],
+          [
+            "1785759560009000000",
+            "\tat io.lettuce.core.protocol.CommandWrapper.complete(CommandWrapper.java:65) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759560010000000",
+            "\tat io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:442) ~[netty-transport-4.1.118.Final.jar!/:4.1.118.Final]"
+          ],
+          [
+            "1785759560011000000",
+            "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+          ],
+          [
+            "1785759560012000000",
+            "\tat io.lettuce.core.internal.Futures.awaitOrCancel(Futures.java:246) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759560013000000",
+            "\tat io.lettuce.core.LettuceFutures.awaitOrCancel(LettuceFutures.java:74) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759560014000000",
+            "\t... 14 common frames omitted"
+          ],
+          [
+            "1785759562000000000",
+            "java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because \"this.size\" is null"
+          ],
+          [
+            "1785759562001000000",
+            "\tat com.example.toyauth.app.user.controller.dto.FollowCondition$FollowingSearch.limit(FollowCondition.java:25)"
+          ],
+          [
+            "1785759562002000000",
+            "\tat com.example.toyauth.app.follow.repository.querydsl.impl.FollowRepositoryCustomImpl.findFollowingsByUserId(FollowRepositoryCustomImpl.java:35)"
+          ],
+          [
+            "1785759562003000000",
+            "\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759562004000000",
+            "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759562005000000",
+            "\tat org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:720) ~[spring-aop-6.2.8.jar!/:6.2.8]"
+          ],
+          [
+            "1785759562006000000",
+            "\tat reactor.core.publisher.MonoFlatMap$FlatMapMain.onNext(MonoFlatMap.java:158) ~[reactor-core-3.7.7.jar!/:3.7.7]"
+          ],
+          [
+            "1785759562007000000",
+            "\tat net.javacrumbs.shedlock.spring.aop.MethodProxyScheduledLockAdvisor$LockingInterceptor.invoke(MethodProxyScheduledLockAdvisor.java:74) ~[shedlock-spring-5.16.0.jar!/:5.16.0]"
+          ],
+          [
+            "1785759562008000000",
+            "\tat com.example.toyauth.app.exp.service.ExpGrantService.grant(ExpGrantService.java:88)"
+          ],
+          [
+            "1785759562009000000",
+            "\tat io.lettuce.core.protocol.CommandWrapper.complete(CommandWrapper.java:65) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759562010000000",
+            "\tat io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:442) ~[netty-transport-4.1.118.Final.jar!/:4.1.118.Final]"
+          ],
+          [
+            "1785759562011000000",
+            "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+          ],
+          [
+            "1785759562012000000",
+            "\tat io.lettuce.core.internal.Futures.awaitOrCancel(Futures.java:246) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759562013000000",
+            "\tat io.lettuce.core.LettuceFutures.awaitOrCancel(LettuceFutures.java:74) ~[lettuce-core-6.5.1.RELEASE.jar!/:6.5.1.RELEASE]"
+          ],
+          [
+            "1785759562014000000",
+            "\t... 14 common frames omitted"
+          ]
+        ]
+      },
+      {
+        "stream": {
+          "service_name": "content-service",
+          "container": "content-service",
+          "detected_level": "warn"
+        },
+        "values": [
+          [
+            "1785759563000000000",
+            "2026-08-03 00:19:23 WARN [traceId=6a70955a] c.e.t.FeedService : 캐시 조회 지연 Remaining time: 29999 ms"
+          ]
+        ]
+      }
+    ]
+  }
+}

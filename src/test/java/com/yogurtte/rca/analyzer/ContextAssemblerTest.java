@@ -16,10 +16,12 @@ import com.yogurtte.rca.collector.CollectedData;
 
 class ContextAssemblerTest {
 
+    private static final CollectProperties COLLECT = new CollectProperties(
+            120, "content-service|auth-service|chat-service", "service_name",
+            200, "5m", List.of(), 60_000, 20, 3, true);
+
     private final ContextAssembler assembler = new ContextAssembler(
-            new CollectProperties(120, "content-service|auth-service|chat-service", "service_name",
-                    200, "5m", List.of(), 60_000, 20, 3, true),
-            new ServiceGraphExtractor());
+            COLLECT, new ServiceGraphExtractor(), LogFoldProperties.off(), TraceCompactProperties.off());
 
     @Test
     void 두_로그_절에_겹친_레코드는_한_번만_실리고_표식이_남는다() {

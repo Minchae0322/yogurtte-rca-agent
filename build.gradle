@@ -54,5 +54,8 @@ tasks.named('test') {
     // 분석 도구(src/test/.../tools/)는 평소 건너뛰고 명시적으로 켤 때만 돈다.
     // 예: ./gradlew test --tests '*ContextRebuildTool*' -Drca.tools=true
     systemProperty 'rca.tools', System.getProperty('rca.tools', 'false')
+    // 도구별 옵션도 그대로 넘긴다 (예: -Drca.tools.dump=true 로 접은 결과를 build/에 떨군다).
+    systemProperty 'rca.tools.dump', System.getProperty('rca.tools.dump', 'false')
+    systemProperty 'rca.tools.metric-summary', System.getProperty('rca.tools.metric-summary', 'false')
     testLogging { showStandardStreams = true }
 }

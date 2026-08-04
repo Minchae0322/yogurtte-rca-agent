@@ -1,0 +1,36 @@
+{
+  "status": "success",
+  "data": {
+    "resultType": "streams",
+    "result": [
+      {
+        "stream": {
+          "service_name": "chat-service",
+          "detected_level": "warn"
+        },
+        "values": [
+          [
+            "1785759558000000000",
+            "\u001b[2m2026-08-03T23:21:18.805+09:00\u001b[0;39m \u001b[33m WARN [traceId=6a70a4cbf41848fcfa14ba00fe4a02f8,spanId=fcf6a78d070833c1,userId=NONE]\u001b[0;39m \u001b[35m7\u001b[0;39m \u001b[2m--- [chat-service] [ntainer#5-1-C-1] [6a70a4cbf41848fcfa14ba00fe4a02f8-fcf6a78d070833c1] \u001b[0;39m\u001b[36mc.e.t.app.config.KafkaConsumerConfig    \u001b[0;39m \u001b[2m:\u001b[0;39m [config] user-notification 처리 실패 1회차: topic=user.notifications partition=3 offset=1042 Remaining time: 29999 ms"
+          ],
+          [
+            "1785759588000000000",
+            "\u001b[2m2026-08-03T23:22:18.805+09:00\u001b[0;39m \u001b[33m WARN [traceId=6a70a4cbf41848fcfa14ba00fe4a02f8,spanId=fcf6a78d070833c2,userId=NONE]\u001b[0;39m \u001b[35m7\u001b[0;39m \u001b[2m--- [chat-service] [ntainer#5-1-C-1] [6a70a4cbf41848fcfa14ba00fe4a02f8-fcf6a78d070833c2] \u001b[0;39m\u001b[36mc.e.t.app.config.KafkaConsumerConfig    \u001b[0;39m \u001b[2m:\u001b[0;39m [config] user-notification 처리 실패 2회차: topic=user.notifications partition=3 offset=1042 Remaining time: 29998 ms"
+          ],
+          [
+            "1785759618000000000",
+            "\u001b[2m2026-08-03T23:23:18.805+09:00\u001b[0;39m \u001b[33m WARN [traceId=6a70a4cbf41848fcfa14ba00fe4a02f8,spanId=fcf6a78d070833c3,userId=NONE]\u001b[0;39m \u001b[35m7\u001b[0;39m \u001b[2m--- [chat-service] [ntainer#5-1-C-1] [6a70a4cbf41848fcfa14ba00fe4a02f8-fcf6a78d070833c3] \u001b[0;39m\u001b[36mc.e.t.app.config.KafkaConsumerConfig    \u001b[0;39m \u001b[2m:\u001b[0;39m [config] user-notification 처리 실패 3회차: topic=user.notifications partition=3 offset=1042 Remaining time: 29997 ms"
+          ],
+          [
+            "1785759648000000000",
+            "\u001b[2m2026-08-03T23:24:18.805+09:00\u001b[0;39m \u001b[33m WARN [traceId=6a70a4cbf41848fcfa14ba00fe4a02f8,spanId=fcf6a78d070833c4,userId=NONE]\u001b[0;39m \u001b[35m7\u001b[0;39m \u001b[2m--- [chat-service] [ntainer#5-1-C-1] [6a70a4cbf41848fcfa14ba00fe4a02f8-fcf6a78d070833c4] \u001b[0;39m\u001b[36mc.e.t.app.config.KafkaConsumerConfig    \u001b[0;39m \u001b[2m:\u001b[0;39m [config] user-notification 처리 실패 4회차: topic=user.notifications partition=3 offset=1042 Remaining time: 29996 ms"
+          ],
+          [
+            "1785759678000000000",
+            "\u001b[2m2026-08-03T23:25:18.805+09:00\u001b[0;39m \u001b[33m WARN [traceId=6a70a4cbf41848fcfa14ba00fe4a02f8,spanId=fcf6a78d070833c5,userId=NONE]\u001b[0;39m \u001b[35m7\u001b[0;39m \u001b[2m--- [chat-service] [ntainer#5-1-C-1] [6a70a4cbf41848fcfa14ba00fe4a02f8-fcf6a78d070833c5] \u001b[0;39m\u001b[36mc.e.t.app.config.KafkaConsumerConfig    \u001b[0;39m \u001b[2m:\u001b[0;39m [config] user-notification 처리 실패 5회차: topic=user.notifications partition=3 offset=1042 Remaining time: 29995 ms"
+          ]
+        ]
+      }
+    ]
+  }
+}

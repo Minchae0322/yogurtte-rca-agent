@@ -18,9 +18,11 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.yogurtte.rca.analyzer.ContextAssembler;
 import com.yogurtte.rca.analyzer.EvidenceExtractor;
+import com.yogurtte.rca.analyzer.LogFoldProperties;
 import com.yogurtte.rca.analyzer.PromptProperties;
 import com.yogurtte.rca.analyzer.ServiceGraphExtractor;
 import com.yogurtte.rca.analyzer.SystemPromptLoader;
+import com.yogurtte.rca.analyzer.TraceCompactProperties;
 import com.yogurtte.rca.client.GrafanaConfig;
 import com.yogurtte.rca.client.GrafanaProperties;
 import com.yogurtte.rca.client.LokiClient;
@@ -43,6 +45,9 @@ import com.yogurtte.rca.support.RecordingNotifier;
  * 그래도 실행은 중단 없이 완주하고, 그 사실을 결과에 남겨야 한다.
  */
 class RcaServiceFlowTest {
+
+    /** 이 흐름 테스트가 보는 것은 조립 순서지 접기가 아니다 — 접기는 LogStackFoldTest가 고정한다. */
+    private static final LogFoldProperties NO_FOLD = LogFoldProperties.off();
 
     private WireMockServer server;
     private RcaService service;
@@ -92,7 +97,7 @@ class RcaServiceFlowTest {
         // API 키 없는 LlmProperties -> TokenCounter가 비활성이라 contextTokens는 -1이 된다.
         TokenCounter tokenCounter = new LlmConfig().tokenCounter(new LlmProperties("fake", null, null, null));
         ServiceGraphExtractor graphExtractor = new ServiceGraphExtractor();
-        service = new RcaService(collector, new ContextAssembler(collectProperties, graphExtractor),
+        service = new RcaService(collector, new ContextAssembler(collectProperties, graphExtractor, NO_FOLD, TraceCompactProperties.off()),
                 new EvidenceExtractor(), graphExtractor, promptLoader,
                 collectProperties, llmClient, tokenCounter, notifier);
     }
@@ -193,7 +198,7 @@ class RcaServiceFlowTest {
         com.yogurtte.rca.collector.CollectedData data = new com.yogurtte.rca.collector.CollectedData(
                 "trace-2", null, null, null, null, java.util.Map.of("trace-2", bigTrace), List.of(), null);
 
-        String context = new ContextAssembler(properties, new ServiceGraphExtractor()).assemble(data, "q");
+        String context = new ContextAssembler(properties, new ServiceGraphExtractor(), NO_FOLD, TraceCompactProperties.off()).assemble(data, "q");
 
         assertThat(context).contains("duration 상위 30개 span만");
         // duration 상위 30개는 399번부터 370번까지; 그보다 짧은 span은 전부 버려진다.
