@@ -1,15 +1,15 @@
-# RCA Report — `scan-1785764429`
+# RCA Report — `scan-1785766500`
 
 | 항목 | 값 |
 |---|---|
 | 모드 | rca |
 | 질문 | 최근 1시간 안에 채팅 알림이 안 온다는 문의가 여러 건 들어왔다. 원인을 조사해줘 |
-| 시각 | 2026-08-03T14:41:25.896323Z |
+| 시각 | 2026-08-03T15:00:04.708766Z |
 | provider | claude-cli |
 | model | `claude-opus-5` · turns 1 |
 | prompt | `./prompts/system-prompt.md` |
-| tokens | in 210648 (cacheRead 18,133 · cacheCreate 192,513) / out 9168 · cost $2.3059 |
-| elapsed | total 146781ms (tempo 7173 · loki 539 · mimir 711 · assemble 23 · llm 133730) |
+| tokens | in 230217 (cacheRead 18,133 · cacheCreate 212,082) / out 9261 · cost $2.5190 |
+| elapsed | total 147925ms (tempo 7985 · loki 489 · mimir 605 · assemble 14 · llm 136802) |
 
 ## 탐색 (Triage)
 
@@ -17,218 +17,173 @@
 |---|---|
 | 시간창 해석 | 상대 표현 '최근 1시간' |
 | 시간창 확신도 | EXACT |
-| 스윕 창 | 2026-08-03T13:40:29.582122Z ~ 2026-08-03T14:40:29.582122Z |
-| 좁힌 창 | 2026-08-03T13:40:29.582122Z ~ 2026-08-03T14:40:29.582122Z |
-| 대상 | chat-service |
-| traceId | 6a70a4c409d0baac34a37e5a651c761d |
+| 스윕 창 | 2026-08-03T13:59:11.381016Z ~ 2026-08-03T14:59:11.381016Z |
+| 좁힌 창 | 2026-08-03T14:15:00Z ~ 2026-08-03T14:54:11Z |
+| 대상 | chat-service, content-service |
+| traceId | 6a70a49244908ca8f15be0b4d7a168b5 |
 | 트레이스 후보 | 21건 |
-| 장애 후보 | 12건 · 선택 INC-1, INC-2, INC-8, INC-9, INC-10, INC-11, INC-12 |
+| 장애 후보 | 10건 · 선택 INC-4, INC-5, INC-6, INC-7, INC-8, INC-9, INC-10 |
 | 계획 파싱 | 성공 |
 | 스윕 컨텍스트 | 후보 + 원본 (A) |
 | prompt | `./prompts/triage-prompt.md` |
-| tokens | in 56742 / out 3447 · cost $0.5092 |
-| chars | 컨텍스트 62,752 + 프롬프트 1,399 = **64,151** |
-| elapsed | survey 919ms · llm 55381ms |
+| tokens | in 53190 / out 3253 · cost $0.4661 |
+| chars | 컨텍스트 57,581 + 프롬프트 1,399 = **58,980** |
+| elapsed | survey 878ms · llm 52429ms |
 
-**선정 이유**: MongoDB 다운(14:25~14:30)을 기점으로 chat-service가 30초 타임아웃으로 막히면서 user.notifications 컨슈머 랙이 25까지 쌓이고 DLQ까지 발생한 것이 '알림 미수신' 증상의 시각·경로와 모두 일치하므로, 이 인과 사슬의 상류(MongoDB)·중간(chat-service 지연/에러)·하류(Kafka 알림 랙)와 이후 chat-service 메트릭 소실 구간을 하나의 창으로 묶어 조사한다.
+**선정 이유**: 14:24~14:35 chat-service가 30초 타임아웃으로 전면 정지하고 mongodb_up=0과 user.notifications 컨슈머 랙 누적·DLQ 유입이 동시에 관측되어, '알림 미도달' 증상의 시각·경로와 정확히 일치하는 단일 사건의 여러 지문이기 때문(INC-10은 그 회복 구간의 잔여 로그로 함께 봄).
 
 **근거**
 
-- kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications, partition=3} 0 → 1 → 20 → 25 로 14:20:29 이후 단조 증가, 창 종료 시점까지 해소 안 됨 — 알림 이벤트가 소비되지 못하고 적체 (INC-1)
-- kafka_consumergroup_lag{consumergroup=notification-recovery, topic=user.notifications.dlq, partition=0} 0 → 1 → 0 (14:25:29 부근) — 알림 처리 실패분이 DLQ로 떨어진 흔적
-- 다른 모든 컨슈머그룹(db-writer, notification/chat.messages, chat-service-fcm-tokens, chat-service-notification-settings)은 창 전체 lag 0 — 적체가 user.notifications 경로에만 국한됨
-- mongodb_up 1 → 0 (14:20:29~14:25:29 구간 전환), 14:25:29~14:30:29 동안 0, 14:30:29 이후 복구 — kafka_brokers 와 up 은 이상 0건이므로 인프라 중 MongoDB만 끊김 (INC-9)
-- Loki chat-service ERROR/WARN 4건(14:20~14:25) → 68건(14:25~14:30) 으로 17배 급증, MongoDB 다운 구간과 정확히 겹침 (INC-8)
-- chat-service 'security filterchain before' 스팬 11건이 30,006~30,031ms 로 균일하게 잘림 (14:25:29~14:29:21) — 30초 타임아웃 상한에 걸린 전형적 지문, status=unset 이라 에러 검색에는 안 잡히고 지연 검색에만 걸림 (INC-11)
-- root span 미수신 트레이스 8건이 30,006~30,088ms (14:25:08~14:27:59), serviceStats 는 chat-service 단독 spanCount 1 — 요청이 chat-service 진입 지점에서 끊겨 트레이스가 완성되지 못함 (INC-10)
-- up{job=chat-service, pod=chat-service-fdcc7c776-qrbc2} 시계열이 1785767729(14:35:29)에서 끊김 — content-service/auth-service/node-exporter 등 다른 타깃은 모두 1785768029(14:40:29)까지 수집됨. 스크레이프 타깃 소멸 = pod 재시작/축출 의심 (INC-2)
-- websocket_active_users{pod=chat-service-fdcc7c776-qrbc2} 가 조회 창 전체에서 0이고 14:35:29 이후 시계열 자체가 사라짐 — 활성 WebSocket 세션이 0이면 실시간 알림 전달 경로가 비어 있음 (INC-2)
-- chat-service ERROR/WARN 1건 (14:35~14:40) — 재시작 직후 잔여 로그로 보이며 복구 여부 확인용 (INC-12)
+- chat-service ERROR/WARN 14:20~14:25 4건 → 14:25~14:30 68건으로 17배 급증 (Loki, INC-4)
+- chat-service 'security filterchain before' 16건이 모두 30,006~30,088ms — 30초 타임아웃 상한에 붙은 균일 분포, 에러가 아닌 '지연' 지문 (Tempo slow, 14:24:18~14:27:49, INC-7)
+- <root span not yet received> 3건 × 30,007~30,016ms, chat-service spanCount 1 — 요청이 chat-service 진입 단계에서 끊겨 트레이스가 완성되지 못함 (INC-8)
+- mongodb_up 1→0→1, 14:29:11 시점 min_over_time(mongodb_up[5m])=0 (Mimir, INC-5)
+- kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications, partition=3} 0→1→11→25→26→0, 14:29~14:44 누적 후 해소 — 알림 소비 정체의 직접 증거 (INC-6)
+- kafka_consumergroup_lag{consumergroup=notification-recovery, topic=user.notifications.dlq, partition=0} 0→1→0 — 알림 일부가 DLQ로 유입 (INC-6)
+- traceId 6a70a4cbf41848fcfa14ba00fe4a02f8: content-service 루트 30,090ms, serviceStats에서 chat-service spanCount 20 / errorCount 10 — 하류 chat-service가 실패 지점 (INC-9)
+- 결손 신호: chat-service 파드 qrbc2의 up 시계열이 14:29 결측 후 14:34에 종료, 새 파드 xf4sv가 14:44부터 등장 — 파드 교체/재시작 정황
+- 결손 신호: websocket_active_users가 같은 구간에 결측되고 신규 파드에서는 0으로만 관측 — 웹소켓 세션 미복구 의심
+- kafka_brokers, up(전체) 이상 신호 0건 — 브로커·노드·다른 서비스는 이 창에서 정상, 장애가 chat-service와 mongodb에 국한
 
-**스윕이 찾은 트레이스** (고른 것은 6a70a4c409d0baac34a37e5a651c761d)
+**스윕이 찾은 트레이스** (고른 것은 6a70a49244908ca8f15be0b4d7a168b5)
 
 | traceId | 채널 | root service | root span | ms |
 |---|---|---|---|---:|
-| `6a70a4cbf41848fcfa14ba00fe4a02f8` | error ⚠값 신뢰 불가 | content-service | http post /battles/{battleId}/items/{itemId}/comments | 3355842068 |
+| `6a70a4cbf41848fcfa14ba00fe4a02f8` | error | content-service | http post /battles/{battleId}/items/{itemId}/comments | 30090 |
 | `6a70a115f09975daa14ec1a090053942` | error | content-service | http get /feeds/scroll | 71 |
-| `6a70a5b526a20b1535898d2637ce2995` | slow | chat-service | security filterchain before | 11357 |
-| `6a70a56fc2ba6a1c584c673655c624ac` | slow | chat-service | security filterchain before | 30009 |
-| `6a70a565442f4eb529704e40fdc8e267` | slow | chat-service | security filterchain before | 30006 |
-| `6a70a55b041ade55fa2b61ba415b3320` | slow | chat-service | security filterchain before | 30007 |
-| `6a70a551019863f873be86bf51ec70ed` | slow | <root span not yet received> | (없음) | 30006 |
-| `6a70a5474af907b3397e981d6c8f020e` | slow | <root span not yet received> | (없음) | 30077 |
-| `6a70a53dd534045afcc703eddaf68e88` | slow | <root span not yet received> | (없음) | 30008 |
+| `6a70a5474af907b3397e981d6c8f020e` | slow | chat-service | security filterchain before | 30084 |
+| `6a70a53dd534045afcc703eddaf68e88` | slow | chat-service | security filterchain before | 30008 |
 | `6a70a533981876b400fe1f1f63b23495` | slow | chat-service | security filterchain before | 30007 |
 | `6a70a529d19d5bd161816e0bd391b391` | slow | chat-service | security filterchain before | 30031 |
 | `6a70a51f4228124d58fda0f293b5718d` | slow | chat-service | security filterchain before | 30008 |
 | `6a70a5159cd2ffa748a878c59a8d63fd` | slow | chat-service | security filterchain before | 30008 |
-| `6a70a50be94507293e827c46c93bdb5b` | slow | <root span not yet received> | (없음) | 30007 |
-| `6a70a501290c9d041c0620935eaa61db` | slow | <root span not yet received> | (없음) | 30088 |
-| `6a70a4f70407c7e4c4cd7fd17a8ddd02` | slow | <root span not yet received> | (없음) | 30006 |
+| `6a70a50be94507293e827c46c93bdb5b` | slow | chat-service | security filterchain before | 30007 |
+| `6a70a501290c9d041c0620935eaa61db` | slow | chat-service | security filterchain before | 30088 |
+| `6a70a4f70407c7e4c4cd7fd17a8ddd02` | slow | chat-service | security filterchain before | 30007 |
 | `6a70a4ed193a2b5a1f1bed00113d8b29` | slow | chat-service | security filterchain before | 30009 |
 | `6a70a4e31505a83978ab808d971228ea` | slow | chat-service | security filterchain before | 30008 |
 | `6a70a4d900ac17f8b3eed1dff5a1f7cd` | slow | chat-service | security filterchain before | 30006 |
-| `6a70a4cf6953872624c277253c4aae4b` | slow | <root span not yet received> | (없음) | 30007 |
-| `6a70a4c409d0baac34a37e5a651c761d` ←선택 | slow | <root span not yet received> | (없음) | 30008 |
+| `6a70a4cf6953872624c277253c4aae4b` | slow | chat-service | security filterchain before | 30008 |
+| `6a70a4c409d0baac34a37e5a651c761d` | slow | chat-service | security filterchain before | 30008 |
+| `6a70a4bac0013ba673497f1f78b893f8` | slow | chat-service | security filterchain before | 30007 |
+| `6a70a4b01759197099d4eaaad1247c81` | slow | <root span not yet received> | (없음) | 30007 |
+| `6a70a4a6b2c7c98a2f264630917bf154` | slow | <root span not yet received> | (없음) | 30016 |
+| `6a70a49ca06ccf017d0f0d4e3795675c` | slow | <root span not yet received> | (없음) | 30008 |
+| `6a70a49244908ca8f15be0b4d7a168b5` ←선택 | slow | chat-service | security filterchain before | 30013 |
 
 **장애 후보** (코드가 신호를 묶은 것 · 창은 여기서 계산됨)
 
-## INC-1  kafka  |  kafka_consumergroup_lag
-- 구간: 2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z  (MIMIR · 집계 해상도만큼 흐림)
-- kafka_consumergroup_lag{consumergroup=chat-service-fcm-tokens, partition=0, topic=user.fcm-tokens} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=chat-service-fcm-tokens, partition=1, topic=user.fcm-tokens} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=chat-service-fcm-tokens, partition=2, topic=user.fcm-tokens} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=chat-service-notification-settings, partition=0, topic=user.notification-settings} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=chat-service-notification-settings, partition=1, topic=user.notification-settings} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=chat-service-notification-settings, partition=2, topic=user.notification-settings} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=0, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=1, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=11, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=3, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=4, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=5, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=7, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer, partition=8, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer-retry-1000, partition=0, topic=chat.messages-retry-1000} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer-retry-2000, partition=0, topic=chat.messages-retry-2000} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=db-writer-retry-4000, partition=0, topic=chat.messages-retry-4000} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=0, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=1, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=11, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=2, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=3, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=4, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=5, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=7, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification, partition=8, topic=chat.messages} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=0, topic=user.notifications} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=1, topic=user.notifications} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=2, topic=user.notifications} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:20:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=4, topic=user.notifications} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=5, topic=user.notifications} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=0, topic=user.notifications.dlq} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:25:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=2, topic=user.notifications.dlq} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-retry-2000, partition=0, topic=chat.messages-retry-2000} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-retry-4000, partition=0, topic=chat.messages-retry-4000} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z)
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 0 → 1
-- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=0, topic=user.notifications.dlq} 0 → 1
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 1 → 20
-- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=0, topic=user.notifications.dlq} 1 → 0
-- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 20 → 25
-- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=0, topic=user.notifications.dlq} 가 0이었다 (2026-08-03T14:35:29Z ~ 2026-08-03T14:40:29Z)
-- 같은 시각의 다른 후보: INC-2, INC-3, INC-4, INC-5, INC-6, INC-7, INC-8, INC-9, INC-10, INC-11, INC-12  (인과 여부는 판단하지 않았다)
-
-## INC-2  chat-service  |  websocket_active_users
-- 구간: 2026-08-03T13:40:29Z ~ 2026-08-03T14:35:29Z  (MIMIR · 집계 해상도만큼 흐림)
-- websocket_active_users{container=chat-service, namespace=default, pod=chat-service-fdcc7c776-qrbc2} 가 0이었다 (2026-08-03T13:40:29Z ~ 2026-08-03T14:35:29Z)
-- 같은 시각의 다른 후보: INC-1, INC-3, INC-4, INC-5, INC-6, INC-7, INC-8, INC-9, INC-10, INC-11, INC-12  (인과 여부는 판단하지 않았다)
-
-## INC-3  auth-service  |  ERROR/WARN
-- 구간: 2026-08-03T13:45:00Z ~ 2026-08-03T13:50:00Z  (LOKI · 집계 해상도만큼 흐림)
-- ERROR/WARN 1건 (2026-08-03T13:45:00Z ~ 2026-08-03T13:50:00Z)
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-4  (인과 여부는 판단하지 않았다)
-
-## INC-4  content-service  |  ERROR/WARN
-- 구간: 2026-08-03T13:45:00Z ~ 2026-08-03T13:50:00Z  (LOKI · 집계 해상도만큼 흐림)
-- ERROR/WARN 3건 (2026-08-03T13:45:00Z ~ 2026-08-03T13:50:00Z)
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-3  (인과 여부는 판단하지 않았다)
-
-## INC-5  content-service  |  ERROR/WARN
+## INC-1  content-service  |  ERROR/WARN
 - 구간: 2026-08-03T14:05:00Z ~ 2026-08-03T14:10:00Z  (LOKI · 집계 해상도만큼 흐림)
 - ERROR/WARN 1건 (2026-08-03T14:05:00Z ~ 2026-08-03T14:10:00Z)
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-6, INC-7  (인과 여부는 판단하지 않았다)
+- 같은 시각의 다른 후보: INC-2, INC-3  (인과 여부는 판단하지 않았다)
 
-## INC-6  content-service  |  http get /feeds/scroll
+## INC-2  content-service  |  http get /feeds/scroll
 - 구간: 2026-08-03T14:09:25.771400Z ~ 2026-08-03T14:09:25.842400Z  (TEMPO · 시각 정확)
 - content-service http get /feeds/scroll 71ms (error 채널)
 - traceId: 6a70a115f09975daa14ec1a090053942
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-5  (인과 여부는 판단하지 않았다)
+- 같은 시각의 다른 후보: INC-1  (인과 여부는 판단하지 않았다)
 
-## INC-7  auth-service  |  ERROR/WARN
+## INC-3  auth-service  |  ERROR/WARN
 - 구간: 2026-08-03T14:10:00Z ~ 2026-08-03T14:15:00Z  (LOKI · 집계 해상도만큼 흐림)
 - ERROR/WARN 4건 (2026-08-03T14:10:00Z ~ 2026-08-03T14:15:00Z)
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-5  (인과 여부는 판단하지 않았다)
+- 같은 시각의 다른 후보: INC-1  (인과 여부는 판단하지 않았다)
 
-## INC-8  chat-service  |  ERROR/WARN
+## INC-4  chat-service  |  ERROR/WARN
 - 구간: 2026-08-03T14:20:00Z ~ 2026-08-03T14:30:00Z  (LOKI · 집계 해상도만큼 흐림)
 - ERROR/WARN 4건 (2026-08-03T14:20:00Z ~ 2026-08-03T14:25:00Z)
 - ERROR/WARN 68건 (2026-08-03T14:25:00Z ~ 2026-08-03T14:30:00Z)
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-9, INC-10, INC-11  (인과 여부는 판단하지 않았다)
+- 같은 시각의 다른 후보: INC-5, INC-6, INC-7, INC-8, INC-9  (인과 여부는 판단하지 않았다)
 
-## INC-9  mongodb  |  mongodb_up
-- 구간: 2026-08-03T14:20:29Z ~ 2026-08-03T14:35:29Z  (MIMIR · 집계 해상도만큼 흐림)
+## INC-5  mongodb  |  mongodb_up
+- 구간: 2026-08-03T14:24:11Z ~ 2026-08-03T14:34:11Z  (MIMIR · 집계 해상도만큼 흐림)
 - mongodb_up 1 → 0
-- mongodb_up 가 0이었다 (2026-08-03T14:25:29Z ~ 2026-08-03T14:30:29Z)
+- mongodb_up 가 0이었다 (2026-08-03T14:29:11Z ~ 2026-08-03T14:29:11Z)
 - mongodb_up 0 → 1
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-8, INC-10, INC-11, INC-12  (인과 여부는 판단하지 않았다)
+- 같은 시각의 다른 후보: INC-4, INC-6, INC-7, INC-8, INC-9  (인과 여부는 판단하지 않았다)
 
-## INC-10  <root span not yet received>
-- 구간: 2026-08-03T14:25:08.967957Z ~ 2026-08-03T14:27:59.556892Z  (TEMPO · 시각 정확)
-- <root span not yet received>  30,008ms (slow 채널)
-- <root span not yet received>  30,007ms (slow 채널)
-- <root span not yet received>  30,006ms (slow 채널)
-- <root span not yet received>  30,088ms (slow 채널)
-- <root span not yet received>  30,007ms (slow 채널)
-- <root span not yet received>  30,008ms (slow 채널)
-- <root span not yet received>  30,077ms (slow 채널)
-- <root span not yet received>  30,006ms (slow 채널)
-- traceId: 6a70a4c409d0baac34a37e5a651c761d, 6a70a4cf6953872624c277253c4aae4b, 6a70a4f70407c7e4c4cd7fd17a8ddd02, 6a70a501290c9d041c0620935eaa61db, 6a70a50be94507293e827c46c93bdb5b, 6a70a53dd534045afcc703eddaf68e88, 6a70a5474af907b3397e981d6c8f020e, 6a70a551019863f873be86bf51ec70ed
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-8, INC-9, INC-11  (인과 여부는 판단하지 않았다)
+## INC-6  kafka  |  kafka_consumergroup_lag
+- 구간: 2026-08-03T14:24:11Z ~ 2026-08-03T14:49:11Z  (MIMIR · 집계 해상도만큼 흐림)
+- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 0 → 1
+- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=0, topic=user.notifications.dlq} 0 → 1
+- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 1 → 11
+- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 11 → 25
+- kafka_consumergroup_lag{consumergroup=notification-recovery, partition=0, topic=user.notifications.dlq} 1 → 0
+- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 25 → 26
+- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 26 → 0
+- 같은 시각의 다른 후보: INC-4, INC-5, INC-7, INC-8, INC-9, INC-10  (인과 여부는 판단하지 않았다)
 
-## INC-11  chat-service  |  security filterchain before
-- 구간: 2026-08-03T14:25:29.051696Z ~ 2026-08-03T14:29:21.322499Z  (TEMPO · 시각 정확)
+## INC-7  chat-service  |  security filterchain before
+- 구간: 2026-08-03T14:24:18.746715Z ~ 2026-08-03T14:27:49.614132Z  (TEMPO · 시각 정확)
+- chat-service security filterchain before 30,013ms (slow 채널)
+- chat-service security filterchain before 30,007ms (slow 채널)
+- chat-service security filterchain before 30,008ms (slow 채널)
+- chat-service security filterchain before 30,008ms (slow 채널)
 - chat-service security filterchain before 30,006ms (slow 채널)
 - chat-service security filterchain before 30,008ms (slow 채널)
 - chat-service security filterchain before 30,009ms (slow 채널)
+- chat-service security filterchain before 30,007ms (slow 채널)
+- chat-service security filterchain before 30,088ms (slow 채널)
+- chat-service security filterchain before 30,007ms (slow 채널)
 - chat-service security filterchain before 30,008ms (slow 채널)
 - chat-service security filterchain before 30,008ms (slow 채널)
 - chat-service security filterchain before 30,031ms (slow 채널)
 - chat-service security filterchain before 30,007ms (slow 채널)
-- chat-service security filterchain before 30,007ms (slow 채널)
-- chat-service security filterchain before 30,006ms (slow 채널)
-- chat-service security filterchain before 30,009ms (slow 채널)
-- chat-service security filterchain before 11,357ms (slow 채널)
-- traceId: 6a70a4d900ac17f8b3eed1dff5a1f7cd, 6a70a4e31505a83978ab808d971228ea, 6a70a4ed193a2b5a1f1bed00113d8b29, 6a70a5159cd2ffa748a878c59a8d63fd, 6a70a51f4228124d58fda0f293b5718d, 6a70a529d19d5bd161816e0bd391b391, 6a70a533981876b400fe1f1f63b23495, 6a70a55b041ade55fa2b61ba415b3320, 6a70a565442f4eb529704e40fdc8e267, 6a70a56fc2ba6a1c584c673655c624ac, 6a70a5b526a20b1535898d2637ce2995
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-8, INC-9, INC-10  (인과 여부는 판단하지 않았다)
+- chat-service security filterchain before 30,008ms (slow 채널)
+- chat-service security filterchain before 30,084ms (slow 채널)
+- traceId: 6a70a49244908ca8f15be0b4d7a168b5, 6a70a4bac0013ba673497f1f78b893f8, 6a70a4c409d0baac34a37e5a651c761d, 6a70a4cf6953872624c277253c4aae4b, 6a70a4d900ac17f8b3eed1dff5a1f7cd, 6a70a4e31505a83978ab808d971228ea, 6a70a4ed193a2b5a1f1bed00113d8b29, 6a70a4f70407c7e4c4cd7fd17a8ddd02, 6a70a501290c9d041c0620935eaa61db, 6a70a50be94507293e827c46c93bdb5b, 6a70a5159cd2ffa748a878c59a8d63fd, 6a70a51f4228124d58fda0f293b5718d, 6a70a529d19d5bd161816e0bd391b391, 6a70a533981876b400fe1f1f63b23495, 6a70a53dd534045afcc703eddaf68e88, 6a70a5474af907b3397e981d6c8f020e
+- 같은 시각의 다른 후보: INC-4, INC-5, INC-6, INC-8, INC-9  (인과 여부는 판단하지 않았다)
 
-## INC-12  chat-service  |  ERROR/WARN
-- 구간: 2026-08-03T14:35:00Z ~ 2026-08-03T14:40:00Z  (LOKI · 집계 해상도만큼 흐림)
+## INC-8  <root span not yet received>
+- 구간: 2026-08-03T14:24:28.800987Z ~ 2026-08-03T14:25:18.892186Z  (TEMPO · 시각 정확)
+- <root span not yet received>  30,008ms (slow 채널)
+- <root span not yet received>  30,016ms (slow 채널)
+- <root span not yet received>  30,007ms (slow 채널)
+- traceId: 6a70a49ca06ccf017d0f0d4e3795675c, 6a70a4a6b2c7c98a2f264630917bf154, 6a70a4b01759197099d4eaaad1247c81
+- 같은 시각의 다른 후보: INC-4, INC-5, INC-6, INC-7  (인과 여부는 판단하지 않았다)
+
+## INC-9  content-service  |  http post /battles/{battleId}/items/{itemId}/comments
+- 구간: 2026-08-03T14:27:19.818007Z ~ 2026-08-03T14:27:49.908007Z  (TEMPO · 시각 정확)
+- content-service http post /battles/{battleId}/items/{itemId}/comments 30,090ms (error 채널)
+- traceId: 6a70a4cbf41848fcfa14ba00fe4a02f8
+- 같은 시각의 다른 후보: INC-4, INC-5, INC-6, INC-7  (인과 여부는 판단하지 않았다)
+
+## INC-10  chat-service  |  ERROR/WARN
+- 구간: 2026-08-03T14:35:00Z ~ 2026-08-03T14:45:00Z  (LOKI · 집계 해상도만큼 흐림)
 - ERROR/WARN 1건 (2026-08-03T14:35:00Z ~ 2026-08-03T14:40:00Z)
-- 같은 시각의 다른 후보: INC-1, INC-2, INC-9  (인과 여부는 판단하지 않았다)
+- ERROR/WARN 1건 (2026-08-03T14:40:00Z ~ 2026-08-03T14:45:00Z)
+- 같은 시각의 다른 후보: INC-6  (인과 여부는 판단하지 않았다)
 
 **기각한 후보**
 
-- INC-3 — auth-service ERROR/WARN 1건(13:45~13:50)으로 단발이며, 알림 적체가 시작된 14:20 이후와 40분 이상 떨어져 있어 증상 시각과 맞지 않는다.
-- INC-4 — content-service ERROR/WARN 3건(13:45~13:50)으로 채팅 알림 경로(user.notifications / websocket / FCM)와 무관한 서비스이고 시각도 어긋난다.
-- INC-5 — content-service ERROR/WARN 1건(14:05~14:10)은 단발 노이즈 수준이며 chat-service 컨슈머 랙 증가 시점보다 앞서고 연결 경로가 없다.
-- INC-6 — content-service /feeds/scroll 71ms 에러 트레이스 1건은 피드 조회 경로의 개별 실패로, 지속시간도 짧고 알림 전달과 무관하다.
-- INC-7 — auth-service ERROR/WARN 4건(14:10~14:15)은 MongoDB 다운·랙 증가 이전이고 auth-service 자체 up 은 정상(14:40:29까지 1)이라 알림 미수신을 설명하지 못한다. 다만 chat-service 'security filterchain' 지연이 인증 조회를 경유한다면 재검토 여지는 남긴다.
-- INC-none — 후보가 되지 못한 트레이스 6a70a4cbf41848fcfa14ba00fe4a02f8(duration 3,355,842,068ms 신뢰 불가)은 root 는 content-service 이지만 serviceStats 상 chat-service spanCount 20/errorCount 10 을 포함하고 하위 스팬이 30,010~30,029ms 로 잘려 있어, 위 30초 타임아웃 지문과 같은 사건일 가능성이 높다. 후보 목록의 id 가 아니라 여기 담지 못했으니 조사 시 이 traceId 를 반드시 원본으로 다시 받아 볼 것.
+- INC-1 — content-service ERROR/WARN 1건(14:05~14:10)으로 증상 시각보다 20분 이르고 건수도 배경 수준이며 알림 경로와 무관하다.
+- INC-2 — content-service GET /feeds/scroll 71ms 단발 에러(14:09:25)로, 피드 조회 경로이고 지연도 없어 알림 미도달과 인과가 없다.
+- INC-3 — auth-service ERROR/WARN 4건(14:10~14:15)은 chat-service 정지 시각보다 10분 이상 앞서고 이후 auth-service에 추가 신호가 전혀 없어 별개 잡음으로 본다.
 
 **보정 기록**
 
-- 창을 후보 [INC-1, INC-2, INC-8, INC-9, INC-10, INC-11, INC-12] 의 신호 시각에서 계산했다 (2026-08-03T13:40:29.582122Z ~ 2026-08-03T14:40:29.582122Z)
+- 창을 후보 [INC-4, INC-5, INC-6, INC-7, INC-8, INC-9, INC-10] 의 신호 시각에서 계산했다 (2026-08-03T14:15:00Z ~ 2026-08-03T14:54:11Z)
 
 ## 수집 범위 (Coverage)
 
-- **window**: 2026-08-03T13:40:29.582122Z ~ 2026-08-03T14:40:29.582122Z (3600s)
-- **trace**: 98,114B / 104 spans
-- **창 안 후보 트레이스**: 20건 / 98,114B
-- **logs**: errwarn=216,545B · traceId=33,165B
-- **metrics**: 8 수집 / 365,542B, 누락 [sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))]
-- **context**: 362,008 chars (+ 시스템 프롬프트 576 chars)
+- **window**: 2026-08-03T14:15:00Z ~ 2026-08-03T14:54:11Z (2351s)
+- **trace**: 122,322B / 124 spans (상위 span만)
+- **창 안 후보 트레이스**: 20건 / 122,322B
+- **logs**: errwarn=216,549B · traceId=61,249B
+- **metrics**: 8 수집 / 246,770B, 누락 [sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))]
+- **context**: 400,115 chars (+ 시스템 프롬프트 576 chars)
 
 ### 토큰 축 (개선 지표)
 
 | 단계 | 총 in | chars | 컨텍스트 토큰 |
 |---|---:|---:|---:|
-| 탐색 | 56,742 | 64,151 | 35,433 |
-| 분석 | 210,648 | 362,584 | 189,339 |
-| **합계** | **267,390** | | **224,772** |
+| 탐색 | 53,190 | 58,980 | 측정 안 됨 |
+| 분석 | 230,217 | 400,691 | 측정 안 됨 |
+| **합계** | **283,407** | | **측정 안 됨** |
 
-- **overheadTokens 21,309 tok — 이 회차에 실측**(1자 프롬프트 프로브, 같은 명령·모델·샌드박스).
-  호출마다 한 번씩 얹히므로 단계별로 뺀다. **다른 날 상수를 쓰지 않았다 = `█ 실측`.**
+- ⚠ **overheadTokens 측정 안 됨** — 컨텍스트 토큰이 비어 있다. 이 회차 수치를 쓰려면
+  `docs/round-1-input-tokens.md`의 다른 날 상수로 **추정**해야 하고, 그건 `▓ 추정`이다
+  (그 상수는 하루 만에 20% 움직인 적이 있다).
 - contextTokens (count_tokens API): 측정 안 됨 — 구독 CLI 경로엔 API 키가 없다
 - 비용은 **API 환산 추정치**다. 구독 계정으로 호출하므로 실제 청구액이 아니다.
 
@@ -238,114 +193,149 @@
 
 ---
 
-## 1. 원인 후보 랭킹 (최대 3개)
+# 장애 분석 — scan-1785766500
 
-1. **MongoDB(172.31.46.124:27017) 프로세스 종료·재시작 → chat-service 알림 저장(`saveNotification`) 실패 → Kafka 재시도 소진 후 DLQ 유실** (14:24:14Z ~ 14:29:2xZ 구간)
-2. **Mongo 회복 이후에도 chat-service의 `user.notifications` 소비가 멈춤 → partition=3 lag 25건 적재(미소비)** — 최근 8분간 알림 미수신을 설명하는 현재 진행 중 원인
-3. **알림 "전달" 경로(WebSocket/FCM push) 자체 문제** — 데이터 부족
+**핵심 결론:** `chat-service`가 의존하는 MongoDB(`172.31.46.124:27017`)가 14:24Z경 셧다운되어 알림 저장(`user_notifications.insert`)이 전면 실패했고, 그 여파로 Kafka 알림 컨슈머가 재시도→DLQ 경로로 밀리면서 알림이 최대 5분 지연·정체됐다. 이후 chat-service 파드가 교체되는 구간에서 컨슈머가 멈춰 2차 정체(lag 26)가 발생했다.
+
+## 1. 원인 후보 랭킹
+
+1. **MongoDB 인스턴스(172.31.46.124:27017) 다운 → chat-service 알림 저장 실패 및 Kafka 재시도/DLQ 적체**
+2. **chat-service 파드 교체(14:32:45Z~14:41:15Z 관측 공백) 중 `notification-processors` 컨슈머 정지 → `user.notifications` p3 lag 26 적체**
+3. **WebSocket 실시간 전달 경로 미도달 (수신자 오프라인 판정, `websocket_active_users=0`)**
 
 ---
 
 ## 2. 후보별 근거
 
-### 후보 1 — MongoDB 다운/재시작으로 알림 저장 실패
+### 후보 1 — MongoDB 다운 (근본 원인)
 
-- **근거**
-  - 시작 시점: `com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017` (14:24:14Z / KST 23:24:14). 이후 즉시 `AnnotatedConnectException: Connection refused: /172.31.46.124:27017`로 전환 → mongod가 정상 종료(shutdown) 후 리스닝 중단.
-  - 메트릭 일치: `mongodb_up` = **0** 구간 `2026-08-03T14:24:44Z ~ 14:29:29Z`. 같은 구간 `up{job=mongodb}`(exporter)는 전 구간 1 → 호스트가 아니라 **mongod 프로세스만** 내려갔음.
-  - 알림 경로 직결 스택: `c.e.t.a.k.u.UserNotificationConsumer : [kafka] 알림 처리 실패: userId=7, type=BATTLE_ITEM_COMMENT` → `UserNotificationService.processNotification(:45)` → `saveNotification(:82)` → `SimpleMongoRepository.save` → `MongoTimeoutException: Timed out while waiting for a server that matches WritableServerSelector`.
-  - 재시도 3회 전부 실패: `[config] user-notification 처리 실패 1/2/3회차: topic=user.notifications partition=3 offset=1045` (14:25:45Z, 14:26:16Z, 14:26:47Z, 각 약 31초 간격 = serverSelectionTimeout 30s).
-  - DLQ 유입 확인: `kafka_consumergroup_lag{consumergroup=notification-recovery, topic=user.notifications.dlq, partition=0}` 이 14:27:29Z에 **0→1**, 이후 0으로 소비됨.
-  - 회복 시점: `Mongo health check ... took 11349ms` (14:29:21Z) — 그 이전 모든 헬스체크는 30001~30023ms(타임아웃). 트레이스 `6a70a5b526a2…`의 `secured request` 도 30초가 아닌 **11.35초**로 짧아짐.
-- **확신도: 높음**
-- **반증 데이터**
-  - `mongodb_up`이 14:29:44Z 이후 1로 복귀했고 헬스체크도 회복 → **Mongo 단독으로는 14:30Z 이후 계속되는 문의를 설명하지 못한다.**
-  - `up{job=mongodb}`, `up{job=kafka}`, `up{job=redis}`, `kafka_brokers`는 전 구간 1 → 인프라 호스트/브로커 자체 장애는 아님.
+**근거**
+- 셧다운 신호: 14:24:14Z(23:24:14 KST) chat-service 로그 — `com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017`. 이후 곧바로 `MongoSocketOpenException` → `AnnotatedConnectException: Connection refused: /172.31.46.124:27017`로 전환.
+- 인프라 메트릭 일치: `mongodb_up{instance=infra-server}` 이 **14:24:45Z ~ 14:29:30Z 구간 0**, 그 외 1.
+- 알림 파이프라인 전 구간에 동일 예외:
+  - `kafka/user.notifications --messaging--> chat-service` 4회, 최대 **30029.9ms**, error = `Timed out while waiting for a server that matches WritableServerSelector ... Connection refused: /172.31.46.124:27017`
+  - `kafka/user.notifications.dlq --messaging--> chat-service` 3회, 최대 **30090.2ms**, 동일 에러
+  - 스택트레이스 최하단이 `UserNotificationService.saveNotification(UserNotificationService.java:82)` → `SimpleMongoRepository.save` → `MongoTemplate.insertDocument` — 즉 **알림 문서 insert 지점에서 죽는다**.
+- 단일 알림(traceId `6a70a4cbf41848fcfa14ba00fe4a02f8`)의 전체 타임라인:
+  - 14:25:15Z content-service `[notify] 알림 발행 성공: userId=7, type=BATTLE_ITEM_COMMENT, partition=3, offset=1045`
+  - 14:25:45 / 14:26:16 / 14:26:47 / 14:27:18Z — `user-notification 처리 실패 1~4회차` (각 30초 Mongo 타임아웃)
+  - 14:27:18Z `[config] DLQ 발행: user.notifications -> user.notifications.dlq (partition=3 offset=1045)`
+  - 14:27:49Z, 14:29:20Z `DLQ 알림 재처리 실패 (1분 후 재시도)`
+  - **14:30:20Z `DLQ 알림 재처리 성공`** — `insert toychat`(3.6ms) 성공, FCM `멀티캐스트 결과: tokens=1, success=1, failure=0`
+  - → **발행에서 실제 전달까지 5분 5초 지연.** 사용자 체감상 "알림이 안 온다".
+- 범위 한정 근거: 같은 호스트의 Redis(`172.31.46.124:6379`)는 정상(`KEYS` 0.6~1.5ms 성공), `up{instance=infra-server, job=node-infra/redis/kafka}` 전 구간 1. 노드/네트워크 전체 장애가 아니라 **mongod 프로세스 단위 문제**.
 
-### 후보 2 — Mongo 회복 후 chat-service 알림 소비 정지 (현재 진행 중)
+**확신도: 높음**
 
-- **근거**
-  - `kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications, partition=3}`: 13:40:29Z~14:25:14Z **0** → 14:27:14Z **1** → (14:27:29~14:32:14 다시 0, DLQ 처리로 따라잡음) → **14:32:29Z 이후 증가: 14:33:44=8, 14:37:29=25, 14:40:29=25**. 즉 Mongo가 살아난 뒤에도 **새 알림 25건이 소비되지 않고 쌓여 있다.**
-  - 같은 시각 chat-service 관측 중단: `up{pod=chat-service-fdcc7c776-qrbc2}` 190점이 **14:32:44Z에서 끝남**(content-service·auth-service는 14:40:29Z까지 계속 수집). `websocket_active_users`, `hikaricp_connections_active/pending`, `jvm_gc_pause_seconds`도 모두 동일하게 14:32:44Z(GC는 14:35:44Z)에서 종료. 앞서 14:24:44Z~14:29:59Z 구간에도 동일 시리즈가 **결측**이었음(= Mongo 다운 구간에 scrape 실패).
-  - 스레드 소진 메커니즘 근거: 수집된 chat-service 트레이스 20건 중 대부분이 `security filterchain before` → `secured request` 가 **정확히 30.00초**(예: 1785767108967957000→1785767138976304000)로, `MongoReactiveHealthIndicator: Mongo health check failed` + `Health contributor ... (mongo) took 30002ms to respond` 와 1:1 대응. 로그상 `nio-8090-exec-1`~`exec-10` 전 스레드가 이 30초 대기에 사용됨 → actuator/health 요청이 톰캣 스레드를 전부 점유 → readiness 실패·scrape 실패로 이어질 조건이 갖춰짐.
-- **확신도: 중간**
-- **반증 데이터**
-  - `up{chat-service}`가 **0으로 관측된 적은 없다**(결측일 뿐). 파드 재시작/OOMKill 이벤트(`kube_pod_container_status_restarts_total`, kube events)는 수집되지 않아 "파드가 사라졌다"고 단정할 수 없다.
-  - `user.notifications`의 partition 0,1,2,4,5 lag는 전 구간 0 → 컨슈머 전체 정지라면 다른 파티션도 밀릴 수 있으나, 해당 파티션들엔 트래픽이 없었을 가능성도 있어 구분되지 않는다(= 파티션 3 단독 스톨 가설과 파드 소멸 가설을 이 데이터로는 분리 못 함).
+**반증 데이터**
+- `mongodb_up`은 14:29:30Z에 1로 복귀했는데 chat-service는 14:28:50Z 시점에도 `Connection refused`를 기록했다. 다만 이는 30초 타임아웃이 만료되기 전의 대기 로그이며, 14:30:20Z 최초 성공과 모순되지 않는다.
+- 그 외 이 후보와 배치되는 관측값: **없음.**
 
-### 후보 3 — 전달(WebSocket/FCM) 경로 문제
+---
 
-- **근거**
-  - `websocket_active_users{chat-service}` = **전 구간 0**(13:40:29Z~14:32:44Z). 저장이 성공해도 WS로 push될 대상 연결이 관측되지 않는다.
-  - 반면 `kafka_consumergroup_lag{consumergroup=chat-service-fcm-tokens, topic=user.fcm-tokens}`(partition 0/1/2)와 `chat-service-notification-settings`는 전 구간 0 → 토큰/설정 소비 자체는 정상.
-- **확신도: 낮음 — 데이터 부족.** FCM 발송 성공/실패 로그·메트릭, WS 세션 수립 로그, 알림 조회 API(`/api/notifications`) 응답 코드가 수집되지 않았다. 또한 `websocket_active_users`는 **사건 이전에도 0**이어서 "변화"가 아니라 기준선일 수 있다.
-- **반증 데이터**: 위 fcm-tokens/notification-settings lag 0, 그리고 사건 전 구간에도 `websocket_active_users`가 0이었다는 점(장애와 무상관한 상수).
+### 후보 2 — chat-service 파드 교체 구간의 컨슈머 정지 (2차 지연)
 
-### 참고 — 이번 알림 미수신과 인과가 확인되지 않은 별개 이상
+**근거**
+- 파드 관측 단절: `chat-service-fdcc7c776-qrbc2`(10.42.3.43)의 모든 시리즈(`up`, `hikaricp_*`, `websocket_active_users`, `jvm_gc_*`)가 **14:32:45Z에서 끊기고**, 신규 파드 `chat-service-fdcc7c776-xf4sv`(10.42.1.47)가 **14:41:15Z부터** 등장한다. 그 사이 **8분 30초간 chat-service 시리즈가 전무**.
+- 소비 정체가 정확히 그 구간에 일치: `kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications, partition=3}` 이 **14:32:15Z~14:42:30Z 동안 비0, 최대 26 (14:41:30Z)**, 신규 파드 기동 직후 14:42:30Z에 0으로 해소. → 이 구간에 발행된 약 26건의 알림이 최대 ~10분 늦게 전달됐다.
+- 재시작을 유발했을 개연성 있는 메커니즘(관측된 사실만): Mongo 장애 동안 `/actuator/health`가 30초씩 블로킹됐다 — `Health contributor ... (mongo) took 30002ms to respond`가 10초 간격으로 반복, 트레이스의 `secured request` span 15건이 모두 **정확히 30.0초**(예: `6a70a49244908ca8f15be0b4d7a168b5`, 30013ms). 같은 시각 qrbc2의 메트릭 스크레이프도 **14:24:45Z~14:30:00Z 결측**.
 
-- `content-service --service--> auth-service` 1회 실패: `finishConnect(..) failed: Connection refused: auth-service.default.svc.cluster.local/10.43.13.21:8081` (`WebClientRequestException`, 14:09:25Z, `http://auth-service:8081/api/external/users?userIds=1,3,7,9`).
-- 시점 정합: `auth-service-5999bb9f5c-lbpf2` 메트릭이 13:59:59Z에 끝나고 `…-hmgp9`가 14:11:44Z에 시작 → 그 사이 auth-service 파드 교체 공백. **호출 그래프에 chat-service→auth-service 엣지는 없으므로 알림 경로 원인으로 볼 근거는 없다.**
-- 수집 실패: content-service 401 카운터(`http_server_requests_seconds_count{status="401"}`) 시리즈 없음 → 인증 관련 가설은 애초에 검증 불가. 위 후보들의 확신도는 이 공백과 파드 이벤트 미수집을 감안해 조정했다.
+**확신도: 중간** (컨슈머 정지와 lag 적체는 확정. 다만 **파드가 왜 사라졌는지는 데이터 부족** — k8s Event, 파드 재시작 카운트, 프로브 설정, OOMKill 여부를 확보하지 못했다.)
+
+**반증 데이터**
+- `up{pod=chat-service-fdcc7c776-qrbc2}`은 존재하는 구간 내내 값 1이며 0으로 떨어진 샘플이 없다. 즉 "프로세스가 죽는 순간"이 메트릭에 잡히지 않았고, 단절은 시리즈 소멸 형태다. 크래시가 아니라 정상 종료·재스케줄일 가능성도 배제할 수 없다.
+- 두 파드의 ReplicaSet 해시가 `fdcc7c776`으로 동일 — 신규 배포(이미지 변경)로 인한 롤아웃이라는 증거는 없다.
+
+---
+
+### 후보 3 — WebSocket 실시간 전달 미도달 (수신자 오프라인)
+
+**근거**
+- 복구 후 성공한 알림조차 WebSocket으로는 나가지 않았다: 14:30:20Z `[notify] 사용자 오프라인 상태로 WebSocket 전송 스킵: userId=7`, 이어 `[push] 시작: userId=7, onlineDevices=[] (제외 대상)`.
+- `websocket_active_users`가 **두 파드 모두 전 구간 0** (qrbc2 14:15:00~14:32:45Z, xf4sv 14:41:15~14:54:00Z).
+- 즉 조회 시간창 동안 이 클러스터의 chat-service에 WebSocket 세션이 하나도 없었으므로, 인앱 실시간 알림 경로는 애초에 동작할 수 없는 상태였다.
+
+**확신도: 낮음** (문의의 "알림이 안 온다"가 인앱 실시간을 뜻하는지 푸시를 뜻하는지 판별할 데이터가 없다. 또한 세션 0이 장애의 결과인지 원래 트래픽이 없었던 것인지 구분할 수 없다.)
+
+**반증 데이터**
+- FCM 푸시는 정상 발송됐다 — `[push] 멀티캐스트 결과: tokens=1, success=1, failure=0`, `messageId=projects/toy-chat-30d47/messages/1785767420477017`. 즉 최소한 푸시 채널로는 (지연되긴 했으나) 도달했다. 이 후보 단독으로는 "알림 미수신"을 설명하지 못한다.
+
+---
+
+### 검토 후 기각한 가설
+
+- **MySQL / Hikari 커넥션 풀 고갈**: 트레이스상 `chat-service --jdbc--> mysql/content` 커넥션 span이 최대 **30084.4ms**로 길지만, `hikaricp_connections_active`·`hikaricp_connections_pending`은 chat/content/auth 전 파드에서 **전 구간 0**이다. 해당 span의 events가 `acquired`(즉시) → 30초 후 `rollback`인 것으로 보아, 트랜잭션 안에서 Mongo 호출이 블로킹되며 JDBC 커넥션을 붙잡고 있었을 뿐 MySQL 자체는 느리지 않았다. content-service의 동일 풀은 최대 102.7ms로 정상.
+- **Kafka 브로커 장애**: `kafka_brokers` 전 구간 1, `up{job=kafka}` 전 구간 1, 발행(`publish user.notifications` 58.1ms)도 정상 성공.
+- **인증(401) 문제**: `sum(rate(http_server_requests_seconds_count{application="content-service", status="401"}[1m]))` 수집 실패로 **데이터 부족**. 다만 content-service는 `POST /battles/{battleId}/items/{itemId}/comments`에서 `status=200, outcome=SUCCESS`로 처리되고 알림 발행까지 성공했으므로, 이 경로에서 인증이 원인이라는 정황은 없다.
 
 ---
 
 ## 3. 권장 다음 조치
 
-**즉시(사용자 영향 해소)**
-1. chat-service 파드 상태 확인: `kubectl -n default get pod chat-service-fdcc7c776-qrbc2 -o wide`, `kubectl describe pod`(재시작 횟수·OOMKilled·probe 실패 이벤트), `kubectl get events --sort-by=.lastTimestamp | grep chat-service`. 14:32:44Z 이후 메트릭 소실 원인을 여기서 확정.
-2. 컨슈머 그룹 확인: `kafka-consumer-groups --describe --group notification-processors --topic user.notifications` → partition=3의 멤버(assigned consumer) 존재 여부, current-offset 정지 여부, lag 25 확인. 멤버가 없거나 정지면 chat-service 재기동으로 소비 재개.
-3. DLQ 재처리: `user.notifications.dlq`에 들어간 `userId=7, type=BATTLE_ITEM_COMMENT`(원본 partition=3 offset=1045) 재발행 또는 수동 알림 보정.
+**즉시 (원인 확정)**
+1. mongod 종료 사유 확인: `172.31.46.124` 호스트에서 `journalctl -u mongod --since "2026-08-03 23:20" --until "23:32"` 및 mongod 로그의 shutdown 직전 라인. `InterruptedAtShutdown`은 **정상 셧다운 시그널**이므로 OOM-killer(`dmesg -T | grep -i oom`), systemd 재시작, 수동/자동 유지보수 중 무엇인지 판별할 것.
+2. chat-service 파드 소멸 사유 확인: `kubectl get events -n default --field-selector involvedObject.name=chat-service-fdcc7c776-qrbc2`, `kubectl describe pod chat-service-fdcc7c776-xf4sv` (lastState / restartCount / Killing·Unhealthy 이벤트). 14:32~14:41Z 구간 확인.
+3. 잔여 미처리 알림 확인: `user.notifications`(p3)와 `user.notifications.dlq`(p0) 현재 lag 및 DLQ 잔존 오프셋 점검 — 데이터상 offset 14는 14:30:20Z에 소진됐으나, 파드 교체 구간(14:32~14:42Z)에 DLQ로 넘어간 건이 있는지 확인.
 
-**원인 확정**
-4. infra-server(172.31.46.124) mongod 종료 이유 확인: `journalctl -u mongod --since "2026-08-03 23:20 KST"`, `/var/log/mongodb/mongod.log`에서 14:24:14Z 전후 shutdown 로그(수동 재시작/패키지 업데이트/OOM 여부). 단일 노드(`SingleServerCluster`)이므로 재발 시 동일 전면 장애.
-5. 알림 저장 실패 건수 전수 파악: 조회 창을 14:20Z~현재로 확장해 `UserNotificationConsumer 알림 처리 실패` 라인을 userId별로 집계(현재 수집분에는 userId=7만 확인됨). 문의 건수와 대조.
+**단기 (재발 시 영향 축소)**
+4. **liveness/readiness 프로브에서 Mongo 헬스 인디케이터 분리**: Mongo 다운 시 `/actuator/health`가 30초 블로킹되어 프로브 타임아웃과 메트릭 스크레이프 결측을 동시에 유발했다. `management.endpoint.health.group.liveness.include`에서 mongo 제외 + `spring.data.mongodb.*` 서버 선택 타임아웃(현재 30초)을 3~5초로 하향.
+5. MongoDB 단일 인스턴스 구성 확인: 클라이언트 로그가 `SingleServerCluster.selectServer`를 타고 있어 **레플리카셋 없이 단일 노드**로 보인다. 알림 저장이 이 단일 노드에 직결되므로 레플리카셋화 또는 저장 실패 시 degrade 경로(푸시 우선 발송 후 비동기 저장) 검토.
 
-**재발 방지(설정 변경)**
-6. actuator 헬스체크가 톰캣 스레드를 30초씩 점유하지 않도록: Mongo 헬스 인디케이터 타임아웃 단축 또는 readiness 그룹에서 mongo 제외(`management.endpoint.health.group.readiness.include`), liveness/readiness 분리.
-7. Mongo 드라이버 `serverSelectionTimeout`/`connectTimeout`을 30s보다 짧게 조정 → 재시도 3회에 90초 이상 소모되는 현상 완화.
-8. Kafka 컨슈머: DLQ 이후 오프셋 진행이 보장되는지(현재 14:27~14:32 구간엔 진행했음) 및 소비 정지 감지용 알람 추가 — `kafka_consumergroup_lag{consumergroup="notification-processors"} > 0 for 5m`, `mongodb_up == 0`, `absent(up{job="chat-service"})`.
-9. 별개로 auth-service 파드 교체(13:59:59Z→14:11:44Z 공백)와 content-service WebClient 실패에 대한 재시도/서킷브레이커 여부 점검, 누락된 401 메트릭 재조회.
+**모니터링/알람**
+6. `mongodb_up == 0`, `kafka_consumergroup_lag{consumergroup="notification-processors"} > 0 for 2m`, chat-service 파드 부재(`absent(up{job="chat-service"})`)에 대한 알람 추가. 이번 건은 세 신호 모두 명확히 떴지만 사용자 문의로 인지됐다.
+7. `websocket_active_users`가 전 구간 0인 것이 정상인지 확인 — 정상이 아니라면 WebSocket 연결 경로(인그레스/세션 저장소)를 별도 조사 대상으로 승격.
+
+**남은 데이터 공백 (결론 확신도 제한 요인)**
+- content-service 401 메트릭 수집 실패(시리즈 없음)
+- k8s Event / 파드 재시작 원인 데이터 없음 → 후보 2의 인과는 미확정
+- mongod 자체 로그·호스트 리소스 메트릭 없음 → 후보 1의 **트리거**는 미확정(장애 사실 자체는 확정)
+- 관측된 알림 이벤트가 userId=7 1건뿐 → "여러 건 문의"와의 대응은 p3 lag 26이라는 간접 증거에 의존
 
 ---
 
 ## 관측 증거 (Evidence)
 
-> 이 조사가 실제로 본 값이다. 원본 응답 전체는 `reports/raw/scan-1785764429-*.json`에 있다.
+> 이 조사가 실제로 본 값이다. 원본 응답 전체는 `reports/raw/scan-1785766500-*.json`에 있다.
 
 ### 호출 그래프 (트레이스에서 추출)
 
 ```
-content-service --db--> redis  4회  최대 0.5ms  [GET]
-chat-service --jdbc--> mysql/content (HikariPool-1)  38회  최대 71.0ms
-    events: acquired
-content-service --jdbc--> mysql/content (HikariPool-1)  19회  최대 68.3ms
+chat-service --db--> mongodb  7회  최대 3.6ms  [insert, find]
+chat-service --db--> redis  2회  최대 1.5ms  [KEYS]
+content-service --db--> redis  1회  최대 0.6ms  [GET]
+chat-service --jdbc--> mysql/content (HikariPool-1)  45회  최대 30084.4ms
+    events: acquired, rollback, commit
+content-service --jdbc--> mysql/content (HikariPool-1)  8회  최대 102.7ms
     events: acquired, commit
-content-service --service--> auth-service  1회  최대 22.6ms
-    error: WebClientRequestException
-    error: finishConnect(..) failed: Connection refused: auth-service.default.svc.cluster.local/10.43.13.21:8081
+chat-service --messaging--> kafka/user.notifications.dlq  1회  최대 894.0ms  [publish]
+content-service --messaging--> kafka/user.notifications  1회  최대 58.1ms  [publish]
+kafka/user.notifications --messaging--> chat-service  4회  최대 30029.9ms  [receive]
+    error: Timed out while waiting for a server that matches WritableServerSelector. Client view of cluster state is {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoSocketOpenException: Exception opening socket}, caused by {io.netty.channel.Abst…
+kafka/user.notifications.dlq --messaging--> chat-service  3회  최대 30090.2ms  [receive]
+    error: Timed out while waiting for a server that matches WritableServerSelector. Client view of cluster state is {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoSocketOpenException: Exception opening socket}, caused by {io.netty.channel.Abst…
 ```
 
-### span (duration 상위 15 / 전체 104)
+### span (duration 상위 15 / 전체 124)
 
 | ms | service | span | 시작 |
 |---:|---|---|---|
+| 30090.16 | chat-service | `receive` | 2026-08-03T14:27:19.818007Z |
 | 30088.01 | chat-service | `secured request` | 2026-08-03T14:26:09.218489Z |
+| 30084.38 | chat-service | `connection` | 2026-08-03T14:27:19.819415Z |
 | 30077.54 | chat-service | `secured request` | 2026-08-03T14:27:19.537312Z |
+| 30074.72 | chat-service | `user-notification-service#process-notification` | 2026-08-03T14:27:19.825637Z |
 | 30030.88 | chat-service | `secured request` | 2026-08-03T14:26:49.385232Z |
-| 30009.28 | chat-service | `secured request` | 2026-08-03T14:25:49.134897Z |
-| 30009.12 | chat-service | `secured request` | 2026-08-03T14:27:59.674928Z |
-| 30008.35 | chat-service | `secured request` | 2026-08-03T14:25:08.967957Z |
-| 30008.26 | chat-service | `secured request` | 2026-08-03T14:27:09.469555Z |
-| 30007.99 | chat-service | `secured request` | 2026-08-03T14:26:29.301185Z |
-| 30007.98 | chat-service | `secured request` | 2026-08-03T14:26:39.342828Z |
-| 30007.95 | chat-service | `secured request` | 2026-08-03T14:25:39.093661Z |
-| 30007.80 | chat-service | `secured request` | 2026-08-03T14:25:19.010226Z |
-| 30007.55 | chat-service | `secured request` | 2026-08-03T14:26:19.259889Z |
-| 30007.24 | chat-service | `secured request` | 2026-08-03T14:27:39.608185Z |
-| 30007.00 | chat-service | `secured request` | 2026-08-03T14:26:59.427157Z |
-| 30006.92 | chat-service | `secured request` | 2026-08-03T14:25:59.176027Z |
+| 30029.94 | chat-service | `receive` | 2026-08-03T14:25:15.810769Z |
+| 30021.34 | chat-service | `connection` | 2026-08-03T14:25:15.811294Z |
+| 30016.13 | chat-service | `secured request` | 2026-08-03T14:24:38.843031Z |
+| 30013.33 | chat-service | `secured request` | 2026-08-03T14:24:18.746875Z |
+| 30012.56 | chat-service | `receive` | 2026-08-03T14:25:46.951072Z |
+| 30012.47 | chat-service | `receive` | 2026-08-03T14:28:50.001304Z |
+| 30011.43 | chat-service | `receive` | 2026-08-03T14:26:48.986521Z |
+| 30010.90 | chat-service | `receive` | 2026-08-03T14:26:17.969109Z |
+| 30010.21 | chat-service | `user-notification-service#process-notification` | 2026-08-03T14:25:15.814471Z |
 
-### 로그 원문 (60 / 전체 1,038줄)
+### 로그 원문 (60 / 전체 1,083줄)
 
 전체가 상한을 넘어 ERROR/WARN 줄을 우선 발췌했다. 나머지는 원본 파일에 있다.
 
@@ -416,41 +406,43 @@ content-service --service--> auth-service  1회  최대 22.6ms
 
 | 쿼리 | series | 점 | min | max | last | 값이 0이던 구간 |
 |---|---|---:|---:|---:|---:|---|
-| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.45:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lbpf2, pool=HikariPool-1, service=auth-service}` | 79 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T13:59:59Z** |
-| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, pool=HikariPool-1, service=auth-service}` | 116 | 0 | 0 | 0 | **2026-08-03T14:11:44Z ~ 2026-08-03T14:40:29Z** |
-| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2, pool=HikariPool-1}` | 190 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:32:44Z** |
-| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n, pool=HikariPool-1}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2, pool=HikariPool-1}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.45:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lbpf2, pool=HikariPool-1, service=auth-service}` | 79 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T13:59:59Z** |
-| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, pool=HikariPool-1, service=auth-service}` | 116 | 0 | 0 | 0 | **2026-08-03T14:11:44Z ~ 2026-08-03T14:40:29Z** |
-| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2, pool=HikariPool-1}` | 190 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:32:44Z** |
-| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n, pool=HikariPool-1}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2, pool=HikariPool-1}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 210 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:35:44Z** |
-| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.45:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lbpf2, service=auth-service}` | 91 | 0 | 0.000 | 0 | **2026-08-03T13:41:14Z ~ 2026-08-03T13:55:59Z, 2026-08-03T14:00:14Z ~ 2026-08-03T14:02:59Z** |
-| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, service=auth-service}` | 112 | 0 | 0.001 | 0 | **2026-08-03T14:12:44Z ~ 2026-08-03T14:24:29Z, 2026-08-03T14:28:44Z ~ 2026-08-03T14:40:29Z** |
-| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 210 | 0.000 | 0.000 | 0.000 | — |
-| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n}` | 241 | 0 | 0.000 | 0.000 | **2026-08-03T13:40:29Z ~ 2026-08-03T13:44:44Z, 2026-08-03T13:48:59Z ~ 2026-08-03T13:58:44Z, 2026-08-03T14:02:59Z ~ 2026-08-03T14:13:44Z, 2026-08-03T14:17:59Z ~ 2026-08-03T14:27:44Z, 2026-08-03T14:31:59Z ~ 2026-08-03T14:38:44Z** |
-| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2}` | 241 | 0 | 0.000 | 0 | **2026-08-03T13:40:44Z ~ 2026-08-03T13:50:29Z, 2026-08-03T13:54:44Z ~ 2026-08-03T14:05:29Z, 2026-08-03T14:09:44Z ~ 2026-08-03T14:19:29Z, 2026-08-03T14:23:44Z ~ 2026-08-03T14:32:29Z, 2026-08-03T14:36:44Z ~ 2026-08-03T14:40:29Z** |
-| `up` | `{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-40-241, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-cph5l, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}` | 241 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-45-39, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-9kvqt, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}` | 241 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.45:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lbpf2}` | 79 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9}` | 116 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 190 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n}` | 241 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2}` | 241 | 1 | 1 | 1 | — |
-| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, instance=10.42.1.248:8080, job=integrations/kubernetes/kube-state-metrics, k8s_cluster_name=yogurtte-k3s-prod, source=kubernetes}` | 241 | 1 | 1 | 1 | — |
-| `mongodb_up` | `{__name__=mongodb_up, cluster=yogurtte-k3s-prod, instance=infra-server, job=mongodb, k8s_cluster_name=yogurtte-k3s-prod}` | 241 | 0 | 1 | 1 | **2026-08-03T14:24:44Z ~ 2026-08-03T14:29:29Z** |
-| `kafka_brokers` | `{__name__=kafka_brokers, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}` | 241 | 1 | 1 | 1 | — |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.fcm-tokens}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.fcm-tokens}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.fcm-tokens}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.notification-settings}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.notification-settings}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.notification-settings}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=chat.messages}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=chat.messages}` | 241 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:40:29Z** |
-| `websocket_active_users` | `{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 190 | 0 | 0 | 0 | **2026-08-03T13:40:29Z ~ 2026-08-03T14:32:44Z** |
+| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, pool=HikariPool-1, service=auth-service}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv, pool=HikariPool-1}` | 52 | 0 | 1 | 0 | **2026-08-03T14:43:15Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2, pool=HikariPool-1}` | 52 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:32:45Z** |
+| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n, pool=HikariPool-1}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_active` | `{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2, pool=HikariPool-1}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, pool=HikariPool-1, service=auth-service}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv, pool=HikariPool-1}` | 52 | 0 | 0 | 0 | **2026-08-03T14:41:15Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2, pool=HikariPool-1}` | 52 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:32:45Z** |
+| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n, pool=HikariPool-1}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `hikaricp_connections_pending` | `{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2, pool=HikariPool-1}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}` | 48 | 0 | 0 | 0 | **2026-08-03T14:42:15Z ~ 2026-08-03T14:54:00Z** |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 72 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:35:45Z** |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, service=auth-service}` | 157 | 0 | 0.001 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:24:30Z, 2026-08-03T14:28:45Z ~ 2026-08-03T14:45:30Z, 2026-08-03T14:49:45Z ~ 2026-08-03T14:54:00Z** |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}` | 48 | 0.000 | 0.002 | 0.000 | — |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 72 | 0.000 | 0.000 | 0.000 | — |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n}` | 157 | 0 | 0.000 | 0.000 | **2026-08-03T14:18:00Z ~ 2026-08-03T14:27:45Z, 2026-08-03T14:32:00Z ~ 2026-08-03T14:38:45Z, 2026-08-03T14:43:00Z ~ 2026-08-03T14:52:45Z** |
+| `rate(jvm_gc_pause_seconds_sum[5m])` | `{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2}` | 157 | 0 | 0.000 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:19:30Z, 2026-08-03T14:23:45Z ~ 2026-08-03T14:32:30Z, 2026-08-03T14:36:45Z ~ 2026-08-03T14:43:30Z, 2026-08-03T14:47:45Z ~ 2026-08-03T14:54:00Z** |
+| `up` | `{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-40-241, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-cph5l, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}` | 157 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-45-39, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-9kvqt, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}` | 157 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9}` | 157 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}` | 52 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 52 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n}` | 157 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2}` | 157 | 1 | 1 | 1 | — |
+| `up` | `{__name__=up, cluster=yogurtte-k3s-prod, instance=10.42.1.248:8080, job=integrations/kubernetes/kube-state-metrics, k8s_cluster_name=yogurtte-k3s-prod, source=kubernetes}` | 157 | 1 | 1 | 1 | — |
+| `mongodb_up` | `{__name__=mongodb_up, cluster=yogurtte-k3s-prod, instance=infra-server, job=mongodb, k8s_cluster_name=yogurtte-k3s-prod}` | 157 | 0 | 1 | 1 | **2026-08-03T14:24:45Z ~ 2026-08-03T14:29:30Z** |
+| `kafka_brokers` | `{__name__=kafka_brokers, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}` | 157 | 1 | 1 | 1 | — |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.fcm-tokens}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.fcm-tokens}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.fcm-tokens}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.notification-settings}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.notification-settings}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.notification-settings}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=chat.messages}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `kafka_consumergroup_lag` | `{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=chat.messages}` | 157 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:54:00Z** |
+| `websocket_active_users` | `{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}` | 52 | 0 | 0 | 0 | **2026-08-03T14:41:15Z ~ 2026-08-03T14:54:00Z** |
+| `websocket_active_users` | `{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.3.43:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-qrbc2}` | 52 | 0 | 0 | 0 | **2026-08-03T14:15:00Z ~ 2026-08-03T14:32:45Z** |
 
 값이 0이던 구간은 굵게 표시했다 — 프로세스가 사라져 시계열이 꺾인 것이 유일한 신호인 장애가 있다.
 
