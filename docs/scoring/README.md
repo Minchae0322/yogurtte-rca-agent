@@ -146,7 +146,7 @@ toy-content [`docs/chaos/RUNBOOK.md`](../../../toy-content/docs/chaos/RUNBOOK.md
 > **분리**했으며, FCM `INTERNAL` 미전달 1건까지 갈라냈다(14초 전 같은 토큰이 `success=1`).
 > 🔴 `overheadTokens = -1`(프로브 실패) — 두 실행의 **토큰 축은 비교 불가**. $2.3052 · E2E 456s.
 >
-> → [ch-1/round-5.md](../ch-1/round-5.md) · [실행 1](../ch-1/round-5-run1.md) · [리포트 원문](../ch-1/round-5-rca-report.md)
+> → [ch-1/round-5.md](../ch-1/round-5.md) · 실행 1 · [리포트 원문](../ch-1/round-5-rca-report.md)
 
 ### CH-1 회차 5 · 실행 1 — **86 / 100** (판정 2건) · 🔴 **결함 11 세 번째 재현 — `log-limit`이 잘랐다**
 
@@ -181,7 +181,7 @@ toy-content [`docs/chaos/RUNBOOK.md`](../../../toy-content/docs/chaos/RUNBOOK.md
 > 부수: `overheadTokens` **29,426 실측** 복구(회차 5는 `-1`) · **B-13 일곱 회차 연속**이고
 > **두 회차 연속으로 판단을 깎았다**(창 안에 401이 실재하는데 시리즈 없음 → *"무트래픽"* 진단 폐기).
 >
-> → [ch-1/round-5-run1.md](../ch-1/round-5-run1.md) · [리포트 원문](../ch-1/round-5-run1-rca-report.md)
+> → ch-1/round-5-run1.md · 리포트 원문
 
 ### CH-1 무효 C (번호 반납) — 🔴 **채점 불가 (주입 사슬 불성립)** · 앵커는 무결하다 (§8.1 집계 제외)
 
@@ -195,7 +195,7 @@ toy-content [`docs/chaos/RUNBOOK.md`](../../../toy-content/docs/chaos/RUNBOOK.md
 > **채점자 실측으로 "신호 부재"를 확인했다** (도구 차단이 아니다):
 > chat-service `DLQ|재처리|user.notifications` **0건** · `알림|notification|kafka` **0건** ·
 > content-service `RequestLoggingFilter` 07:00~07:40Z **2건(전부 401)** ·
-> chat-service 비-health 로그는 전부 Mongo 드라이버 DEBUG. 상세 쿼리는 [ch-1/round-x-주입불성립.md §2](../ch-1/round-x-주입불성립.md).
+> chat-service 비-health 로그는 전부 Mongo 드라이버 DEBUG. 상세 쿼리는 ch-1/round-x-주입불성립.md §2.
 >
 > 🔴 **원인은 AU-3 시크릿 드리프트 원복 미완료다** (초판의 *"낡은 토큰 재사용"* 은 정정).
 > `chaos.sh`의 `measure_CH_1()`은 `token && t1` — **트리거 직전 매번 새로 로그인**하고,
@@ -227,7 +227,7 @@ toy-content [`docs/chaos/RUNBOOK.md`](../../../toy-content/docs/chaos/RUNBOOK.md
 > 창 안에 401이 실재했는데 시리즈가 없어 에이전트가 1순위 확신도를 *"중간"* 으로 낮췄다.
 > *"무트래픽이라 시리즈가 없는 게 맞다"* 던 [B-29](../round-4/README.md) 진단의 부분 반증이다.
 >
-> → [ch-1/round-x-주입불성립.md](../ch-1/round-x-주입불성립.md) · [리포트 원문](../ch-1/round-x-주입불성립-rca-report.md)
+> → ch-1/round-x-주입불성립.md · 리포트 원문
 
 ### IN-2 회차 3 — **96 / 100 → 평균 98 ± 2** · 🔴 **아무것도 안 고쳤는데 4점이 움직였다**
 
@@ -834,7 +834,7 @@ cacheCreation 44,242`로 합산이 성립하고 컨텍스트 68,839자와 어긋
 
 ### CH-1 이관 X (구 회차 1) — **채점 불가 (앵커 부적합)**
 
-- 리포트: [`ch-1/round-x-73s-rca-report.md`](../ch-1/round-x-73s-rca-report.md) · 실행 기록 [AE-01](../findings/ae-01-rca-v0-ch1-blind-eval.md)
+- 리포트: `ch-1/round-x-73s-rca-report.md` · 실행 기록 [AE-01](../findings/ae-01-rca-v0-ch1-blind-eval.md)
 - 앵커: `scenarios/CH-1/answer.md`
 
 | 항목 | 배점 | 점수 | 판정 근거 |
