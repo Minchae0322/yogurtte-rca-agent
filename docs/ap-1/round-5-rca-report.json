@@ -1,0 +1,761 @@
+{
+  "traceId" : "scan-1785895200",
+  "question" : "최근 1시간 안에 댓글 작성이 실패했다는 제보가 있다. 원인을 조사해줘",
+  "mode" : "rca",
+  "startedAt" : "2026-08-05T02:14:44.641436800Z",
+  "llmProvider" : "claude-cli",
+  "llmModel" : "claude-opus-5",
+  "llmTurns" : 1,
+  "promptSource" : ".\\prompts\\system-prompt.md",
+  "analysis" : "## 1. 원인 후보 랭킹 (최대 3개)\n\n1. **댓글 본문 길이가 `tb_feed_comment.content` 컬럼 정의를 초과해 MySQL이 INSERT를 거부 → 트랜잭션 롤백 → HTTP 500** (MySQL error 1406 / SQLState 22001)\n2. **애플리케이션 계층에 본문 길이 검증이 없어 DB까지 도달하고, 입력 오류가 4xx가 아닌 500으로 매핑됨** (1번의 상위 원인 계층 — 왜 막히지 않았는가)\n3. **제보된 다른 실패 건에 대한 별도 원인** — 관측 창에서 실패 트레이스는 1건뿐이라 확인 불가 (데이터 부족)\n\n---\n\n## 2. 후보별 근거\n\n### 후보 1 — content 컬럼 길이 초과로 INSERT 실패\n\n**근거**\n- 실패 트레이스 `6a729b55f741850507e3ddfd50cc4d65`: 루트 span `http post /feeds/{feedId}/comments`, `\"status\":\"500\"`, `\"outcome\":\"SERVER_ERROR\"`, `\"http.url\":\"/api/feeds/145/comments\"`, durNs 119,485,000 (119.5ms).\n- 자식 span `query` (`spanId` `pWkAaUE3PyM=`, 51.335ms)에 `\"error\":\"Data truncation: Data too long for column 'content' at row 1\"`, `status.code = STATUS_CODE_ERROR`, SQL은 `insert into tb_feed_comment (content,created_at,creator_id,...) values (?,...)`.\n- 로그 원문:\n  - `WARN … o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 1406, SQLState: 22001` (11:09:25.704, userId=1)\n  - `ERROR … o.h.e.jdbc.spi.SqlExceptionHelper - Data truncation: Data too long for column 'content' at row 1`\n  - `org.springframework.dao.DataIntegrityViolationException: could not execute statement [Data truncation: Data too long for column 'content' at row 1]` → `Caused by: org.hibernate.exception.DataException` → `Caused by: com.mysql.cj.jdbc.exceptions.MysqlDataTruncation`\n  - 앱 프레임: `com.example.toycontent.app.feed.service.FeedCommentService.createComment(FeedCommentService.java:64)`, 진입점 `FeedCommentController.createComment(FeedCommentController.java:53)`\n  - `RequestLoggingFilter - [HTTP] POST /api/feeds/145/comments 500 - 118ms`\n- 인프라 원인은 모두 배제됨: `hikaricp_connections_active`·`pending` 4개 인스턴스 전 구간 0, `up` 전 구간 1(mysql 노드 포함 infra-server 계열 전부), GC pause rate 최대 5.4e-5초/초 수준, Redis `GET` 0.557ms + 로그 `[user-cache] 캐시 HIT - userId: 1, elapsed: 1ms`.\n\n**확신도: 높음**\n\n**반증 데이터: 없음** (관측 창 내 500 응답·에러 로그·에러 span이 모두 동일 traceId·동일 예외로 일치)\n\n**대기·지연 구간 판정**\n| 구간 | 실측 | 상한(타임아웃 설정값) | 만료 여부 | 최종 상태 |\n|---|---|---|---|---|\n| Hikari 커넥션 획득 (`connection` span 시작 …639905000 → `acquired` …641574000) | 1.669ms | `connectionTimeout` 설정값 미확보 | 만료 아님 (획득 성공이 이벤트로 확인됨) | **성공** |\n| INSERT 실행 (`query` span) | 51.335ms | 쿼리/트랜잭션 타임아웃 설정값 미확보 → **만료 여부 판정 불가**. 단 종료 사유는 타임아웃이 아니라 SQLState 22001 데이터 오류 | 타임아웃 아님 | **실패** |\n| 트랜잭션 | `connection` span 105.255ms, `rollback` 이벤트 …730706000 (11:09:25.730) | 해당 없음 | — | **롤백 → 폐기.** 재시도 근거 없음(동일 traceId 재실행 span·재시도 로그·재시도 토픽 유입 없음. `chat.messages-retry-*` lag은 전 구간 0이며 댓글 경로와 무관) |\n| 전체 요청 | 119.5ms → 500 응답 | — | — | **클라이언트에 실패 반환** |\n\n---\n\n### 후보 2 — 애플리케이션 계층 입력 길이 검증 부재 / 입력 오류의 500 매핑\n\n**근거**\n- 스택트레이스에 Bean Validation 계열 프레임이 전혀 없고, `FeedCommentController.createComment:53` → `FeedCommentService.createComment:64` → Hibernate → MySQL 순으로 **검증 없이 DB까지 도달**했다. 길이 위반이 DB 제약에서 처음 잡혔다.\n- `WARN … c.e.t.a.c.e.GlobalExceptionHandler - [api-error] handleAllException` — 전용 핸들러가 아닌 포괄 핸들러가 처리했고, 결과가 `status=500`, `outcome=SERVER_ERROR`. 사용자 입력 오류가 서버 오류로 표시되어 제보가 \"장애\"로 인지된 원인이기도 하다.\n- 요청은 인증을 정상 통과했다: `JwtAuthenticationFilter`·`JwtFilter` 프레임 통과, MDC `userId=1`, security filterchain before/after 12/12 완주.\n\n**확신도: 중간** (관측된 사실은 확실하나, 컬럼 정의 길이와 실제 입력 길이·DTO 검증 애너테이션 유무는 관측 데이터에 없음 — 코드/스키마 확인 필요)\n\n**반증 데이터: 없음**\n\n**대기·지연 구간 판정: 해당 없음** (대기 구간이 아니라 검증 로직 부재 건)\n\n---\n\n### 후보 3 — 제보된 다른 실패 건의 별도 원인\n\n**근거**\n- 제보는 \"댓글 작성 실패\"였으나 창(02:00:00Z ~ 02:14:12Z) 내에서 관측된 댓글 작성 실패는 **트레이스 1건·에러 로그 1세트**뿐이다. 로그 접기 표식에도 반복 지문(`xN회`)이 없어 동일 오류의 다발 발생 근거가 없다.\n- 인증 실패 가설은 배제 불가: `sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))`가 **no series로 수집 실패**했다. 다만 관측된 실패 건 자체는 401이 아니라 500이다.\n- 함께 수집된 auth-service `http get /user/{userId}/following`이 3.23초(durNs 3,231,689,000)로 느리지만 `\"status\":\"200\"`, `\"outcome\":\"SUCCESS\"`이며, 호출 그래프에 content→auth 엣지가 없어 댓글 경로와의 인과 근거가 없다.\n\n**확신도: 낮음**\n\n**반증 데이터**: 실패 건이 1건뿐이라는 사실 자체 — 광범위한 다발 장애를 시사하는 관측값(에러율 급증, 풀 고갈, 서비스 다운)이 하나도 없다. `up` 전 구간 1, Hikari pending 전 구간 0.\n\n**대기·지연 구간 판정**\n- auth-service 3.23초 요청: 상한(타임아웃) 설정값 미확보 → **만료 여부 판정 불가**. 최종 상태는 명시적으로 **성공**(200/SUCCESS).\n\n---\n\n## 3. 권장 다음 조치\n\n### 이미 발생한 피해: 복구 가능한가\n**서버 측 복구 불가.** 근거: `connection` span에 `rollback` 이벤트가 기록되어 해당 INSERT는 커밋되지 않았고, 재시도·DLQ 경로 근거가 없다(댓글 작성은 동기 HTTP 경로이며 Kafka lag 전 구간 0). 또한 INSERT 파라미터는 `?`로 바인딩되어 로그·span 어디에도 원문 댓글 내용이 남아 있지 않으므로 본문 재구성도 불가능하다.\n- 실행 가능한 조치: 피해 범위는 **userId=1, feedId=145, 2026-08-05 11:09:25 KST(02:09:25 UTC) 1건**으로 특정된다. 해당 사용자에게 재작성을 안내하는 것이 유일한 복구 경로다.\n- 단, 창 밖(최근 1시간 전체) 동일 오류 건수는 미확인 — 아래 추가 수집 항목 참조.\n\n### 재발 방지\n1. `tb_feed_comment.content` 실제 컬럼 정의 확인(`SHOW CREATE TABLE tb_feed_comment`) 후, 요청 DTO에 동일한 상한의 길이 검증 추가 → DB 도달 전에 차단.\n2. 컬럼 정의와 클라이언트 입력 상한이 어긋나 있다면 둘 중 하나로 정렬(컬럼 확장 시 `VARCHAR`↔`TEXT` 변경 영향 검토 필요).\n3. `DataIntegrityViolationException`/`DataException`을 `GlobalExceptionHandler`에서 400 계열로 매핑 — 현재는 `handleAllException`이 잡아 500으로 나가고 있어 사용자·모니터링 양쪽에서 서버 장애로 오인된다.\n4. **데이터 부족**으로 판단 불가한 부분(추가 수집 필요):\n   - 최근 1시간 전체에 대한 `SQLState: 22001` / error 1406 로그 건수 — 실제 영향 사용자 수 산정용\n   - content-service의 4xx/5xx 상태별 요청 수 메트릭 (401 시리즈가 결측이었으므로 `http_server_requests_seconds_count` 라벨 수집 자체를 점검)\n   - `tb_feed_comment` DDL 및 댓글 DTO의 검증 애너테이션 유무\n   - HikariCP `connectionTimeout` / JPA 쿼리·트랜잭션 타임아웃 설정값 — 위 표의 \"판정 불가\" 해소용\n\n### 복구 확인\n1. 수정 배포 후 상한 초과 본문으로 `POST /api/feeds/{feedId}/comments` 호출 → **400**(500 아님)이 반환되고 `tb_feed_comment` INSERT span이 생성되지 않는지 확인.\n2. 상한 이내 본문으로 호출 → 200 및 `query` span에 error 속성 없이 커밋(`rollback` 이벤트 부재) 확인.\n3. Loki에서 `SQLState: 22001` 및 `Data too long for column 'content'` 건수가 배포 후 0으로 유지되는지 24시간 관찰.\n4. 회귀 감시 지표: content-service 5xx 비율, `hikaricp_connections_pending`(현재 정상값 0 유지) — 검증 추가로 인한 부작용 확인.\n\n> 확신도 보정: `status=\"401\"` 메트릭 수집 실패로 인증 실패 경로를 계량적으로 배제하지 못했다. 다만 실패 트레이스는 JWT 필터를 통과해 `userId=1`로 DB까지 진입했으므로, **관측된 이 1건에 한해** 후보 1은 높음을 유지한다. 제보 전체가 이 1건으로 설명되는지는 위 추가 로그 집계 전까지 확정할 수 없다.",
+  "inputTokens" : 67693,
+  "outputTokens" : 6108,
+  "cacheReadTokens" : 23449,
+  "cacheCreationTokens" : 44242,
+  "costUsd" : 0.6068545,
+  "totalElapsedMs" : 112496,
+  "timings" : {
+    "tempoMs" : 902,
+    "lokiMs" : 408,
+    "mimirMs" : 907,
+    "assembleMs" : 169,
+    "llmMs" : 98670
+  },
+  "contextChars" : 68839,
+  "coverage" : {
+    "windowStart" : "2026-08-05T02:00:00Z",
+    "windowEnd" : "2026-08-05T02:14:12.436908200Z",
+    "windowSeconds" : 852,
+    "traceBytes" : 33415,
+    "traceSpans" : 26,
+    "traceTrimmed" : false,
+    "candidateTraces" : 10,
+    "candidateTraceBytes" : 33415,
+    "errorWarnLogBytes" : 37139,
+    "traceIdLogBytes" : 6327,
+    "metricsBytes" : 105113,
+    "metricsCollected" : [ "hikaricp_connections_active", "hikaricp_connections_pending", "rate(jvm_gc_pause_seconds_sum[5m])", "up", "mongodb_up", "kafka_brokers", "kafka_consumergroup_lag", "websocket_active_users" ],
+    "metricsMissing" : [ "sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))" ],
+    "promptChars" : 805,
+    "contextChars" : 68839,
+    "contextTokens" : -1,
+    "overheadTokens" : 29426,
+    "metricSummarized" : true
+  },
+  "triage" : {
+    "timeExpression" : "상대 표현 '최근 1시간'",
+    "timeConfidence" : "EXACT",
+    "surveyStart" : "2026-08-05T01:14:12.436908200Z",
+    "surveyEnd" : "2026-08-05T02:14:12.436908200Z",
+    "chosenStart" : "2026-08-05T02:00:00Z",
+    "chosenEnd" : "2026-08-05T02:14:12.436908200Z",
+    "services" : [ "content-service" ],
+    "traceId" : "6a729b55f741850507e3ddfd50cc4d65",
+    "traceCandidates" : [ {
+      "traceId" : "6a729b55f741850507e3ddfd50cc4d65",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "http post /feeds/{feedId}/comments",
+      "durationMs" : 119,
+      "channel" : "error",
+      "startedAt" : "2026-08-05T02:09:25.627296Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a729bd0cf63e6ea421b273667e35a3f",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http get /user/{userid}/following",
+      "durationMs" : 3231,
+      "channel" : "slow",
+      "startedAt" : "2026-08-05T02:11:28.128454Z",
+      "trusted" : true
+    } ],
+    "reason" : "질문의 증상(댓글 작성 실패)과 엔드포인트·시각·서비스가 모두 일치하는 유일한 후보 쌍이고, 트레이스(INC-3)와 로그(INC-1)는 같은 장애의 서로 다른 지문이라 합쳐서 봐야 한다.",
+    "evidence" : [ "INC-3: content-service http post /feeds/{feedId}/comments 119ms error 채널, traceId 6a729b55f741850507e3ddfd50cc4d65 (2026-08-05T02:09:25Z) — 제보된 '댓글 작성' 엔드포인트와 정확히 일치", "INC-1: 같은 content-service에서 02:05:00Z~02:10:00Z ERROR/WARN 4건 — INC-3 트레이스 시각을 포함하는 구간이라 같은 장애의 로그 지문으로 함께 봄", "119ms 만의 실패 = 타임아웃 아님. 즉시 예외/거부 경로이므로 content-service 로그의 스택트레이스가 원인 판별의 1차 증거", "up / mongodb_up / kafka_brokers min_over_time 이상 0건 — 파드 다운·DB 다운·브로커 소실은 배제됨" ],
+    "planParsed" : true,
+    "notes" : [ "창을 후보 [INC-1, INC-3] 의 신호 시각에서 계산했다 (2026-08-05T02:00:00Z ~ 2026-08-05T02:14:12.436908200Z)" ],
+    "promptSource" : ".\\prompts\\triage-prompt.md",
+    "analysis" : "## 1. 판단\n\n댓글 작성 실패 제보와 정확히 일치하는 신호는 02:05~02:10 구간의 content-service다. `POST /feeds/{feedId}/comments`가 02:09:25에 119ms 만에 error 채널로 떨어졌고(INC-3), 같은 구간 content-service의 ERROR/WARN 로그 4건(INC-1)이 함께 잡혔다. 119ms 즉시 실패라 다운스트림 타임아웃형이 아니라 content-service 내부 또는 그 직전 의존성에서의 즉시 거부/예외로 보인다.\n\n## 2. 계획\n\n```json\n{\n  \"incidentIds\": [\"INC-3\", \"INC-1\"],\n  \"services\": [\"content-service\"],\n  \"evidence\": [\n    \"INC-3: content-service http post /feeds/{feedId}/comments 119ms error 채널, traceId 6a729b55f741850507e3ddfd50cc4d65 (2026-08-05T02:09:25Z) — 제보된 '댓글 작성' 엔드포인트와 정확히 일치\",\n    \"INC-1: 같은 content-service에서 02:05:00Z~02:10:00Z ERROR/WARN 4건 — INC-3 트레이스 시각을 포함하는 구간이라 같은 장애의 로그 지문으로 함께 봄\",\n    \"119ms 만의 실패 = 타임아웃 아님. 즉시 예외/거부 경로이므로 content-service 로그의 스택트레이스가 원인 판별의 1차 증거\",\n    \"up / mongodb_up / kafka_brokers min_over_time 이상 0건 — 파드 다운·DB 다운·브로커 소실은 배제됨\"\n  ],\n  \"reason\": \"질문의 증상(댓글 작성 실패)과 엔드포인트·시각·서비스가 모두 일치하는 유일한 후보 쌍이고, 트레이스(INC-3)와 로그(INC-1)는 같은 장애의 서로 다른 지문이라 합쳐서 봐야 한다.\",\n  \"dismissed\": [\n    {\"incidentId\": \"INC-2\", \"why\": \"kafka_consumergroup_lag가 notification-processors/user.notifications에서 0→1로 1건 증가한 수준이며, 알림 소비 지연은 댓글 쓰기 요청의 동기 경로 밖이고 lag 1은 정상 변동 범위라 증상과 연결되지 않는다.\"},\n    {\"incidentId\": \"INC-4\", \"why\": \"auth-service GET /user/{userid}/following 3,231ms는 slow 채널의 조회 경로이고 02:11:28로 실패 트레이스보다 늦으며, 댓글 실패가 119ms 즉시 실패라 이 지연이 원인일 수 없다 — 다만 content-service 로그에서 auth 호출 흔적이 나오면 재검토 대상.\"}\n  ]\n}\n```",
+    "inputTokens" : 32049,
+    "outputTokens" : 1387,
+    "costUsd" : 0.1595785,
+    "contextChars" : 1876,
+    "promptChars" : 1399,
+    "surveyMs" : 1639,
+    "llmMs" : 30479,
+    "surveyFailures" : [ ],
+    "incidentCandidates" : [ "## INC-1  content-service  |  ERROR/WARN\n- 구간: 2026-08-05T02:05:00Z ~ 2026-08-05T02:10:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 4건 (2026-08-05T02:05:00Z ~ 2026-08-05T02:10:00Z)\n- 같은 시각의 다른 후보: INC-2, INC-3  (인과 여부는 판단하지 않았다)\n", "## INC-2  kafka  |  kafka_consumergroup_lag\n- 구간: 2026-08-05T02:09:12Z ~ 2026-08-05T02:14:12Z  (MIMIR · 집계 해상도만큼 흐림)\n- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 0 → 1\n- 같은 시각의 다른 후보: INC-1, INC-3, INC-4  (인과 여부는 판단하지 않았다)\n", "## INC-3  content-service  |  http post /feeds/{feedId}/comments\n- 구간: 2026-08-05T02:09:25.627296Z ~ 2026-08-05T02:09:25.746296Z  (TEMPO · 시각 정확)\n- content-service http post /feeds/{feedId}/comments 119ms (error 채널)\n- traceId: 6a729b55f741850507e3ddfd50cc4d65\n- 같은 시각의 다른 후보: INC-1, INC-2  (인과 여부는 판단하지 않았다)\n", "## INC-4  auth-service  |  http get /user/{userid}/following\n- 구간: 2026-08-05T02:11:28.128454Z ~ 2026-08-05T02:11:31.359454Z  (TEMPO · 시각 정확)\n- auth-service http get /user/{userid}/following 3,231ms (slow 채널)\n- traceId: 6a729bd0cf63e6ea421b273667e35a3f\n- 같은 시각의 다른 후보: INC-2  (인과 여부는 판단하지 않았다)\n" ],
+    "chosenIncidentIds" : [ "INC-1", "INC-3" ],
+    "dismissedIncidentIds" : [ "INC-2 — kafka_consumergroup_lag가 notification-processors/user.notifications에서 0→1로 1건 증가한 수준이며, 알림 소비 지연은 댓글 쓰기 요청의 동기 경로 밖이고 lag 1은 정상 변동 범위라 증상과 연결되지 않는다.", "INC-4 — auth-service GET /user/{userid}/following 3,231ms는 slow 채널의 조회 경로이고 02:11:28로 실패 트레이스보다 늦으며, 댓글 실패가 119ms 즉시 실패라 이 지연이 원인일 수 없다 — 다만 content-service 로그에서 auth 호출 흔적이 나오면 재검토 대상." ],
+    "rawIncluded" : false
+  },
+  "evidence" : {
+    "investigatedTraceId" : "6a729b55f741850507e3ddfd50cc4d65",
+    "rawPrefix" : "scan-1785895200",
+    "spanCount" : 26,
+    "topSpans" : [ {
+      "service" : "auth-service",
+      "name" : "http get /user/{userid}/following",
+      "durationMs" : 3231.689,
+      "startedAt" : "2026-08-05T02:11:28.128454Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 3211.934,
+      "startedAt" : "2026-08-05T02:11:28.146913Z"
+    }, {
+      "service" : "content-service",
+      "name" : "http post /feeds/{feedId}/comments",
+      "durationMs" : 119.485,
+      "startedAt" : "2026-08-05T02:09:25.627296Z"
+    }, {
+      "service" : "content-service",
+      "name" : "secured request",
+      "durationMs" : 117.351,
+      "startedAt" : "2026-08-05T02:09:25.627879Z"
+    }, {
+      "service" : "content-service",
+      "name" : "connection",
+      "durationMs" : 105.255,
+      "startedAt" : "2026-08-05T02:09:25.639905Z"
+    }, {
+      "service" : "content-service",
+      "name" : "query",
+      "durationMs" : 51.335,
+      "startedAt" : "2026-08-05T02:09:25.652279Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "security filterchain before",
+      "durationMs" : 18.025,
+      "startedAt" : "2026-08-05T02:11:28.128797Z"
+    }, {
+      "service" : "content-service",
+      "name" : "secured request",
+      "durationMs" : 13.287,
+      "startedAt" : "2026-08-05T02:06:41.797213Z"
+    }, {
+      "service" : "content-service",
+      "name" : "secured request",
+      "durationMs" : 4.769,
+      "startedAt" : "2026-08-05T02:06:44.747096Z"
+    }, {
+      "service" : "content-service",
+      "name" : "query",
+      "durationMs" : 2.446,
+      "startedAt" : "2026-08-05T02:09:25.643996Z"
+    }, {
+      "service" : "content-service",
+      "name" : "connection",
+      "durationMs" : 1.833,
+      "startedAt" : "2026-08-05T02:06:44.747343Z"
+    }, {
+      "service" : "content-service",
+      "name" : "connection",
+      "durationMs" : 1.561,
+      "startedAt" : "2026-08-05T02:06:44.749251Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "secured request",
+      "durationMs" : 0.562,
+      "startedAt" : "2026-08-05T02:06:41.914503Z"
+    }, {
+      "service" : "content-service",
+      "name" : "GET",
+      "durationMs" : 0.557,
+      "startedAt" : "2026-08-05T02:09:25.647544Z"
+    }, {
+      "service" : "content-service",
+      "name" : "INFO",
+      "durationMs" : 0.511,
+      "startedAt" : "2026-08-05T02:06:44.750994Z"
+    } ],
+    "logLinesTotal" : 226,
+    "logSamples" : [ {
+      "at" : "2026-08-05T02:09:25.704345964Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.704 [http-nio-8082-exec-1]  WARN [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=a7c6e4ef0c5e7a18,userId=1] o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 1406, SQLState: 22001"
+    }, {
+      "at" : "2026-08-05T02:09:25.704345964Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.704 [http-nio-8082-exec-1]  WARN [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=a7c6e4ef0c5e7a18,userId=1] o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 1406, SQLState: 22001"
+    }, {
+      "at" : "2026-08-05T02:09:25.704509571Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.704 [http-nio-8082-exec-1] ERROR [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=a7c6e4ef0c5e7a18,userId=1] o.h.e.jdbc.spi.SqlExceptionHelper - Data truncation: Data too long for column 'content' at row 1"
+    }, {
+      "at" : "2026-08-05T02:09:25.704509571Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.704 [http-nio-8082-exec-1] ERROR [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=a7c6e4ef0c5e7a18,userId=1] o.h.e.jdbc.spi.SqlExceptionHelper - Data truncation: Data too long for column 'content' at row 1"
+    }, {
+      "at" : "2026-08-05T02:09:25.743092742Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.733 [http-nio-8082-exec-1]  WARN [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=a7c6e4ef0c5e7a18,userId=1] c.e.t.a.c.e.GlobalExceptionHandler - [api-error] handleAllException"
+    }, {
+      "at" : "2026-08-05T02:09:25.743092742Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.733 [http-nio-8082-exec-1]  WARN [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=a7c6e4ef0c5e7a18,userId=1] c.e.t.a.c.e.GlobalExceptionHandler - [api-error] handleAllException"
+    }, {
+      "at" : "2026-08-05T02:09:25.743132730Z",
+      "service" : "content-service",
+      "line" : "org.springframework.dao.DataIntegrityViolationException: could not execute statement [Data truncation: Data too long for column 'content' at row 1] [insert into tb_feed_comment (content,created_at,creator_id,creator_nickname,creator_profile_url,deleted,deleted_at,feed_id,parent_comment_id,updated_at) values (?,?,?,?,?,?,?,?,?,?)]; SQL [insert into tb_feed_comment (content,created_at,creator_id,creator_nickname,creator_profile_url,deleted,deleted_at,feed_id,parent_comment_id,updated_at) values (?,?,?,?,?,?,?,?,?,?)]"
+    }, {
+      "at" : "2026-08-05T02:09:25.743147681Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:293)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743150638Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:241)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743153998Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.translateExceptionIfPossible(AbstractEntityManagerFactoryBean.java:560)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743157926Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.dao.support.ChainedPersistenceExceptionTranslator.translateExceptionIfPossible(ChainedPersistenceExceptionTranslator.java:61)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743161438Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.dao.support.DataAccessUtils.translateIfNecessary(DataAccessUtils.java:343)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743164510Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:160)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743167358Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743170756Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.jpa.repository.support.CrudMethodMetadataPostProcessor$CrudMethodMetadataPopulatingMethodInterceptor.invoke(CrudMethodMetadataPostProcessor.java:165)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743173295Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743176178Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:223)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743181852Z",
+      "service" : "content-service",
+      "line" : "\tat com.example.toycontent.app.feed.service.FeedCommentService.createComment(FeedCommentService.java:64)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743195193Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743197973Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743200606Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743203038Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:380)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743205758Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743208386Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743210938Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:727)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743216155Z",
+      "service" : "content-service",
+      "line" : "\tat com.example.toycontent.app.feed.controller.FeedCommentController.createComment(FeedCommentController.java:53)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743234028Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:257)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743236622Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:190)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743244555Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743247830Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:986)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743250684Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:891)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743253307Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743255978Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1088)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743258604Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:978)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743261243Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743263782Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743266620Z",
+      "service" : "content-service",
+      "line" : "\tat jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743269255Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743271814Z",
+      "service" : "content-service",
+      "line" : "\tat jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743274660Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:195)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743277319Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743279959Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743282536Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743284919Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743287247Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:110)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743290027Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743293246Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743296392Z",
+      "service" : "content-service",
+      "line" : "\tat com.example.toycontent.app.auth.filter.JwtFilter.doFilterInternal(JwtFilter.java:73)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743299187Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743301879Z",
+      "service" : "content-service",
+      "line" : "\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743329598Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743332281Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743574150Z",
+      "service" : "content-service",
+      "line" : "Caused by: org.hibernate.exception.DataException: could not execute statement [Data truncation: Data too long for column 'content' at row 1] [insert into tb_feed_comment (content,created_at,creator_id,creator_nickname,creator_profile_url,deleted,deleted_at,feed_id,parent_comment_id,updated_at) values (?,?,?,?,?,?,?,?,?,?)]"
+    }, {
+      "at" : "2026-08-05T02:09:25.743576013Z",
+      "service" : "content-service",
+      "line" : "\tat org.hibernate.exception.internal.SQLExceptionTypeDelegate.convert(SQLExceptionTypeDelegate.java:55)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743577813Z",
+      "service" : "content-service",
+      "line" : "\tat org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743579530Z",
+      "service" : "content-service",
+      "line" : "\tat org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743846186Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:138)"
+    }, {
+      "at" : "2026-08-05T02:09:25.743851815Z",
+      "service" : "content-service",
+      "line" : "\tat com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException(SQLExceptionsMapping.java:96)"
+    }, {
+      "at" : "2026-08-05T02:09:25.745531986Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.745 [http-nio-8082-exec-1] ERROR [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=07e3ddfd50cc4d65,userId=NONE] c.e.t.a.c.f.RequestLoggingFilter - [HTTP] POST /api/feeds/145/comments 500 - 118ms"
+    }, {
+      "at" : "2026-08-05T02:09:25.745531986Z",
+      "service" : "content-service",
+      "line" : "2026-08-05 11:09:25.745 [http-nio-8082-exec-1] ERROR [traceId=6a729b55f741850507e3ddfd50cc4d65,spanId=07e3ddfd50cc4d65,userId=NONE] c.e.t.a.c.f.RequestLoggingFilter - [HTTP] POST /api/feeds/145/comments 500 - 118ms"
+    } ],
+    "metrics" : [ {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, pool=HikariPool-1, service=auth-service}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv, pool=HikariPool-1}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n, pool=HikariPool-1}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2, pool=HikariPool-1}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, pool=HikariPool-1, service=auth-service}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv, pool=HikariPool-1}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n, pool=HikariPool-1}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2, pool=HikariPool-1}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9, service=auth-service}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 5.416666666666671E-5,
+      "last" : 5.416666666666671E-5,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:11:30Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.1666666666667602E-4,
+      "max" : 0.001104166666666669,
+      "last" : 1.4166666666666218E-4,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 5.41666666666681E-5,
+      "last" : 2.4999999999999097E-5,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:01:45Z", "2026-08-05T02:06:00Z ~ 2026-08-05T02:12:45Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 2.083333333333289E-5,
+      "last" : 2.083333333333289E-5,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:00:30Z", "2026-08-05T02:04:45Z ~ 2026-08-05T02:10:30Z" ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-40-241, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-cph5l, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-45-39, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-9kvqt, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.46:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-hmgp9}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.43:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-h2f6n}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.42:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-6995bb7d94-nq9l2}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=10.42.1.248:8080, job=integrations/kubernetes/kube-state-metrics, k8s_cluster_name=yogurtte-k3s-prod, source=kubernetes}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "mongodb_up",
+      "series" : "{__name__=mongodb_up, cluster=yogurtte-k3s-prod, instance=infra-server, job=mongodb, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_brokers",
+      "series" : "{__name__=kafka_brokers, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.fcm-tokens}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.fcm-tokens}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.fcm-tokens}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.notification-settings}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.notification-settings}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.notification-settings}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=chat.messages}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=chat.messages}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    }, {
+      "query" : "websocket_active_users",
+      "series" : "{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.47:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-xf4sv}",
+      "points" : 57,
+      "firstAt" : "2026-08-05T02:00:00Z",
+      "lastAt" : "2026-08-05T02:14:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-05T02:00:00Z ~ 2026-08-05T02:14:00Z" ]
+    } ]
+  },
+  "serviceGraph" : {
+    "edges" : [ {
+      "kind" : "db",
+      "source" : "content-service",
+      "target" : "redis",
+      "detail" : "",
+      "calls" : 2,
+      "maxMs" : 0.557,
+      "operations" : [ "GET", "INFO" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "jdbc",
+      "source" : "content-service",
+      "target" : "mysql/content",
+      "detail" : "HikariPool-1",
+      "calls" : 6,
+      "maxMs" : 105.255,
+      "operations" : [ ],
+      "errors" : [ "Data truncation: Data too long for column 'content' at row 1" ],
+      "events" : [ "acquired", "rollback" ],
+      "attributes" : { }
+    } ],
+    "empty" : false
+  },
+  "collectionFailures" : [ "Metric 'sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))' returned no series in this window; skipped." ]
+}
