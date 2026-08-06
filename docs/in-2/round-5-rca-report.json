@@ -1,0 +1,849 @@
+{
+  "traceId" : "scan-1785990300",
+  "question" : "최근 1시간 안에 댓글 알림이 안 왔다는 제보가 있다. 원인을 조사해줘",
+  "mode" : "rca",
+  "startedAt" : "2026-08-06T05:05:57.860939100Z",
+  "llmProvider" : "claude-cli",
+  "llmModel" : "claude-opus-5",
+  "llmTurns" : 1,
+  "promptSource" : ".\\prompts\\system-prompt.md",
+  "analysis" : "## 1. 원인 후보 랭킹 (최대 3개)\n\n1. **Kafka 브로커 다운(04:47:15~04:50:15 UTC) → content-service의 `user.notifications` 발행이 60초 블로킹 후 만료·폐기**\n2. **Redis 다운(04:32:5x~04:33:0x UTC) → `battle-deadline-notification-scheduler.notify` 스케줄 알림 태스크 연속 실패** (댓글 알림과는 다른 알림 경로지만 같은 창의 알림 누락)\n3. **컨슈머(`notification-processors`) 적체·처리 실패** — 데이터상 반증됨, 사실상 배제\n\n---\n\n## 2. 후보별 근거\n\n### 후보 1 — Kafka 브로커 다운으로 댓글 알림 발행 실패\n\n- **근거**\n  - traceId `6a741223ef2158f305caa6eac0719bfd` (04:48:35 UTC): `http post /battles/{battleId}/items/{itemId}/comments` 는 `status=200`, `outcome=SUCCESS`, 59.9ms로 정상 종료. 로그도 `[battle] 댓글 작성 완료 - commentId: 327, battleId: 22, itemId: 125` — **댓글 자체는 DB 커밋됨**(`insert into tb_battle_item_comment`, `jdbc.row-affected=1`, `generated-keys=327`, connection span에 `commit` 이벤트).\n  - 같은 트레이스의 비동기 알림 span: `notification-publish` (`NotificationEventListener.onNotification`) `durNs=60021881000` = **60.02초**, `error=\"Send failed\"`, `STATUS_CODE_ERROR`.\n  - 자식 span `publish user.notifications` (`SPAN_KIND_PRODUCER`, `messaging.system=kafka`) `durNs=60016108000` = **60.016초**, `error=\"Topic user.notifications not present in metadata after 60000 ms.\"`\n  - 로그 원문: `o.s.k.s.LoggingProducerListener - Exception thrown when sending a message with key='7' and payload='KafkaNotificationDto(userId=7, type=BATTLE_ITEM_COMMENT, title=새 댓글, ...' to topic user.notifications:` 및 `c.e.t.a.n.NotificationEventListener - [notify] 알림 발행 실패: userId=7, type=BATTLE_ITEM_COMMENT, error=Send failed` (13:49:35.97 KST = 04:49:35 UTC).\n  - 인프라 메트릭이 시각적으로 일치: `up{job=kafka, instance=infra-server}` **0인 구간 04:47:15Z~04:50:15Z**, `kafka_brokers` 결측 04:47:00Z~04:50:30Z 및 04:50:30Z에 값 0. 발행 시도 구간(04:48:35.955 → 04:49:35.971)이 **브로커 다운 구간에 완전히 포함**된다.\n- **확신도: 높음**\n- **대기·지연 구간 판정**\n  - 실측 대기 60,016ms vs 상한(에러 메시지에 명시된 메타데이터 대기 한도 = Kafka 프로듀서 `max.block.ms` 60,000ms) → **만료됨**.\n  - 최종 상태: **실패 후 폐기**. 재시도 증거 없음(동일 key='7' 재발행 로그·span 없음), DLQ로도 안 감 — `kafka_consumergroup_lag{consumergroup=notification-recovery, topic=user.notifications.dlq}`가 전 구간 0/-1로 유입 흔적 없음. 애플리케이션은 예외를 로깅만 하고 종료(`알림 발행 실패` 이후 후속 없음).\n  - 사용자 영향 판정: 댓글은 저장(200 응답), **알림만 소실** → 제보 증상과 정확히 일치.\n- **반증 데이터**\n  - `kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications}` 는 전 파티션 전 구간 0 — \"브로커 장애면 lag이 튀어야 하지 않나\"로 읽힐 수 있으나, 발행 자체가 실패해 메시지가 들어가지 않았으므로 lag 0은 오히려 이 후보와 정합적이다.\n  - 약한 반증: `up{job=kafka}`·`kafka_brokers`는 둘 다 `instance=infra-server`의 동일 exporter에서 나온다. **브로커 다운인지 exporter 다운인지 이 두 시리즈만으로는 분리되지 않는다.** 다만 클라이언트 측 `Topic ... not present in metadata after 60000 ms`는 브로커/메타데이터에 실제로 도달하지 못했음을 독립적으로 뒷받침한다.\n  - 관측된 소실 알림은 **1건(userId=7)뿐**이다. 다운 구간 3분 동안의 총 소실 건수는 트레이스 10건 샘플만으로는 **판정 불가**.\n\n### 후보 2 — Redis 다운으로 배틀 마감 알림 스케줄러 실패\n\n- **근거**\n  - `i.l.core.protocol.ConnectionWatchdog - Cannot reconnect to [172.31.46.124/<unresolved>:6379]: finishConnect(..) failed: Connection refused: /172.31.46.124:6379` — content-service 두 파드(sp24n, v2pw9)와 chat-service에서 각각 **x4회, 04:32:51.5~04:33:00.6 UTC, 평균 3.0초 간격**.\n  - 스케줄러 트레이스 6건이 모두 실패: `task battle-deadline-notification-scheduler.notify`, `outcome=ERROR`, `error=\"Redis command timed out\"`, `exception=QueryTimeoutException`, `code.function=notifyEnd` — 04:33:00(2003ms/2000ms), 04:34:00(2002ms/2010ms), 04:35:00(2000ms/2000ms), 두 파드에서 각각.\n  - 로그: `o.s.s.s.TaskUtils$LoggingErrorHandler - Unexpected error occurred in scheduled task` (13:33:02.003 / 13:33:02.027 KST), `Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)`.\n  - 부수 피해: `[user-cache] Redis 캐시 조회/저장 실패` x다수, `/api/feeds/scroll` 16,409ms·16,147ms `[HTTP-SLOW]`(캐시 미스 시 2초 타임아웃 × 사용자 수 직렬 누적).\n- **확신도: 중간** — 사실 자체는 확정적이나, **제보된 \"댓글 알림\"과는 다른 알림 경로**다(`BATTLE_ITEM_COMMENT` 발행 경로는 Kafka, 이쪽은 배틀 마감 알림 스케줄러). 제보 시간대(최근 1시간)에는 포함된다.\n- **대기·지연 구간 판정**\n  - 실측 2,003ms / 2,010ms / 2,000ms vs 상한 2,000ms(로그에 명시된 Lettuce command timeout `2 second(s)`) → **만료됨**.\n  - 최종 상태: **실패**. 태스크는 예외로 종료되고 `LoggingErrorHandler`가 삼킴 → 해당 주기 알림은 **폐기**. 다만 스케줄러가 60초 주기로 재실행되어 04:33/04:34/04:35 세 주기 연속 같은 실패 — 이는 재시도가 아니라 다음 주기 실행이다.\n- **반증 데이터**\n  - `up{job=redis, instance=infra-server}` **전 구간 1** — Redis exporter는 정상으로 보고했는데 앱 파드에서는 `Connection refused`. 네트워크/파드 레벨 문제이거나 exporter 시야가 다를 가능성이 있어 \"Redis 프로세스 다운\" 단정은 못 한다.\n  - 04:48:35 댓글 트레이스에서는 `[user-cache] 캐시 HIT - userId: 1, elapsed: 4ms`, redis `GET` span 0.628ms로 **정상** → 후보 2는 후보 1의 원인이 아니다(시간·경로 모두 분리).\n\n### 후보 3 — 컨슈머 측 적체/처리 실패\n\n- **근거(반대 방향)**: `kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications}` 파티션 0~5 전부 **전 구간 0**. DLQ(`user.notifications.dlq`) lag도 0/-1. 소비 지연이나 적체 흔적 전무.\n- **확신도: 낮음** (사실상 배제)\n- **대기·지연 구간 판정**: **판정 불가** — 컨슈머 서비스가 무엇인지 호출 그래프에 엣지가 없고(`user.notifications`는 publish 엣지만 존재), 컨슈머 span·로그가 수집되지 않았다. 처리 성공/실패 최종 상태 근거 없음.\n- **반증 데이터**: 위 lag 0 자체가 반증. 단, lag 0은 \"컨슈머가 잘 따라잡았다\"와 \"메시지가 애초에 없었다\"를 구분하지 못한다 — **데이터 부족**.\n\n### 데이터 부족 항목 (결론 확신도에 반영)\n\n- `http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}` 시리즈 **수집 실패** → 인증 실패로 인한 알림 누락 가설은 평가 불가(다만 이를 지지하는 다른 근거도 없음).\n- 04:47:00~04:50:45 구간에 **모든 Kafka exporter 시리즈가 동시 결측** → 브로커 다운 vs exporter 다운 분리 불가.\n- content-service 두 파드의 `up`/`hikaricp_*`가 04:33:30~04:37:00 **결측**(값은 결측 전후 모두 1, 0으로 떨어진 적 없음) → 재시작 여부 판정 불가. `hikaricp_connections_active/pending`은 전 서비스 전 구간 0이라 커넥션 풀 고갈은 근거 없음(16.4초 `connection` span은 풀 대기가 아니라 트랜잭션 내부 Redis 타임아웃 누적).\n- 소실 알림 총 건수, 영향 사용자 목록: **판정 불가**(트레이스 10건 샘플).\n\n---\n\n## 3. 권장 다음 조치\n\n### 이미 발생한 피해: 복구 가능한가\n\n**가능(수동)**. 근거: 댓글 원본은 MySQL에 남아 있다 — `tb_battle_item_comment`에 `commentId=327`이 커밋 완료. 알림 페이로드(`userId=7, type=BATTLE_ITEM_COMMENT, battleId=22, itemId=125`)를 DB에서 그대로 재구성할 수 있다.\n\n- 복구 방법: `tb_battle_item_comment`에서 `created_at BETWEEN 2026-08-06T04:47:15Z AND 2026-08-06T04:50:15Z`(Kafka 다운 구간) 범위를 조회 → 각 댓글의 수신 대상에게 `user.notifications` 재발행. 후보 2 관련 배틀 마감 알림은 04:33:00~04:35:00 세 주기분을 스케줄러 수동 재실행으로 커버.\n- **자동 복구는 불가**: DLQ(`user.notifications.dlq`) lag이 전 구간 0/-1로 실패 메시지가 적재되지 않았다. 예외가 `NotificationEventListener`에서 로깅만 되고 소실됐다.\n- 복구 범위 확정 전 선행 필요: 위 \"데이터 부족\" 항목대로 04:47~04:50 구간의 전체 발행 실패 건수를 로그(`알림 발행 실패` 카운트)로 먼저 집계할 것. 관측된 건 1건뿐이다.\n\n### 재발 방지\n\n1. **발행 실패를 삼키지 말 것** — `NotificationEventListener.onNotification`이 `Send failed`를 로깅만 하고 종료한다. 실패 시 아웃박스 테이블 적재 또는 `user.notifications.dlq` 강제 produce로 전환(DLQ 토픽과 `notification-recovery` 컨슈머 그룹은 이미 존재하는데 사용되지 않고 있다).\n2. **`max.block.ms` 60초는 과다** — 브로커 다운 시 알림 스레드가 요청당 60초 점유된다. 수 초 수준으로 낮추고 즉시 아웃박스 폴백.\n3. **알람 추가**: `up{job=kafka} == 0` 및 `absent(kafka_brokers)` 1분 지속 시 페이지. 이번 3분 다운은 사용자 제보로만 발견됐다.\n4. **Redis 경로(후보 2)**: `UserCacheStore` 캐시 조회/저장 실패는 이미 예외 전파를 막고 있지 않아 `/feeds/scroll`이 16초까지 늘어졌다. 캐시는 fail-open 처리하고, 명령 타임아웃 2초 × N사용자 직렬 호출을 배치/병렬화. 스케줄러 태스크는 Redis 예외 시 재시도 백오프.\n\n### 복구 확인\n\n1. `up{job=kafka}` / `kafka_brokers` 가 1로 회복 유지되는지 확인 — 04:50:30 이후 샘플(`04:52:30=1 … 05:04:45=1`)은 이미 회복을 보여준다.\n2. 재발행 후 `kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications}`가 일시 상승 후 0으로 수렴하는지 확인 → 발행·소비 양방향이 살아있음을 증명.\n3. 신규 댓글 1건을 테스트로 작성해 트레이스에서 `publish user.notifications` span이 `STATUS_CODE_OK` / 수십 ms 내 종료되는지 확인(장애 시 60,016ms·ERROR였다).\n4. 대상 사용자(userId=7 포함, 재발행 목록 전체)에게 알림이 실제 도달했는지 최종 확인 — **단, 발행 이후 단말 전달까지의 경로는 이번 관측 데이터에 엣지·span이 없어 검증 근거가 없다. 해당 구간은 별도 수집 필요.**",
+  "inputTokens" : 96532,
+  "outputTokens" : 7461,
+  "cacheReadTokens" : 23449,
+  "cacheCreationTokens" : 73081,
+  "costUsd" : 0.9290695,
+  "totalElapsedMs" : 136832,
+  "timings" : {
+    "tempoMs" : 3869,
+    "lokiMs" : 518,
+    "mimirMs" : 1091,
+    "assembleMs" : 400,
+    "llmMs" : 119222
+  },
+  "contextChars" : 119031,
+  "coverage" : {
+    "windowStart" : "2026-08-06T04:25:00Z",
+    "windowEnd" : "2026-08-06T05:04:55Z",
+    "windowSeconds" : 2395,
+    "traceBytes" : 77179,
+    "traceSpans" : 78,
+    "traceTrimmed" : false,
+    "candidateTraces" : 10,
+    "candidateTraceBytes" : 77179,
+    "errorWarnLogBytes" : 149739,
+    "traceIdLogBytes" : 11938,
+    "metricsBytes" : 244339,
+    "metricsCollected" : [ "hikaricp_connections_active", "hikaricp_connections_pending", "rate(jvm_gc_pause_seconds_sum[5m])", "up", "mongodb_up", "kafka_brokers", "kafka_consumergroup_lag", "websocket_active_users" ],
+    "metricsMissing" : [ "sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))" ],
+    "promptChars" : 805,
+    "contextChars" : 119031,
+    "contextTokens" : -1,
+    "overheadTokens" : 29913,
+    "metricSummarized" : true
+  },
+  "triage" : {
+    "timeExpression" : "상대 표현 '최근 1시간'",
+    "timeConfidence" : "EXACT",
+    "surveyStart" : "2026-08-06T04:04:55.249874400Z",
+    "surveyEnd" : "2026-08-06T05:04:55.249874400Z",
+    "chosenStart" : "2026-08-06T04:25:00Z",
+    "chosenEnd" : "2026-08-06T05:04:55Z",
+    "services" : [ "content-service", "chat-service" ],
+    "traceId" : "6a740e7c2620ba4220a89df5f5dcffcd",
+    "traceCandidates" : [ {
+      "traceId" : "6a741223ef2158f305caa6eac0719bfd",
+      "rootServiceName" : "<root span not yet received>",
+      "rootTraceName" : "",
+      "durationMs" : 60021,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:48:35.955349Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740ef437378b2ba59b137b2a6f7349",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2000,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:35:00.015374Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740ef40b0c7d258e82b43ce573b9c0",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2000,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:35:00.001161Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740eb8723600d08b6755dfc53d7d12",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2010,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:34:00.012779Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740eb80716747faf6aa754773de070",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2002,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:34:00.000730Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740e7ce4ae0784411add206af99250",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2000,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:33:00.026871Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740e7c2620ba4220a89df5f5dcffcd",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2003,
+      "channel" : "error",
+      "startedAt" : "2026-08-06T04:33:00.000283Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740e8a1120fa25d0b130c650332129",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "http get /feeds/scroll",
+      "durationMs" : 16147,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T04:33:14.029553Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a740e7417e8b0b83aa26f5450e14d12",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "http get /feeds/scroll",
+      "durationMs" : 16409,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T04:32:52.051686Z",
+      "trusted" : true
+    } ],
+    "reason" : "댓글 알림처럼 비동기 이벤트로 전달되는 기능이 끊긴 증상은 04:45~04:55 Kafka 브로커 단절과 그 창의 content-service 에러 폭증으로 가장 잘 설명되며, 04:33의 알림 스케줄러 2초 타임아웃도 같은 발행 경로 문제일 수 있어 함께 조사한다.",
+    "evidence" : [ "kafka up 1→0, 04:49:55~04:54:55 구간 up=0 (min_over_time(up[5m]) 이상 신호 3건) — 알림 발행/소비 경로의 브로커가 실제로 사라짐", "kafka_brokers 1→0, 04:54:55 시점 0 — INC-5와 동일 장애의 다른 지문이라 함께 선택", "content-service ERROR/WARN 370건 (04:45~04:50) + 51건 (04:50~04:55) — Kafka 단절 창과 정확히 겹치는 최대 규모 에러 폭증", "INC-7: 04:48:35~04:49:35, root span 미수신 상태의 60,021ms error 트레이스 — 요청이 완결되지 못하고 끊긴 흔적(트레이스가 '없다'는 것 자체가 신호)", "INC-4: battle-deadline-notification-scheduler.notify가 2,003/2,000/2,002/2,010/2,000/2,000ms로 6회 연속 error — 편차 없는 2초 정지는 알림 발행 다운스트림의 타임아웃 지문", "INC-2: 위 스케줄러 실패와 같은 시각(04:30~04:35) content-service ERROR/WARN 79건 — INC-4의 로그 측면이라 함께 선택", "kafka_consumergroup_lag 이상 0건은 정상 근거로 쓰지 않음 — 브로커가 죽은 구간에는 lag 메트릭 자체가 수집되지 않아 0으로 보일 수 있음", "websocket_active_users 이상 0건 — 사용자 접속 자체는 유지되었으므로 '접속 끊김'이 아니라 '알림이 안 온 것'이라는 제보와 부합" ],
+    "planParsed" : true,
+    "notes" : [ "창을 후보 [INC-2, INC-4, INC-5, INC-6, INC-7, INC-8] 의 신호 시각에서 계산했다 (2026-08-06T04:25:00Z ~ 2026-08-06T05:04:55Z)" ],
+    "promptSource" : ".\\prompts\\triage-prompt.md",
+    "analysis" : "## 1. 판단\n\n댓글 알림 미도달의 시각과 가장 맞는 것은 **04:44~04:59 Kafka 브로커 단절**이다. `up` 1→0, `kafka_brokers` 1→0으로 브로커가 약 5~10분간 사라졌고, 같은 창에서 content-service ERROR/WARN이 370건으로 폭증했으며, 루트 스팬조차 도착하지 못한 60초짜리 트레이스(INC-7)가 남았다 — 알림 발행이 Kafka를 타고 나간다면 이 구간의 이벤트는 유실되거나 소비되지 못했을 가능성이 높다.\n\n부차적으로 04:33~04:35의 `battle-deadline-notification-scheduler.notify`가 정확히 2,000ms에서 6회 연속 error로 끊긴 것도 **알림 발행 경로 자체의 타임아웃 지문**이라 함께 본다. 종류는 배틀 마감 알림이지만 발행 경로를 공유할 수 있어 배제하지 않았다.\n\n## 2. 계획\n\n```json\n{\n  \"incidentIds\": [\"INC-5\", \"INC-8\", \"INC-6\", \"INC-7\", \"INC-4\", \"INC-2\"],\n  \"services\": [\"content-service\", \"chat-service\"],\n  \"evidence\": [\n    \"kafka up 1→0, 04:49:55~04:54:55 구간 up=0 (min_over_time(up[5m]) 이상 신호 3건) — 알림 발행/소비 경로의 브로커가 실제로 사라짐\",\n    \"kafka_brokers 1→0, 04:54:55 시점 0 — INC-5와 동일 장애의 다른 지문이라 함께 선택\",\n    \"content-service ERROR/WARN 370건 (04:45~04:50) + 51건 (04:50~04:55) — Kafka 단절 창과 정확히 겹치는 최대 규모 에러 폭증\",\n    \"INC-7: 04:48:35~04:49:35, root span 미수신 상태의 60,021ms error 트레이스 — 요청이 완결되지 못하고 끊긴 흔적(트레이스가 '없다'는 것 자체가 신호)\",\n    \"INC-4: battle-deadline-notification-scheduler.notify가 2,003/2,000/2,002/2,010/2,000/2,000ms로 6회 연속 error — 편차 없는 2초 정지는 알림 발행 다운스트림의 타임아웃 지문\",\n    \"INC-2: 위 스케줄러 실패와 같은 시각(04:30~04:35) content-service ERROR/WARN 79건 — INC-4의 로그 측면이라 함께 선택\",\n    \"kafka_consumergroup_lag 이상 0건은 정상 근거로 쓰지 않음 — 브로커가 죽은 구간에는 lag 메트릭 자체가 수집되지 않아 0으로 보일 수 있음\",\n    \"websocket_active_users 이상 0건 — 사용자 접속 자체는 유지되었으므로 '접속 끊김'이 아니라 '알림이 안 온 것'이라는 제보와 부합\"\n  ],\n  \"reason\": \"댓글 알림처럼 비동기 이벤트로 전달되는 기능이 끊긴 증상은 04:45~04:55 Kafka 브로커 단절과 그 창의 content-service 에러 폭증으로 가장 잘 설명되며, 04:33의 알림 스케줄러 2초 타임아웃도 같은 발행 경로 문제일 수 있어 함께 조사한다.\",\n  \"dismissed\": [\n    {\"incidentId\": \"INC-1\", \"why\": \"chat-service ERROR/WARN 28건은 Kafka 단절 창이 아닌 04:30~04:40대이고 규모도 작아, 댓글 알림 미도달의 주 신호로 보기엔 시각과 크기가 모두 맞지 않는다.\"},\n    {\"incidentId\": \"INC-3\", \"why\": \"/feeds/scroll 16초 지연은 피드 조회 읽기 경로의 지연으로, 알림 발행·전달 경로와 엔드포인트가 다르고 제보 증상(알림 미도달)과 직접 연결되지 않는다.\"}\n  ]\n}\n```\n\n건너뜀: mongodb_up·consumergroup_lag·websocket_active_users는 이상 0건이라 후보에서 제외. Kafka 단절이 원인 아님으로 밝혀지면 INC-1(chat-service 소비자 측)을 다음 후보로 올릴 것.",
+    "inputTokens" : 33264,
+    "outputTokens" : 3070,
+    "costUsd" : 0.21380349999999998,
+    "contextChars" : 3761,
+    "promptChars" : 1399,
+    "surveyMs" : 3276,
+    "llmMs" : 59009,
+    "surveyFailures" : [ ],
+    "incidentCandidates" : [ "## INC-1  chat-service  |  ERROR/WARN\n- 구간: 2026-08-06T04:30:00Z ~ 2026-08-06T04:40:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 28건 (2026-08-06T04:30:00Z ~ 2026-08-06T04:35:00Z)\n- ERROR/WARN 7건 (2026-08-06T04:35:00Z ~ 2026-08-06T04:40:00Z)\n- 같은 시각의 다른 후보: INC-2, INC-3, INC-4  (인과 여부는 판단하지 않았다)\n", "## INC-2  content-service  |  ERROR/WARN\n- 구간: 2026-08-06T04:30:00Z ~ 2026-08-06T04:40:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 79건 (2026-08-06T04:30:00Z ~ 2026-08-06T04:35:00Z)\n- ERROR/WARN 17건 (2026-08-06T04:35:00Z ~ 2026-08-06T04:40:00Z)\n- 같은 시각의 다른 후보: INC-1, INC-3, INC-4  (인과 여부는 판단하지 않았다)\n", "## INC-3  content-service  |  http get /feeds/scroll\n- 구간: 2026-08-06T04:32:52.051686Z ~ 2026-08-06T04:33:30.176553Z  (TEMPO · 시각 정확)\n- content-service http get /feeds/scroll 16,409ms (slow 채널)\n- content-service http get /feeds/scroll 16,147ms (slow 채널)\n- traceId: 6a740e7417e8b0b83aa26f5450e14d12, 6a740e8a1120fa25d0b130c650332129\n- 같은 시각의 다른 후보: INC-1, INC-2, INC-4  (인과 여부는 판단하지 않았다)\n", "## INC-4  content-service  |  task battle-deadline-notification-scheduler.notify\n- 구간: 2026-08-06T04:33:00.000283Z ~ 2026-08-06T04:35:02.015374Z  (TEMPO · 시각 정확)\n- content-service task battle-deadline-notification-scheduler.notify 2,003ms (error 채널)\n- content-service task battle-deadline-notification-scheduler.notify 2,000ms (error 채널)\n- content-service task battle-deadline-notification-scheduler.notify 2,002ms (error 채널)\n- content-service task battle-deadline-notification-scheduler.notify 2,010ms (error 채널)\n- content-service task battle-deadline-notification-scheduler.notify 2,000ms (error 채널)\n- content-service task battle-deadline-notification-scheduler.notify 2,000ms (error 채널)\n- traceId: 6a740e7c2620ba4220a89df5f5dcffcd, 6a740e7ce4ae0784411add206af99250, 6a740eb80716747faf6aa754773de070, 6a740eb8723600d08b6755dfc53d7d12, 6a740ef40b0c7d258e82b43ce573b9c0, 6a740ef437378b2ba59b137b2a6f7349\n- 같은 시각의 다른 후보: INC-1, INC-2, INC-3  (인과 여부는 판단하지 않았다)\n", "## INC-5  kafka  |  up\n- 구간: 2026-08-06T04:44:55Z ~ 2026-08-06T04:59:55Z  (MIMIR · 집계 해상도만큼 흐림)\n- up 1 → 0\n- up 가 0이었다 (2026-08-06T04:49:55Z ~ 2026-08-06T04:54:55Z)\n- up 0 → 1\n- 같은 시각의 다른 후보: INC-6, INC-7, INC-8  (인과 여부는 판단하지 않았다)\n", "## INC-6  content-service  |  ERROR/WARN\n- 구간: 2026-08-06T04:45:00Z ~ 2026-08-06T04:55:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 370건 (2026-08-06T04:45:00Z ~ 2026-08-06T04:50:00Z)\n- ERROR/WARN 51건 (2026-08-06T04:50:00Z ~ 2026-08-06T04:55:00Z)\n- 같은 시각의 다른 후보: INC-5, INC-7, INC-8  (인과 여부는 판단하지 않았다)\n", "## INC-7  <root span not yet received>\n- 구간: 2026-08-06T04:48:35.955349Z ~ 2026-08-06T04:49:35.976349Z  (TEMPO · 시각 정확)\n- <root span not yet received>  60,021ms (error 채널)\n- traceId: 6a741223ef2158f305caa6eac0719bfd\n- 같은 시각의 다른 후보: INC-5, INC-6  (인과 여부는 판단하지 않았다)\n", "## INC-8  kafka  |  kafka_brokers\n- 구간: 2026-08-06T04:49:55Z ~ 2026-08-06T04:59:55Z  (MIMIR · 집계 해상도만큼 흐림)\n- kafka_brokers 1 → 0\n- kafka_brokers 가 0이었다 (2026-08-06T04:54:55Z ~ 2026-08-06T04:54:55Z)\n- kafka_brokers 0 → 1\n- 같은 시각의 다른 후보: INC-5, INC-6  (인과 여부는 판단하지 않았다)\n" ],
+    "chosenIncidentIds" : [ "INC-2", "INC-4", "INC-5", "INC-6", "INC-7", "INC-8" ],
+    "dismissedIncidentIds" : [ "INC-1 — chat-service ERROR/WARN 28건은 Kafka 단절 창이 아닌 04:30~04:40대이고 규모도 작아, 댓글 알림 미도달의 주 신호로 보기엔 시각과 크기가 모두 맞지 않는다.", "INC-3 — /feeds/scroll 16초 지연은 피드 조회 읽기 경로의 지연으로, 알림 발행·전달 경로와 엔드포인트가 다르고 제보 증상(알림 미도달)과 직접 연결되지 않는다." ],
+    "rawIncluded" : false
+  },
+  "evidence" : {
+    "investigatedTraceId" : "6a740e7c2620ba4220a89df5f5dcffcd",
+    "rawPrefix" : "scan-1785990300",
+    "spanCount" : 78,
+    "topSpans" : [ {
+      "service" : "content-service",
+      "name" : "notification-publish",
+      "durationMs" : 60021.881,
+      "startedAt" : "2026-08-06T04:48:35.955349Z"
+    }, {
+      "service" : "content-service",
+      "name" : "publish user.notifications",
+      "durationMs" : 60016.108,
+      "startedAt" : "2026-08-06T04:48:35.955475Z"
+    }, {
+      "service" : "content-service",
+      "name" : "http get /feeds/scroll",
+      "durationMs" : 16409.58,
+      "startedAt" : "2026-08-06T04:32:52.051686Z"
+    }, {
+      "service" : "content-service",
+      "name" : "secured request",
+      "durationMs" : 16407.827,
+      "startedAt" : "2026-08-06T04:32:52.052099Z"
+    }, {
+      "service" : "content-service",
+      "name" : "connection",
+      "durationMs" : 16406.799,
+      "startedAt" : "2026-08-06T04:32:52.052909Z"
+    }, {
+      "service" : "content-service",
+      "name" : "http get /feeds/scroll",
+      "durationMs" : 16147.668,
+      "startedAt" : "2026-08-06T04:33:14.029553Z"
+    }, {
+      "service" : "content-service",
+      "name" : "secured request",
+      "durationMs" : 16145.866,
+      "startedAt" : "2026-08-06T04:33:14.029983Z"
+    }, {
+      "service" : "content-service",
+      "name" : "connection",
+      "durationMs" : 16144.264,
+      "startedAt" : "2026-08-06T04:33:14.031404Z"
+    }, {
+      "service" : "content-service",
+      "name" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2010.392,
+      "startedAt" : "2026-08-06T04:34:00.012779Z"
+    }, {
+      "service" : "content-service",
+      "name" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2003.617,
+      "startedAt" : "2026-08-06T04:33:00.000283Z"
+    }, {
+      "service" : "content-service",
+      "name" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2002.42,
+      "startedAt" : "2026-08-06T04:34:00.000730Z"
+    }, {
+      "service" : "content-service",
+      "name" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2000.955,
+      "startedAt" : "2026-08-06T04:33:00.026871Z"
+    }, {
+      "service" : "content-service",
+      "name" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2000.925,
+      "startedAt" : "2026-08-06T04:35:00.001161Z"
+    }, {
+      "service" : "content-service",
+      "name" : "task battle-deadline-notification-scheduler.notify",
+      "durationMs" : 2000.834,
+      "startedAt" : "2026-08-06T04:35:00.015374Z"
+    }, {
+      "service" : "content-service",
+      "name" : "http get",
+      "durationMs" : 226.001,
+      "startedAt" : "2026-08-06T04:33:00.166294Z"
+    } ],
+    "logLinesTotal" : 1023,
+    "logSamples" : [ {
+      "at" : "2026-08-06T04:32:51.624990403Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T13:32:51.624+09:00\u001B[0;39m \u001B[33m WARN [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [llEventLoop-6-2] [                                                 ] \u001B[0;39m\u001B[36mi.l.core.protocol.ConnectionWatchdog    \u001B[0;39m \u001B[2m:\u001B[0;39m Cannot reconnect to [172.31.46.124/<unresolved>:6379]: finishConnect(..) failed: Connection refused: /172.31.46.124:6379"
+    }, {
+      "at" : "2026-08-06T04:32:51.625665622Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T13:32:51.625+09:00\u001B[0;39m \u001B[33m WARN [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [llEventLoop-6-1] [                                                 ] \u001B[0;39m\u001B[36mi.l.core.protocol.ConnectionWatchdog    \u001B[0;39m \u001B[2m:\u001B[0;39m Cannot reconnect to [172.31.46.124/<unresolved>:6379]: finishConnect(..) failed: Connection refused: /172.31.46.124:6379"
+    }, {
+      "at" : "2026-08-06T04:32:54.076768228Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:32:54.072 [http-nio-8082-exec-5] ERROR [traceId=6a740e7417e8b0b83aa26f5450e14d12,spanId=f8c1f3b4bf5554c8,userId=NONE] c.e.t.e.user.service.UserCacheStore - [user-cache] Redis 캐시 조회 실패: cacheKey=user:info:1"
+    }, {
+      "at" : "2026-08-06T04:32:54.076790904Z",
+      "service" : "content-service",
+      "line" : "org.springframework.dao.QueryTimeoutException: Redis command timed out"
+    }, {
+      "at" : "2026-08-06T04:32:54.076795452Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:68)"
+    }, {
+      "at" : "2026-08-06T04:32:54.076799261Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:41)"
+    }, {
+      "at" : "2026-08-06T04:32:54.076803703Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.PassThroughExceptionTranslationStrategy.translate(PassThroughExceptionTranslationStrategy.java:40)"
+    }, {
+      "at" : "2026-08-06T04:32:54.076807423Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.FallbackExceptionTranslationStrategy.translate(FallbackExceptionTranslationStrategy.java:38)"
+    }, {
+      "at" : "2026-08-06T04:32:54.076810987Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceConnection.convertLettuceAccessException(LettuceConnection.java:310)"
+    }, {
+      "at" : "2026-08-06T04:32:54.077053943Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-06T04:32:54.077055999Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    }, {
+      "at" : "2026-08-06T04:32:54.077341011Z",
+      "service" : "content-service",
+      "line" : "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+    }, {
+      "at" : "2026-08-06T04:32:54.077343427Z",
+      "service" : "content-service",
+      "line" : "\tat io.lettuce.core.internal.ExceptionFactory.createTimeoutException(ExceptionFactory.java:63)"
+    }, {
+      "at" : "2026-08-06T04:32:54.269738674Z",
+      "service" : "content-service",
+      "line" : "org.springframework.dao.QueryTimeoutException: Redis command timed out"
+    }, {
+      "at" : "2026-08-06T04:32:54.269742119Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:68)"
+    }, {
+      "at" : "2026-08-06T04:32:54.269745196Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceReactiveRedisConnection.lambda$translateException$0(LettuceReactiveRedisConnection.java:242)"
+    }, {
+      "at" : "2026-08-06T04:32:54.269782628Z",
+      "service" : "content-service",
+      "line" : "\tat io.lettuce.core.protocol.CommandWrapper.completeExceptionally(CommandWrapper.java:132)"
+    }, {
+      "at" : "2026-08-06T04:32:54.269806594Z",
+      "service" : "content-service",
+      "line" : "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+    }, {
+      "at" : "2026-08-06T04:32:54.269808991Z",
+      "service" : "content-service",
+      "line" : "\tat io.lettuce.core.internal.ExceptionFactory.createTimeoutException(ExceptionFactory.java:63)"
+    }, {
+      "at" : "2026-08-06T04:32:54.323880577Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T13:32:54.322+09:00\u001B[0;39m \u001B[33m WARN [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [xecutorLoop-3-2] [                                                 ] \u001B[0;39m\u001B[36mo.s.b.a.d.r.RedisReactiveHealthIndicator\u001B[0;39m \u001B[2m:\u001B[0;39m Redis health check failed"
+    }, {
+      "at" : "2026-08-06T04:32:54.323910718Z",
+      "service" : "chat-service",
+      "line" : "org.springframework.dao.QueryTimeoutException: Redis command timed out"
+    }, {
+      "at" : "2026-08-06T04:32:54.323913921Z",
+      "service" : "chat-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:68) ~[spring-data-redis-3.5.1.jar!/:3.5.1]"
+    }, {
+      "at" : "2026-08-06T04:32:54.323916869Z",
+      "service" : "chat-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceReactiveRedisConnection.lambda$translateException$0(LettuceReactiveRedisConnection.java:242) ~[spring-data-redis-3.5.1.jar!/:3.5.1]"
+    }, {
+      "at" : "2026-08-06T04:32:54.323965610Z",
+      "service" : "chat-service",
+      "line" : "\tat io.lettuce.core.protocol.CommandWrapper.completeExceptionally(CommandWrapper.java:132) ~[lettuce-core-6.6.0.RELEASE.jar!/:6.6.0.RELEASE/643bd47]"
+    }, {
+      "at" : "2026-08-06T04:32:54.323987961Z",
+      "service" : "chat-service",
+      "line" : "Caused by: io.lettuce.core.RedisCommandTimeoutException: INFO. Command timed out after 2 second(s)"
+    }, {
+      "at" : "2026-08-06T04:32:54.323990130Z",
+      "service" : "chat-service",
+      "line" : "\tat io.lettuce.core.internal.ExceptionFactory.createTimeoutException(ExceptionFactory.java:75) ~[lettuce-core-6.6.0.RELEASE.jar!/:6.6.0.RELEASE/643bd47]"
+    }, {
+      "at" : "2026-08-06T04:32:56.077391159Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:32:56.075 [http-nio-8082-exec-5] ERROR [traceId=6a740e7417e8b0b83aa26f5450e14d12,spanId=f8c1f3b4bf5554c8,userId=NONE] c.e.t.e.user.service.UserCacheStore - [user-cache] Redis 캐시 조회 실패: cacheKey=user:info:3"
+    }, {
+      "at" : "2026-08-06T04:32:56.077422485Z",
+      "service" : "content-service",
+      "line" : "org.springframework.dao.QueryTimeoutException: Redis command timed out"
+    }, {
+      "at" : "2026-08-06T04:32:56.077426259Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:68)"
+    }, {
+      "at" : "2026-08-06T04:32:56.077429103Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:41)"
+    }, {
+      "at" : "2026-08-06T04:32:56.077432421Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.PassThroughExceptionTranslationStrategy.translate(PassThroughExceptionTranslationStrategy.java:40)"
+    }, {
+      "at" : "2026-08-06T04:32:56.077435439Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.FallbackExceptionTranslationStrategy.translate(FallbackExceptionTranslationStrategy.java:38)"
+    }, {
+      "at" : "2026-08-06T04:32:56.077438552Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceConnection.convertLettuceAccessException(LettuceConnection.java:310)"
+    }, {
+      "at" : "2026-08-06T04:32:56.077731602Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-06T04:32:56.077734291Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    }, {
+      "at" : "2026-08-06T04:32:56.078067490Z",
+      "service" : "content-service",
+      "line" : "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+    }, {
+      "at" : "2026-08-06T04:32:56.078070205Z",
+      "service" : "content-service",
+      "line" : "\tat io.lettuce.core.internal.ExceptionFactory.createTimeoutException(ExceptionFactory.java:63)"
+    }, {
+      "at" : "2026-08-06T04:32:58.080823016Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:32:58.079 [http-nio-8082-exec-5] ERROR [traceId=6a740e7417e8b0b83aa26f5450e14d12,spanId=f8c1f3b4bf5554c8,userId=NONE] c.e.t.e.user.service.UserCacheStore - [user-cache] Redis 캐시 조회 실패: cacheKey=user:info:7"
+    }, {
+      "at" : "2026-08-06T04:32:58.080851649Z",
+      "service" : "content-service",
+      "line" : "org.springframework.dao.QueryTimeoutException: Redis command timed out"
+    }, {
+      "at" : "2026-08-06T04:32:58.080856055Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:68)"
+    }, {
+      "at" : "2026-08-06T04:32:58.080858889Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:41)"
+    }, {
+      "at" : "2026-08-06T04:32:58.080862494Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.PassThroughExceptionTranslationStrategy.translate(PassThroughExceptionTranslationStrategy.java:40)"
+    }, {
+      "at" : "2026-08-06T04:32:58.080865422Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.FallbackExceptionTranslationStrategy.translate(FallbackExceptionTranslationStrategy.java:38)"
+    }, {
+      "at" : "2026-08-06T04:32:58.080868130Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceConnection.convertLettuceAccessException(LettuceConnection.java:310)"
+    }, {
+      "at" : "2026-08-06T04:32:58.081114876Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-06T04:32:58.081117312Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    }, {
+      "at" : "2026-08-06T04:32:58.081439429Z",
+      "service" : "content-service",
+      "line" : "Caused by: io.lettuce.core.RedisCommandTimeoutException: Command timed out after 2 second(s)"
+    }, {
+      "at" : "2026-08-06T04:32:58.081442419Z",
+      "service" : "content-service",
+      "line" : "\tat io.lettuce.core.internal.ExceptionFactory.createTimeoutException(ExceptionFactory.java:63)"
+    }, {
+      "at" : "2026-08-06T04:33:00.164766092Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:33:00.088 [http-nio-8082-exec-5] ERROR [traceId=6a740e7417e8b0b83aa26f5450e14d12,spanId=f8c1f3b4bf5554c8,userId=NONE] c.e.t.e.user.service.UserCacheStore - [user-cache] Redis 캐시 조회 실패: cacheKey=user:info:9"
+    }, {
+      "at" : "2026-08-06T04:33:00.164818848Z",
+      "service" : "content-service",
+      "line" : "org.springframework.dao.QueryTimeoutException: Redis command timed out"
+    }, {
+      "at" : "2026-08-06T04:33:00.164823639Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:68)"
+    }, {
+      "at" : "2026-08-06T04:33:00.164826534Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceExceptionConverter.convert(LettuceExceptionConverter.java:41)"
+    }, {
+      "at" : "2026-08-06T04:33:00.164829643Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.PassThroughExceptionTranslationStrategy.translate(PassThroughExceptionTranslationStrategy.java:40)"
+    }, {
+      "at" : "2026-08-06T04:33:00.164832543Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.FallbackExceptionTranslationStrategy.translate(FallbackExceptionTranslationStrategy.java:38)"
+    }, {
+      "at" : "2026-08-06T04:33:00.164835318Z",
+      "service" : "content-service",
+      "line" : "\tat org.springframework.data.redis.connection.lettuce.LettuceConnection.convertLettuceAccessException(LettuceConnection.java:310)"
+    }, {
+      "at" : "2026-08-06T04:33:00.625012262Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T13:33:00.624+09:00\u001B[0;39m \u001B[33m WARN [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [llEventLoop-6-2] [                                                 ] \u001B[0;39m\u001B[36mi.l.core.protocol.ConnectionWatchdog    \u001B[0;39m \u001B[2m:\u001B[0;39m Cannot reconnect to [172.31.46.124/<unresolved>:6379]: finishConnect(..) failed: Connection refused: /172.31.46.124:6379"
+    }, {
+      "at" : "2026-08-06T04:33:00.625233699Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T13:33:00.625+09:00\u001B[0;39m \u001B[33m WARN [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [llEventLoop-6-1] [                                                 ] \u001B[0;39m\u001B[36mi.l.core.protocol.ConnectionWatchdog    \u001B[0;39m \u001B[2m:\u001B[0;39m Cannot reconnect to [172.31.46.124/<unresolved>:6379]: finishConnect(..) failed: Connection refused: /172.31.46.124:6379"
+    }, {
+      "at" : "2026-08-06T04:33:02.008070881Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:33:02.003 [scheduling-1] ERROR [traceId=NONE,spanId=NONE,userId=NONE] o.s.s.s.TaskUtils$LoggingErrorHandler - Unexpected error occurred in scheduled task"
+    }, {
+      "at" : "2026-08-06T04:33:02.053382659Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:33:02.027 [scheduling-1] ERROR [traceId=NONE,spanId=NONE,userId=NONE] o.s.s.s.TaskUtils$LoggingErrorHandler - Unexpected error occurred in scheduled task"
+    }, {
+      "at" : "2026-08-06T04:33:02.407966466Z",
+      "service" : "content-service",
+      "line" : "2026-08-06 13:33:02.403 [http-nio-8082-exec-5] ERROR [traceId=6a740e7417e8b0b83aa26f5450e14d12,spanId=f8c1f3b4bf5554c8,userId=NONE] c.e.t.e.user.service.UserCacheStore - [user-cache] Redis 캐시 저장 실패: userId=1"
+    } ],
+    "metrics" : [ {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, pool=HikariPool-1, service=auth-service}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl, pool=HikariPool-1}",
+      "points" : 152,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n, pool=HikariPool-1}",
+      "points" : 148,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9, pool=HikariPool-1}",
+      "points" : 148,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, pool=HikariPool-1, service=auth-service}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl, pool=HikariPool-1}",
+      "points" : 152,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n, pool=HikariPool-1}",
+      "points" : 148,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9, pool=HikariPool-1}",
+      "points" : 148,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, service=auth-service}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 3.333333333333336E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T04:35:30Z", "2026-08-06T04:39:45Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=auth-service, cause=Metadata GC Threshold, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, service=auth-service}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 9.208616666666625E-5,
+      "max" : 7.000000000000006E-4,
+      "last" : 2.16666666666665E-4,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 3.333333333333336E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T04:28:30Z", "2026-08-06T04:32:45Z ~ 2026-08-06T04:48:30Z", "2026-08-06T04:52:45Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 3.333333333333336E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T04:29:45Z", "2026-08-06T04:34:00Z ~ 2026-08-06T04:48:45Z", "2026-08-06T04:53:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-40-241, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-cph5l, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-45-39, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-9kvqt, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 152,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 148,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 148,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=10.42.1.248:8080, job=integrations/kubernetes/kube-state-metrics, k8s_cluster_name=yogurtte-k3s-prod, source=kubernetes}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ "2026-08-06T04:47:15Z ~ 2026-08-06T04:50:15Z" ]
+    }, {
+      "query" : "mongodb_up",
+      "series" : "{__name__=mongodb_up, cluster=yogurtte-k3s-prod, instance=infra-server, job=mongodb, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 160,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_brokers",
+      "series" : "{__name__=kafka_brokers, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 147,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ "2026-08-06T04:50:30Z ~ 2026-08-06T04:50:30Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.fcm-tokens}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.fcm-tokens}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.fcm-tokens}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.notification-settings}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.notification-settings}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.notification-settings}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=chat.messages}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=chat.messages}",
+      "points" : 146,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    }, {
+      "query" : "websocket_active_users",
+      "series" : "{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 152,
+      "firstAt" : "2026-08-06T04:25:00Z",
+      "lastAt" : "2026-08-06T05:04:45Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T04:25:00Z ~ 2026-08-06T05:04:45Z" ]
+    } ]
+  },
+  "serviceGraph" : {
+    "edges" : [ {
+      "kind" : "db",
+      "source" : "content-service",
+      "target" : "redis",
+      "detail" : "",
+      "calls" : 1,
+      "maxMs" : 0.628,
+      "operations" : [ "GET" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "jdbc",
+      "source" : "content-service",
+      "target" : "mysql/content",
+      "detail" : "HikariPool-1",
+      "calls" : 46,
+      "maxMs" : 16406.799,
+      "operations" : [ ],
+      "errors" : [ ],
+      "events" : [ "acquired", "commit" ],
+      "attributes" : { }
+    }, {
+      "kind" : "messaging",
+      "source" : "content-service",
+      "target" : "kafka/user.notifications",
+      "detail" : "",
+      "calls" : 1,
+      "maxMs" : 60016.108,
+      "operations" : [ "publish" ],
+      "errors" : [ "Topic user.notifications not present in metadata after 60000 ms." ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "service",
+      "source" : "content-service",
+      "target" : "auth-service",
+      "detail" : "",
+      "calls" : 4,
+      "maxMs" : 226.001,
+      "operations" : [ ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    } ],
+    "empty" : false
+  },
+  "collectionFailures" : [ "Metric 'sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))' returned no series in this window; skipped." ]
+}

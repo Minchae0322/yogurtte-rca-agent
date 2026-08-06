@@ -103,6 +103,24 @@ public record Incident(
 
     /** 컨텍스트에 넣을 한 덩어리. 원본 JSON은 따로 그대로 실린다. */
     public String describe() {
+        return describe(true);
+    }
+
+    /**
+     * 반복 신호를 <b>접어서</b> 쓴다 (B-43).
+     *
+     * <p>같은 후보로 묶였다는 것은 채널·리소스·지문이 같다는 뜻인데, 그러고도 신호를 한 줄씩
+     * 펼쳐 적고 있었다. 스케줄러 실패 6건이 6줄 + traceId 6개(약 650자)가 되고, Redis 타임아웃
+     * 19건이면 약 1,800자다. <b>검색 상한을 올릴 수 없던 이유가 이것이었다.</b>
+     *
+     * <p><b>지우는 것이 아니라 접는다.</b> 반복 횟수 자체가 근거이기 때문이다 — 스케줄러 6건은
+     * "60초 주기 3회 × 2파드"였고 리포트는 그래서 <i>"3주기 연속 실패"</i>로 결론을 냈다.
+     * 1건으로 줄였다면 주기성과 일회성을 구별할 수 없다. 로그가 이미 같은 판단을 했고
+     * (`[x47회 · 시각 범위 · 평균 간격]`), AP-1 회차 5에서 <b>그 표식의 부재가 판단 근거로 쓰였다.</b>
+     *
+     * @param fold false면 접기 전 형태. A/B 측정용이며 운영 경로는 항상 true다
+     */
+    public String describe(boolean fold) {
         StringBuilder sb = new StringBuilder();
         sb.append("## ").append(id).append("  ").append(resource);
         if (!"?".equals(signature)) {
@@ -113,15 +131,66 @@ public record Incident(
                 .append("  (").append(channel).append(" · ")
                 .append(precision() == Precision.EXACT ? "시각 정확" : "집계 해상도만큼 흐림")
                 .append(")\n");
-        signals.forEach(s -> sb.append("- ").append(s.what()).append('\n'));
-        if (!traceIds.isEmpty()) {
-            sb.append("- traceId: ").append(String.join(", ", traceIds)).append('\n');
+        if (fold) {
+            foldedSignals().forEach(line -> sb.append("- ").append(line).append('\n'));
+        } else {
+            signals.forEach(s -> sb.append("- ").append(s.what()).append('\n'));
         }
+        appendTraceIds(sb, fold);
         if (!related.isEmpty()) {
             sb.append("- 같은 시각의 다른 후보: ").append(String.join(", ", related))
                     .append("  (인과 여부는 판단하지 않았다)\n");
         }
         return sb.toString();
+    }
+
+    /** 반복 상한. 이보다 적으면 접어도 얻는 것이 없어 원문을 그대로 둔다. */
+    private static final int FOLD_MIN = 3;
+    private static final int TRACE_ID_KEEP = 2;
+
+    /**
+     * 같은 문구가 {@link #FOLD_MIN}건 이상이면 한 줄로 접는다. 문구가 서로 다르면 접지 않는다 —
+     * 다른 문구는 다른 사실이고, 그것까지 뭉치면 정보를 지우는 것이 된다.
+     */
+    private List<String> foldedSignals() {
+        LinkedHashMap<String, List<Signal>> byWhat = signals.stream().collect(Collectors.groupingBy(
+                s -> s.what().replaceAll("[0-9][0-9,.]*", "#"), LinkedHashMap::new, Collectors.toList()));
+        return byWhat.values().stream().map(group -> {
+            if (group.size() < FOLD_MIN) {
+                return group.stream().map(Signal::what).collect(Collectors.joining("\n- "));
+            }
+            return group.get(0).what() + "  [x" + group.size() + "회"
+                    + spanOf(group) + gapOf(group) + "]";
+        }).toList();
+    }
+
+    private static String spanOf(List<Signal> group) {
+        Instant from = group.stream().map(Signal::from).min(Comparator.naturalOrder()).orElse(null);
+        Instant to = group.stream().map(Signal::to).max(Comparator.naturalOrder()).orElse(null);
+        return (from == null || from.equals(to)) ? "" : " · " + from + "~" + to;
+    }
+
+    /** 평균 간격 — 주기적 실패와 다발 실패를 가른다. */
+    private static String gapOf(List<Signal> group) {
+        if (group.size() < 2) {
+            return "";
+        }
+        List<Instant> at = group.stream().map(Signal::from).sorted().toList();
+        long totalSec = Duration.between(at.get(0), at.get(at.size() - 1)).toSeconds();
+        return totalSec <= 0 ? "" : " · 평균 " + (totalSec / (at.size() - 1)) + "초 간격";
+    }
+
+    /** traceId도 전량 나열하면 건당 34자다. 대표 몇 개와 개수만 남긴다. */
+    private void appendTraceIds(StringBuilder sb, boolean fold) {
+        if (traceIds.isEmpty()) {
+            return;
+        }
+        if (!fold || traceIds.size() <= TRACE_ID_KEEP + 1) {
+            sb.append("- traceId: ").append(String.join(", ", traceIds)).append('\n');
+            return;
+        }
+        sb.append("- traceId: ").append(String.join(", ", traceIds.subList(0, TRACE_ID_KEEP)))
+                .append(" (+").append(traceIds.size() - TRACE_ID_KEEP).append("건)\n");
     }
 
     public static List<String> idsOf(List<Incident> incidents) {

@@ -53,6 +53,7 @@ public record SurveyProperties(
         String slowTraceQuery,
         String slowTraceThreshold,
         int traceLimit,
+        int incidentLimit,
         String logQuery,
         List<String> metricQueries,
         String clusterGap,
@@ -75,8 +76,18 @@ public record SurveyProperties(
         traceQuery = blankTo(traceQuery, "{ status = error }");
         // status != error 를 붙여 에러 채널과 겹치지 않게 가른다 — 어느 채널로 도달했는지가 남아야 한다.
         slowTraceQuery = blankTo(slowTraceQuery, "{ duration > %s && status != error }");
-        slowTraceThreshold = blankTo(slowTraceThreshold, "3s");
-        traceLimit = traceLimit <= 0 ? 20 : traceLimit;
+        // B-43: 시스템의 최소 타임아웃 상수(Redis 2,000ms)와 같은 자리에 둔다. 3s는 그보다 커서
+        // Redis 타임아웃이 만든 2,0xx ms 지연이 통째로 탈락했다(실측: chat 19건).
+        // 정확히 2,000ms인 지문은 이 조건에서 빠지지만, 그런 것은 예외가 나므로 에러 채널이 잡는다.
+        // 하한은 정상 트래픽 노이즈 바닥(실측 약 500ms)이라 2s는 오탐 0건 구간이다.
+        slowTraceThreshold = blankTo(slowTraceThreshold, "2s");
+        // B-43: Tempo 검색 상한. 원본은 include-raw=false라 LLM에 실리지 않으므로 토큰과 무관하다.
+        // 컨텍스트를 정하는 상한은 이것이 아니라 incidentLimit이다 — 같은 지문은 후보 하나로 묶인다.
+        // 200은 실측 근거다 — 회차 5 네 문항의 좁힌 창에서 임계값 초과가 7·10·61·61건이었고,
+        // 스윕 창 1시간에서도 61건이다. 최대 실측치의 3배 여유.
+        traceLimit = traceLimit <= 0 ? 200 : traceLimit;
+        // B-43: LLM이 실제로 읽는 단위의 상한. 트레이스 건수와 비례하지 않는다.
+        incidentLimit = incidentLimit <= 0 ? 15 : incidentLimit;
         logQuery = blankTo(logQuery,
                 "sum by (service_name) (count_over_time({service_name=~\"%s\"} |~ \"ERROR|WARN\" [5m]))");
         metricQueries = metricQueries == null ? List.of() : List.copyOf(metricQueries);

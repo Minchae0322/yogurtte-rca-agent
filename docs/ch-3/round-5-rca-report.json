@@ -1,0 +1,906 @@
+{
+  "traceId" : "scan-1785976661",
+  "question" : "최근 1시간 안에 앱이 잠깐 버벅였다는 얘기가 있어요. 뭔가 있었는지 봐줘",
+  "mode" : "rca",
+  "startedAt" : "2026-08-06T01:36:46.592745300Z",
+  "llmProvider" : "claude-cli",
+  "llmModel" : "claude-opus-5",
+  "llmTurns" : 1,
+  "promptSource" : ".\\prompts\\system-prompt.md",
+  "analysis" : "관측 데이터만으로 정리했다. 두 개의 독립된 사건이 창 안에 있다.\n\n## 1. 원인 후보 랭킹 (최대 3개)\n\n1. **MongoDB(172.31.46.124:27017) 계획/비계획 셧다운·재기동 (00:53:34~00:53:57 UTC)** → chat-service 알림 처리 및 HTTP 요청이 최대 24초 블로킹\n2. **chat-service 파드 교체 (dnbs9 → kh2dl, 00:40:11~00:47:09 UTC)** → `notification-processors` 컨슈머 공백으로 `user.notifications` p3 랙 25 누적, 알림 1건 494초 지연\n3. **재기동 직후 chat-service의 Redis 경로 지연 (00:47:44~00:48:10 UTC)** → 헬스 컨트리뷰터 15.7초, 요청 24.9초. 원인 미확정\n\n---\n\n## 2. 후보별 근거\n\n### 후보 1 — MongoDB 셧다운/재기동\n\n**근거**\n- 로그 원문: `com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017` — 00:53:34.115~.116 UTC, **x2회**.\n- 이어서 `com.mongodb.MongoSocketOpenException: Exception opening socket` / `Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /172.31.46.124:27017` — 00:53:35.118, 00:53:42.256 (**x2회**). 셧다운 → 포트 소멸 순서로, 프로세스 재기동이 맞다.\n- `org.mongodb.driver.cluster : Exception in monitor thread while connecting to server 172.31.46.124:27017` **x4회 · 00:53:34.115 ~ 00:53:42.256**.\n- 트레이스 `6a73db0e...`: `receive`(kafka) 24.008s, 그 아래 `user-notification-service#process-notification` 23.999s. 시작 00:53:35.027인데 **첫 Mongo span `insert toychat`이 00:53:57.738에야 시작** — 중간 22.71초가 통째로 서버 셀렉션 대기다.\n- 같은 창의 정상 기준선(00:53:57 이후 동일 트레이스 내부): `insert` 15.3ms, `user_sync_status.find` 1.5~6.9ms, `KEYS` 1.0~1.7ms. 즉 Mongo 복귀 후에는 정상.\n- 사용자 요청 경로도 물렸다: `6a73db16...` `secured request` **15.878초**(00:53:42.244 시작, `nio-8090-exec-2`), `6a73db20...` `secured request` **5.751초**(00:53:52.283 시작, `nio-8090-exec-5`). 둘 다 동일 traceId의 `Waiting for server to become available` 로그를 동반한다.\n\n**대기·지연 판정**\n| 대기 구간 | 실측 대기 | 상한(설정값) | 만료 여부 | 최종 상태 |\n|---|---|---|---|---|\n| `6a73db0e` 알림 처리의 Mongo 서버 셀렉션 | **22.71초** (00:53:35.027→00:53:57.738) | 30초 — 로그 `Remaining time: 29994 ms` (operation ID 383) | **만료 안 함** | **성공.** `insert` 완료, `[push] 멀티캐스트 결과: tokens=1, success=1, failure=0`(00:53:59.022), `[notify] 알림 처리 완료: userId=7, ... id=6a73db0fd2c54bf44544e29d`, `[kafka] 알림 처리 완료`(00:53:59.030). 재시도·DLQ 없음 |\n| `6a73db16` HTTP 요청 (`nio-8090-exec-2`) | **15.878초** | 30초 — `Remaining time: 29999 ms` (ID 401) | **만료 안 함** | **완료.** Mongo 복귀 시점(00:53:57.7)에 풀림. 다만 응답 본문/상태코드 span 속성이 없어 **성공/실패는 판정 불가** (동일 traceId에 `mongo took 15774ms to respond` WARN만 존재) |\n| `6a73db20` HTTP 요청 (`nio-8090-exec-5`) | **5.751초** | 30초 — `Remaining time: 29999 ms` (ID 444) | **만료 안 함** | **완료.** 상태코드 근거 없어 성공/실패 **판정 불가** |\n| chat-service HikariPool-1 커넥션 점유 (`6a73db0e`) | **24.007초** 점유 (acquired 00:53:35.025 → commit 00:53:59.028) | 풀 획득 타임아웃 설정값 미수집 → **상한 대조 불가** (획득 자체는 2.2ms로 즉시 성공) | 해당 없음 | **성공 (commit).** 단, MySQL 커넥션을 잡은 채 Mongo·Redis·FCM 외부 호출을 24초간 수행 |\n\n**확신도: 높음** (앱 측 예외 원문과 트레이스 공백이 초 단위로 일치)\n\n**반증 데이터**\n- `mongodb_up{instance=infra-server}` 및 `up{job=mongodb}`가 **전 구간 1, 변화 없음** (90점/22분 ≒ 15초 간격이므로 ~23초 중단은 잡혔어야 한다). 익스포터가 실제 mongod와 다른 경로로 보거나 값이 stale일 가능성. 앱 측 `Connection refused` 원문이 더 강한 증거라 판단했으나, **이 불일치 때문에 \"몇 초간 완전 다운\"의 정확한 구간 폭은 확정하지 못했다.**\n- content-service는 무영향: 같은 시각 `POST /battles/{battleId}/items/{itemId}/comments` **46.857ms, status 200, outcome SUCCESS**. Mongo를 쓰지 않으므로 정합적이다.\n\n---\n\n### 후보 2 — chat-service 파드 교체로 인한 컨슈머 공백\n\n**근거**\n- 메트릭 시리즈 자체가 파드 교체를 보여준다: `up{pod=chat-service-fdcc7c776-dnbs9}` 11점 **00:37:41~00:40:11에서 종료**, `up{pod=chat-service-fdcc7c776-kh2dl}` 44점 **00:49:11부터 시작**. `hikaricp_*`, `websocket_active_users`, `jvm_gc_pause` 모두 같은 경계.\n- 신규 파드 부팅 로그: `2026-08-06T09:47:09.623+09:00 WARN [traceId=NONE] 7 [ main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default...` (= 00:47:09 UTC, `main` 스레드 = 기동 시점).\n- `kafka_consumergroup_lag{consumergroup=notification-processors, topic=user.notifications, partition=3}`: 00:37:41=0 → **00:40:11=2 → 00:42:41=17 → 00:45:11=25 → 00:47:41=25 → 00:49:11 이후 0**. 랙 상승 개시와 구 파드 소멸이 같은 스크랩(00:40:11)이다.\n- 트레이스 `6a73d7cd...`: content-service가 **00:39:41.166**에 `[notify] 알림 발행 성공: userId=7, ..., partition=3, offset=1130`. 그런데 chat-service의 `receive` span 시작은 **00:47:55.722**.\n\n**대기·지연 판정**\n| 대기 구간 | 실측 대기 | 상한(설정값) | 만료 여부 | 최종 상태 |\n|---|---|---|---|---|\n| offset 1130 발행→소비 | **494.6초** (00:39:41.166 → 00:47:55.722) | 컨슈머 `max.poll.interval.ms`·토픽 retention 미수집 → **상한 대조 불가** | **판정 불가** | **성공.** 20.505초 처리 후 `[push] 멀티캐스트 결과: tokens=1, success=1, failure=0`(00:48:16.121), `[kafka] 알림 처리 완료`(00:48:16.222). 랙 0 복귀, `notification-recovery`/`user.notifications.dlq` 랙 **전 구간 0** → 폐기·DLQ 없음 |\n| 같은 트레이스의 HikariPool-1 점유 | **17.596초** (acquired 00:47:58.630 → commit 00:48:16.135) | 미수집 → 대조 불가 | 해당 없음 | **성공 (commit).** 내부 지연은 FCM 호출이 지배적(00:48:10.222 발송 → 00:48:16.121 결과, ≒5.9초) |\n\n**확신도: 높음** (파드 교체 사실과 랙 곡선, 소비 지연이 모두 같은 시각으로 수렴)\n\n**반증 데이터**\n- 파드가 왜 교체됐는지 근거가 없다 — 배포인지 OOMKill인지 프로브 실패인지 **데이터 부족**. kube event / 재시작 사유를 못 봤으므로 \"장애\"가 아니라 \"정상 배포\"일 수 있다.\n- 사용자 체감 근거는 약하다: `websocket_active_users`가 **양 파드 모두 전 구간 0**이고, 로그도 `[notify] 사용자 오프라인 상태로 WebSocket 전송 스킵: userId=7`. 즉 이 구간 접속 사용자가 관측되지 않았다.\n- 구 파드 `dnbs9`의 `hikaricp_connections_pending`/`active`도 소멸 직전까지 0이라, 종료 원인이 부하라는 흔적은 없다.\n\n---\n\n### 후보 3 — 재기동 직후 Redis 경로 지연 (원인 미확정)\n\n**근거**\n- WARN 원문 2건: `Health contributor ...AdaptedReactiveHealthContributors$1 (redis) took 15709ms to respond` (00:48:08.630, traceId `6a73d9b0...`), `... (redis) took 15503ms to respond` (00:48:08.719, traceId `6a73d9b8...`).\n- 해당 traceId의 서버 span: `6a73d9b0` `secured request` **24.911초**, `6a73d9b8` **17.590초**, 인접한 `6a73d9c3` **6.111초**. 모두 chat-service, `nio-8090-exec-*`.\n- 같은 창의 Redis 명령 실측은 그렇게 느리지 않다: `KEYS 0` **89.3ms / 96.6ms** (00:48:08.428, 00:48:09.420). Mongo도 91~111ms로 정상 기준선(1.5~15ms)의 10배 수준.\n- 두 헬스체크가 00:48:08.63/.72로 거의 동시에 풀리고, 두 요청이 00:48:10.02에 함께 끝난다 → 개별 명령 지연이 아니라 **공유 자원(커넥션/스케줄러) 해제 시점에 동조**한 모양이다.\n\n**대기·지연 판정**\n| 대기 구간 | 실측 대기 | 상한(설정값) | 만료 여부 | 최종 상태 |\n|---|---|---|---|---|\n| Redis 헬스 컨트리뷰터 | **15.709초 / 15.503초** | Redis 클라이언트 타임아웃 **2초** (span 속성 `server.address: redis://172.31.46.124?timeout=2s`) | **개별 명령 기준이면 초과.** 다만 실측 `KEYS`는 89~97ms로 2초 미만 → 15.7초는 명령 실행이 아니라 큐잉/커넥션 획득/리액티브 스케줄러 대기로 **추정**. 헬스 컨트리뷰터 자체의 타임아웃 설정값은 미수집 → **만료 여부 판정 불가** | **완료.** WARN 문구가 `took ... to respond`이므로 응답은 반환됨. UP/DOWN 값 근거 없음 → 성공/실패 **판정 불가** |\n\n**확신도: 낮음** (현상은 확실하나 15.7초가 어디서 소모됐는지 데이터가 없다)\n\n**반증 데이터**\n- `up{job=redis, instance=infra-server}` **전 구간 1**, Redis 명령 span은 모두 100ms 미만. Redis 서버 자체 장애는 반증된다.\n- 같은 시각 content-service의 Redis `GET`은 **0.787ms / 0.807ms** — 동일 Redis(172.31.46.124)에 붙는 다른 서비스는 멀쩡했다. 즉 Redis 공용 인프라 문제가 아니라 **chat-service 신규 파드의 클라이언트 측(콜드스타트/커넥션 초기화) 문제** 쪽이 유력하다.\n- `jvm_gc_pause`는 무죄: kh2dl의 minor GC rate 최대 **0.00103**(≒0.1%). GC 스톨로 15초를 설명할 수 없다.\n\n---\n\n### 공통 반증 / 데이터 신뢰도 경고\n- `hikaricp_connections_active`·`hikaricp_connections_pending`이 **모든 파드에서 전 구간 0**인데, 트레이스는 chat-service가 커넥션을 **24.007초·17.596초 점유**했음을 `acquired`/`commit` 이벤트로 보여준다. 15초 스크랩 간격으로도 24초 점유는 최소 1회 잡혀야 한다. **이 두 게이지는 이번 분석에서 근거로 쓸 수 없다** — 특히 \"커넥션 풀 고갈은 없었다\"는 결론을 이 메트릭으로 확정하지 마라.\n- 수집 실패: `http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}` 시리즈 없음. 인증 실패 급증 가설은 검증 불가지만, 이번 증상과 연결할 다른 근거도 없다.\n- chat-service의 `http_server_requests` 계열 메트릭이 아예 없어, **영향받은 요청 수·비율은 산출 불가**. 위 지연은 샘플 트레이스 5건에서만 확인된 것이다.\n\n---\n\n## 3. 권장 다음 조치\n\n### 이미 발생한 피해 — 복구 **불필요** (이미 자연 복구됨)\n- 알림 2건(offset 1130, 1156) 모두 **최종 전달 성공**: FCM `success=1, failure=0`, messageId 발급(`.../messages/1785977295669348`, `.../messages/1785977638482157`), Kafka 커밋 완료.\n- 유실 없음: `user.notifications` 랙 0 복귀, `user.notifications.dlq`(`notification-recovery`) 랙 **전 구간 0**, `chat.messages` 계열 랙 전부 0.\n- content-service 쓰기 경로는 무손상: 댓글 298·324 모두 `commit` + `status 200`.\n- **재발송하지 마라.** 이미 전달된 건이라 중복 푸시만 만든다. 피해는 \"지연\"(494초 / 22.7초)이며 지연은 사후 복구 대상이 아니다.\n- 단, `6a73db16`·`6a73db20`의 HTTP 응답 결과가 성공인지 실패인지 근거가 없다. 이 두 건이 사용자 요청이었다면 **실패 응답을 받았을 가능성은 배제 못 함 → 판정 불가**.\n\n### 재발 방지\n1. **MongoDB 단일 인스턴스 제거 또는 재기동 절차화.** 지금은 mongod 프로세스 재시작 = chat-service 알림 경로 전면 정지다. 레플리카셋 구성이 근본책이고, 최소한 재기동 사유부터 확인해야 한다(계획된 것인지 크래시인지 아직 모름).\n2. **`processNotification`의 트랜잭션 경계 축소.** `HikariPool-1` MySQL 커넥션을 잡은 채 Mongo·Redis·FCM(외부 HTTP)을 호출해 24초를 점유했다. 외부 I/O를 트랜잭션 밖으로 빼라. 지금은 풀 크기 여유로 버텼을 뿐, 동시 알림이 몇 건만 겹쳐도 MySQL 풀 고갈로 번진다.\n3. **Mongo `serverSelectionTimeout` 30초를 요청 스레드에 그대로 물리지 마라.** `nio-8090-exec-*`가 30초까지 잡히면 톰캣 스레드풀이 먼저 마른다. 요청 경로는 수 초로 낮추고, 컨슈머 경로만 길게 가져가는 편이 낫다.\n4. **actuator 헬스 컨트리뷰터에 타임아웃을 걸어라.** redis 15.7초, mongo 15.8초가 헬스 응답을 잡았다. 이게 readiness/liveness 프로브에 물려 있으면 인프라 흔들림이 곧 파드 재시작으로 증폭된다(후보 2의 파드 교체 원인일 수 있으나 **미확인**).\n5. **`KEYS` 제거.** `UserNotificationWebSocketSender`/`PushDispatcher`가 알림마다 `KEYS 0`을 친다. Redis 단일 스레드를 O(N)으로 막는 호출이고, 실측도 정상 구간 1ms 대비 이 창에서 89~97ms였다. `SCAN` 또는 세션 레지스트리 셋으로 교체.\n6. **chat-service 단일 파드 해소.** 파드 1개라 교체 중 컨슈머 그룹 멤버가 0이 되고 곧장 랙이 쌓인다. replicas ≥ 2 + PodDisruptionBudget.\n7. **알림 E2E 지연 알람 추가.** 494초 지연이 아무 알람도 울리지 않았다. `kafka_consumergroup_lag{topic=\"user.notifications\"} > 0` 이 N분 지속 시 알람이 최소선이다.\n\n### 복구 확인\n- **이미 관측으로 확인된 것**: Mongo는 00:53:57.738부터 정상(`insert` 15.3ms, `find` 1.5~6.9ms). Kafka 랙 00:49:11 이후 전 파티션 0. FCM 발송 성공. chat-service `up=1` 유지(00:49:11~00:59:56). content-service 200 응답.\n- **아직 확인 못 해 추가 수집이 필요한 것** (아래가 없어 위 확신도를 낮춰 잡았다):\n  - `kubectl get events` / `kubectl describe pod chat-service-*` — **파드 교체 사유**(배포 vs OOMKilled vs 프로브 실패). 후보 2의 성격이 여기서 갈린다.\n  - mongod 자체 로그 — 00:53:34 셧다운이 계획된 것인지, 그리고 `mongodb_up=1` 이 왜 떨어지지 않았는지(익스포터 신뢰성).\n  - 172.31.46.124(= Mongo·Redis 동거 호스트) 노드 리소스 메트릭 — 00:47:55~00:48:16의 Mongo/Redis 동반 10~100배 지연이 호스트발인지 클라이언트발인지.\n  - chat-service `http_server_requests_seconds_*` — 영향받은 요청 수와 상태코드 분포. 지금은 트레이스 5건이 전부다.\n  - Hikari `connectionTimeout`, Mongo 클라이언트 옵션, readiness/liveness 프로브 정의 — 위 \"만료 여부 판정 불가\" 항목들을 닫으려면 필요.\n  - `hikaricp_*` 게이지가 왜 24초 점유 중에도 0인지 — 메트릭 파이프라인 점검.",
+  "inputTokens" : 90365,
+  "outputTokens" : 15130,
+  "cacheReadTokens" : 23449,
+  "cacheCreationTokens" : 66914,
+  "costUsd" : 1.0591245,
+  "totalElapsedMs" : 240428,
+  "timings" : {
+    "tempoMs" : 4373,
+    "lokiMs" : 489,
+    "mimirMs" : 852,
+    "assembleMs" : 91,
+    "llmMs" : 227514
+  },
+  "contextChars" : 108747,
+  "coverage" : {
+    "windowStart" : "2026-08-06T00:37:41.076260Z",
+    "windowEnd" : "2026-08-06T01:00:00Z",
+    "windowSeconds" : 1338,
+    "traceBytes" : 76307,
+    "traceSpans" : 82,
+    "traceTrimmed" : false,
+    "candidateTraces" : 10,
+    "candidateTraceBytes" : 76307,
+    "errorWarnLogBytes" : 26097,
+    "traceIdLogBytes" : 24766,
+    "metricsBytes" : 151557,
+    "metricsCollected" : [ "hikaricp_connections_active", "hikaricp_connections_pending", "rate(jvm_gc_pause_seconds_sum[5m])", "up", "mongodb_up", "kafka_brokers", "kafka_consumergroup_lag", "websocket_active_users" ],
+    "metricsMissing" : [ "sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))" ],
+    "promptChars" : 805,
+    "contextChars" : 108747,
+    "contextTokens" : -1,
+    "overheadTokens" : 29081,
+    "metricSummarized" : true
+  },
+  "triage" : {
+    "timeExpression" : "상대 표현 '최근 1시간'",
+    "timeConfidence" : "EXACT",
+    "surveyStart" : "2026-08-06T00:36:05.494326900Z",
+    "surveyEnd" : "2026-08-06T01:36:05.494326900Z",
+    "chosenStart" : "2026-08-06T00:37:41.076260Z",
+    "chosenEnd" : "2026-08-06T01:00:00Z",
+    "services" : [ "content-service", "chat-service" ],
+    "traceId" : "6a73d7cd82e6e12dd5c7a7ca51858e6e",
+    "traceCandidates" : [ {
+      "traceId" : "6a73db20d7504a562163749f221b664b",
+      "rootServiceName" : "chat-service",
+      "rootTraceName" : "security filterchain before",
+      "durationMs" : 5751,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:53:52.281842Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a73db166e5322a7df383f8412a96c4d",
+      "rootServiceName" : "chat-service",
+      "rootTraceName" : "security filterchain before",
+      "durationMs" : 15879,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:53:42.241455Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a73db0e28f9ff3fc4cce81a89cfb39e",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "http post /battles/{battleId}/items/{itemId}/comments",
+      "durationMs" : 24073,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:53:34.957148Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a73d9c39aaf7193897c86174a60f421",
+      "rootServiceName" : "chat-service",
+      "rootTraceName" : "security filterchain before",
+      "durationMs" : 6510,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:48:03.420146Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a73d9b830a513e3385f8985bbc2c359",
+      "rootServiceName" : "chat-service",
+      "rootTraceName" : "security filterchain before",
+      "durationMs" : 17613,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:47:52.405900Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a73d9b04dcd773a41a3a8263fde1b79",
+      "rootServiceName" : "chat-service",
+      "rootTraceName" : "security filterchain before",
+      "durationMs" : 25386,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:47:44.632550Z",
+      "trusted" : true
+    }, {
+      "traceId" : "6a73d7cd82e6e12dd5c7a7ca51858e6e",
+      "rootServiceName" : "content-service",
+      "rootTraceName" : "http post /battles/{battleId}/items/{itemId}/comments",
+      "durationMs" : 515150,
+      "channel" : "slow",
+      "startedAt" : "2026-08-06T00:39:41.076260Z",
+      "trusted" : true
+    } ],
+    "reason" : "약 5분 간격으로 두 번, content-service 댓글 쓰기 지연과 chat-service 인증 필터체인 지연이 초 단위로 동반 발생한 동일 지문이므로 상·하류를 함께 묶어 하나의 지연 장애로 조사한다.",
+    "evidence" : [ "Tempo 에러 검색 0건 · 지연 검색 7건 — 에러 없는 순수 지연 장애, '잠깐 버벅임' 증상과 일치", "INC-2: content-service POST /battles/{battleId}/items/{itemId}/comments 515,150ms, 트레이스 구간 00:39:41~00:48:16(=515s)과 정확히 일치하는 단일 장기 요청", "INC-4: chat-service security filterchain before 25,386ms / 17,613ms / 6,510ms, 00:47:44~00:48:10 — INC-2 종료 시각과 26초 이내로 겹침", "INC-6+INC-7: 00:53:34~00:53:59에 content-service 24,073ms와 chat-service filterchain 15,879ms/5,751ms가 8초 간격으로 동시 발생 — 1차와 동일한 지문의 재발", "INC-3: chat-service ERROR/WARN 4건(00:45~00:55)이 두 지연 클러스터를 모두 덮는 구간에 존재", "up / mongodb_up / kafka_brokers / websocket_active_users 이상 0건 — 파드·DB·브로커·접속자 급감은 배제되고 요청 경로 내부 지연만 남음" ],
+    "planParsed" : true,
+    "notes" : [ "창을 후보 [INC-2, INC-3, INC-4, INC-6, INC-7] 의 신호 시각에서 계산했다 (2026-08-06T00:37:41.076260Z ~ 2026-08-06T01:00:00Z)" ],
+    "promptSource" : ".\\prompts\\triage-prompt.md",
+    "analysis" : "## 1. 판단\n\n에러는 0건인데 지연만 7건 — \"에러 없이 느려지기만 한\" 전형적인 버벅임이고, 질문의 증상과 정확히 맞는다. 00:47:44~00:48:16과 00:53:34~00:53:59, 두 번의 클러스터에서 **content-service의 댓글 POST 지연과 chat-service의 security filterchain 지연이 초 단위로 겹쳐서** 같은 지문으로 반복된다. INC-2의 515,150ms는 트레이스 구간(00:39:41~00:48:16 = 8분35초) 전체와 일치하므로 장시간 매달린 단일 요청이며, 그 끝이 1차 클러스터와 붙는다.\n\n## 2. 계획\n\n```json\n{\n  \"incidentIds\": [\"INC-2\", \"INC-4\", \"INC-6\", \"INC-7\", \"INC-3\"],\n  \"services\": [\"content-service\", \"chat-service\"],\n  \"evidence\": [\n    \"Tempo 에러 검색 0건 · 지연 검색 7건 — 에러 없는 순수 지연 장애, '잠깐 버벅임' 증상과 일치\",\n    \"INC-2: content-service POST /battles/{battleId}/items/{itemId}/comments 515,150ms, 트레이스 구간 00:39:41~00:48:16(=515s)과 정확히 일치하는 단일 장기 요청\",\n    \"INC-4: chat-service security filterchain before 25,386ms / 17,613ms / 6,510ms, 00:47:44~00:48:10 — INC-2 종료 시각과 26초 이내로 겹침\",\n    \"INC-6+INC-7: 00:53:34~00:53:59에 content-service 24,073ms와 chat-service filterchain 15,879ms/5,751ms가 8초 간격으로 동시 발생 — 1차와 동일한 지문의 재발\",\n    \"INC-3: chat-service ERROR/WARN 4건(00:45~00:55)이 두 지연 클러스터를 모두 덮는 구간에 존재\",\n    \"up / mongodb_up / kafka_brokers / websocket_active_users 이상 0건 — 파드·DB·브로커·접속자 급감은 배제되고 요청 경로 내부 지연만 남음\"\n  ],\n  \"reason\": \"약 5분 간격으로 두 번, content-service 댓글 쓰기 지연과 chat-service 인증 필터체인 지연이 초 단위로 동반 발생한 동일 지문이므로 상·하류를 함께 묶어 하나의 지연 장애로 조사한다.\",\n  \"dismissed\": [\n    {\"incidentId\": \"INC-1\", \"why\": \"notification-processors 파티션 3의 lag가 0→25로 오르는 비동기 알림 경로 신호이고, 최대 25라는 절대량이 사용자 체감 버벅임을 만들 규모가 아니다.\"},\n    {\"incidentId\": \"INC-5\", \"why\": \"같은 lag가 25→1→0으로 자연 회복된 정상화 신호이며, 원인이 아니라 INC-1의 해소 구간이다.\"}\n  ]\n}\n```\n\n건너뜀: kafka lag 두 건 — 회복까지 확인됐고 동기 요청 경로가 아니다. 지연 클러스터 조사에서 컨슈머 스레드 고갈 정황이 나오면 그때 다시 붙일 것.",
+    "inputTokens" : 33131,
+    "outputTokens" : 1886,
+    "costUsd" : 0.18287350000000002,
+    "contextChars" : 3660,
+    "promptChars" : 1399,
+    "surveyMs" : 1944,
+    "llmMs" : 39016,
+    "surveyFailures" : [ "Tempo 에러 검색 '{ status = error }'이 이 창에서 0건이다. 트레이스가 생성되지 않는 장애(컨슈머 전멸·파드 부재)이거나 에러가 아닌 형태의 장애(200 성공 + 지연)일 수 있으니 이 사실 자체를 근거로 쓸 것." ],
+    "incidentCandidates" : [ "## INC-1  kafka  |  kafka_consumergroup_lag\n- 구간: 2026-08-06T00:36:05Z ~ 2026-08-06T00:46:05Z  (MIMIR · 집계 해상도만큼 흐림)\n- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 0 → 8\n- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 8 → 25\n- 같은 시각의 다른 후보: INC-2, INC-3  (인과 여부는 판단하지 않았다)\n", "## INC-2  content-service  |  http post /battles/{battleId}/items/{itemId}/comments\n- 구간: 2026-08-06T00:39:41.076260Z ~ 2026-08-06T00:48:16.226260Z  (TEMPO · 시각 정확)\n- content-service http post /battles/{battleId}/items/{itemId}/comments 515,150ms (slow 채널)\n- traceId: 6a73d7cd82e6e12dd5c7a7ca51858e6e\n- 같은 시각의 다른 후보: INC-1, INC-3, INC-4  (인과 여부는 판단하지 않았다)\n", "## INC-3  chat-service  |  ERROR/WARN\n- 구간: 2026-08-06T00:45:00Z ~ 2026-08-06T00:55:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 3건 (2026-08-06T00:45:00Z ~ 2026-08-06T00:50:00Z)\n- ERROR/WARN 1건 (2026-08-06T00:50:00Z ~ 2026-08-06T00:55:00Z)\n- 같은 시각의 다른 후보: INC-1, INC-2, INC-4, INC-5, INC-6, INC-7  (인과 여부는 판단하지 않았다)\n", "## INC-4  chat-service  |  security filterchain before\n- 구간: 2026-08-06T00:47:44.632550Z ~ 2026-08-06T00:48:10.018900Z  (TEMPO · 시각 정확)\n- chat-service security filterchain before 25,386ms (slow 채널)\n- chat-service security filterchain before 17,613ms (slow 채널)\n- chat-service security filterchain before 6,510ms (slow 채널)\n- traceId: 6a73d9b04dcd773a41a3a8263fde1b79, 6a73d9b830a513e3385f8985bbc2c359, 6a73d9c39aaf7193897c86174a60f421\n- 같은 시각의 다른 후보: INC-2, INC-3  (인과 여부는 판단하지 않았다)\n", "## INC-5  kafka  |  kafka_consumergroup_lag\n- 구간: 2026-08-06T00:51:05Z ~ 2026-08-06T01:01:05Z  (MIMIR · 집계 해상도만큼 흐림)\n- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 25 → 1\n- kafka_consumergroup_lag{consumergroup=notification-processors, partition=3, topic=user.notifications} 1 → 0\n- 같은 시각의 다른 후보: INC-3, INC-6, INC-7  (인과 여부는 판단하지 않았다)\n", "## INC-6  content-service  |  http post /battles/{battleId}/items/{itemId}/comments\n- 구간: 2026-08-06T00:53:34.957148Z ~ 2026-08-06T00:53:59.030148Z  (TEMPO · 시각 정확)\n- content-service http post /battles/{battleId}/items/{itemId}/comments 24,073ms (slow 채널)\n- traceId: 6a73db0e28f9ff3fc4cce81a89cfb39e\n- 같은 시각의 다른 후보: INC-3, INC-5, INC-7  (인과 여부는 판단하지 않았다)\n", "## INC-7  chat-service  |  security filterchain before\n- 구간: 2026-08-06T00:53:42.241455Z ~ 2026-08-06T00:53:58.120455Z  (TEMPO · 시각 정확)\n- chat-service security filterchain before 15,879ms (slow 채널)\n- chat-service security filterchain before 5,751ms (slow 채널)\n- traceId: 6a73db166e5322a7df383f8412a96c4d, 6a73db20d7504a562163749f221b664b\n- 같은 시각의 다른 후보: INC-3, INC-5, INC-6  (인과 여부는 판단하지 않았다)\n" ],
+    "chosenIncidentIds" : [ "INC-2", "INC-3", "INC-4", "INC-6", "INC-7" ],
+    "dismissedIncidentIds" : [ "INC-1 — notification-processors 파티션 3의 lag가 0→25로 오르는 비동기 알림 경로 신호이고, 최대 25라는 절대량이 사용자 체감 버벅임을 만들 규모가 아니다.", "INC-5 — 같은 lag가 25→1→0으로 자연 회복된 정상화 신호이며, 원인이 아니라 INC-1의 해소 구간이다." ],
+    "rawIncluded" : false
+  },
+  "evidence" : {
+    "investigatedTraceId" : "6a73d7cd82e6e12dd5c7a7ca51858e6e",
+    "rawPrefix" : "scan-1785976661",
+    "spanCount" : 82,
+    "topSpans" : [ {
+      "service" : "chat-service",
+      "name" : "secured request",
+      "durationMs" : 24911.495,
+      "startedAt" : "2026-08-06T00:47:45.107119Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "receive",
+      "durationMs" : 24008.411,
+      "startedAt" : "2026-08-06T00:53:35.022278Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "connection",
+      "durationMs" : 24007.333,
+      "startedAt" : "2026-08-06T00:53:35.023007Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "user-notification-service#process-notification",
+      "durationMs" : 23999.548,
+      "startedAt" : "2026-08-06T00:53:35.027183Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "receive",
+      "durationMs" : 20504.999,
+      "startedAt" : "2026-08-06T00:47:55.722081Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "connection",
+      "durationMs" : 17595.849,
+      "startedAt" : "2026-08-06T00:47:58.624549Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "secured request",
+      "durationMs" : 17589.949,
+      "startedAt" : "2026-08-06T00:47:52.429445Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "user-notification-service#process-notification",
+      "durationMs" : 17212.136,
+      "startedAt" : "2026-08-06T00:47:58.917952Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "secured request",
+      "durationMs" : 15877.585,
+      "startedAt" : "2026-08-06T00:53:42.243707Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "push-dispatcher#dispatch",
+      "durationMs" : 6708.246,
+      "startedAt" : "2026-08-06T00:48:09.418255Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "secured request",
+      "durationMs" : 6111.157,
+      "startedAt" : "2026-08-06T00:48:03.819092Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "secured request",
+      "durationMs" : 5750.589,
+      "startedAt" : "2026-08-06T00:53:52.282535Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "push-dispatcher#dispatch",
+      "durationMs" : 1181.445,
+      "startedAt" : "2026-08-06T00:53:57.843555Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "user-notification-web-socket-sender#send-notificat",
+      "durationMs" : 1104.063,
+      "startedAt" : "2026-08-06T00:48:07.422961Z"
+    }, {
+      "service" : "chat-service",
+      "name" : "security filterchain before",
+      "durationMs" : 398.745,
+      "startedAt" : "2026-08-06T00:48:03.420146Z"
+    } ],
+    "logLinesTotal" : 135,
+    "logSamples" : [ {
+      "at" : "2026-08-06T00:47:09.624127059Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:47:09.623+09:00\u001B[0;39m \u001B[33m WARN [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [           main] [                                                 ] \u001B[0;39m\u001B[36mJpaBaseConfiguration$JpaWebConfiguration\u001B[0;39m \u001B[2m:\u001B[0;39m spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning"
+    }, {
+      "at" : "2026-08-06T00:48:08.719080655Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:48:08.630+09:00\u001B[0;39m \u001B[33m WARN [traceId=6a73d9b04dcd773a41a3a8263fde1b79,spanId=36b2ebc37468686b,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-1] [6a73d9b04dcd773a41a3a8263fde1b79-36b2ebc37468686b] \u001B[0;39m\u001B[36mo.s.b.a.health.HealthEndpointSupport    \u001B[0;39m \u001B[2m:\u001B[0;39m Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 15709ms to respond"
+    }, {
+      "at" : "2026-08-06T00:48:08.719080655Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:48:08.630+09:00\u001B[0;39m \u001B[33m WARN [traceId=6a73d9b04dcd773a41a3a8263fde1b79,spanId=36b2ebc37468686b,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-1] [6a73d9b04dcd773a41a3a8263fde1b79-36b2ebc37468686b] \u001B[0;39m\u001B[36mo.s.b.a.health.HealthEndpointSupport    \u001B[0;39m \u001B[2m:\u001B[0;39m Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 15709ms to respond"
+    }, {
+      "at" : "2026-08-06T00:48:08.721481543Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:48:08.719+09:00\u001B[0;39m \u001B[33m WARN [traceId=6a73d9b830a513e3385f8985bbc2c359,spanId=bdc3b5811970a66c,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-2] [6a73d9b830a513e3385f8985bbc2c359-bdc3b5811970a66c] \u001B[0;39m\u001B[36mo.s.b.a.health.HealthEndpointSupport    \u001B[0;39m \u001B[2m:\u001B[0;39m Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 15503ms to respond"
+    }, {
+      "at" : "2026-08-06T00:48:08.721481543Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:48:08.719+09:00\u001B[0;39m \u001B[33m WARN [traceId=6a73d9b830a513e3385f8985bbc2c359,spanId=bdc3b5811970a66c,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-2] [6a73d9b830a513e3385f8985bbc2c359-bdc3b5811970a66c] \u001B[0;39m\u001B[36mo.s.b.a.health.HealthEndpointSupport    \u001B[0;39m \u001B[2m:\u001B[0;39m Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (redis) took 15503ms to respond"
+    }, {
+      "at" : "2026-08-06T00:53:34.115753955Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:34.106+09:00\u001B[0;39m \u001B[32m INFO [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [31.46.124:27017] [                                                 ] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Exception in monitor thread while connecting to server 172.31.46.124:27017"
+    }, {
+      "at" : "2026-08-06T00:53:34.115783511Z",
+      "service" : "chat-service",
+      "line" : "com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017. The full response is {\"ok\": 0.0, \"errmsg\": \"interrupted at shutdown\", \"code\": 11600, \"codeName\": \"InterruptedAtShutdown\"}"
+    }, {
+      "at" : "2026-08-06T00:53:34.115786802Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.ProtocolHelper.createSpecialException(ProtocolHelper.java:264) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.115806014Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.ProtocolHelper.getCommandFailureException(ProtocolHelper.java:206) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.115811614Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.InternalStreamConnection.receiveCommandMessageResponse(InternalStreamConnection.java:520) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.115814804Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.InternalStreamConnection.receive(InternalStreamConnection.java:469) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.115818189Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.DefaultServerMonitor$ServerMonitor.lookupServerDescription(DefaultServerMonitor.java:249) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.115821087Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.DefaultServerMonitor$ServerMonitor.run(DefaultServerMonitor.java:176) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.116350422Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:34.106+09:00\u001B[0;39m \u001B[32m INFO [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [31.46.124:27017] [                                                 ] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Exception in monitor thread while connecting to server 172.31.46.124:27017"
+    }, {
+      "at" : "2026-08-06T00:53:34.116364364Z",
+      "service" : "chat-service",
+      "line" : "com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017. The full response is {\"ok\": 0.0, \"errmsg\": \"interrupted at shutdown\", \"code\": 11600, \"codeName\": \"InterruptedAtShutdown\"}"
+    }, {
+      "at" : "2026-08-06T00:53:34.116367792Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.ProtocolHelper.createSpecialException(ProtocolHelper.java:264) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.116370633Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.ProtocolHelper.getCommandFailureException(ProtocolHelper.java:206) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.116373767Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.InternalStreamConnection.receiveCommandMessageResponse(InternalStreamConnection.java:520) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.116376414Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.InternalStreamConnection.receive(InternalStreamConnection.java:469) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.116379174Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.DefaultServerMonitor$ServerMonitor.lookupServerDescription(DefaultServerMonitor.java:249) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:34.116381936Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.DefaultServerMonitor$ServerMonitor.run(DefaultServerMonitor.java:176) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.038136733Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:35.037+09:00\u001B[0;39m \u001B[32m INFO [traceId=6a73db0e28f9ff3fc4cce81a89cfb39e,spanId=dd1cc7ec2d7c08ad,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [ntainer#5-1-C-1] [6a73db0e28f9ff3fc4cce81a89cfb39e-dd1cc7ec2d7c08ad] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Waiting for server to become available for operation with ID 383. Remaining time: 29994 ms. Selector: WritableServerSelector, topology description: {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017. The full response is {\"ok\": 0.0, \"errmsg\": \"interrupted at shutdown\", \"code\": 11600, \"codeName\": \"InterruptedAtShutdown\"}}}]."
+    }, {
+      "at" : "2026-08-06T00:53:35.038136733Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:35.037+09:00\u001B[0;39m \u001B[32m INFO [traceId=6a73db0e28f9ff3fc4cce81a89cfb39e,spanId=dd1cc7ec2d7c08ad,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [ntainer#5-1-C-1] [6a73db0e28f9ff3fc4cce81a89cfb39e-dd1cc7ec2d7c08ad] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Waiting for server to become available for operation with ID 383. Remaining time: 29994 ms. Selector: WritableServerSelector, topology description: {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017. The full response is {\"ok\": 0.0, \"errmsg\": \"interrupted at shutdown\", \"code\": 11600, \"codeName\": \"InterruptedAtShutdown\"}}}]."
+    }, {
+      "at" : "2026-08-06T00:53:35.118559762Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:35.117+09:00\u001B[0;39m \u001B[32m INFO [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [31.46.124:27017] [                                                 ] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Exception in monitor thread while connecting to server 172.31.46.124:27017"
+    }, {
+      "at" : "2026-08-06T00:53:35.118590979Z",
+      "service" : "chat-service",
+      "line" : "com.mongodb.MongoSocketOpenException: Exception opening socket"
+    }, {
+      "at" : "2026-08-06T00:53:35.118594596Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.netty.NettyStream$OpenChannelFutureListener.lambda$operationComplete$1(NettyStream.java:534) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118597961Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.Locks.lambda$withLock$0(Locks.java:34) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118601296Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.Locks.checkedWithLock(Locks.java:61) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118604807Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.Locks.withLock(Locks.java:55) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118607441Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.Locks.withLock(Locks.java:33) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118610575Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.netty.NettyStream$OpenChannelFutureListener.operationComplete(NettyStream.java:521) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118613501Z",
+      "service" : "chat-service",
+      "line" : "\tat com.mongodb.internal.connection.netty.NettyStream$OpenChannelFutureListener.operationComplete(NettyStream.java:504) ~[mongodb-driver-core-5.5.1.jar!/:na]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118620515Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.notifyListener0(DefaultPromise.java:603) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118623728Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.notifyListeners0(DefaultPromise.java:596) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118643793Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.notifyListenersNow(DefaultPromise.java:572) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118650052Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.notifyListeners(DefaultPromise.java:505) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118653248Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.setValue0(DefaultPromise.java:649) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118655913Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.setFailure0(DefaultPromise.java:642) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118658225Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.DefaultPromise.tryFailure(DefaultPromise.java:131) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118661071Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.fulfillConnectPromise(AbstractNioChannel.java:326) ~[netty-transport-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118663533Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:342) ~[netty-transport-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118665996Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[netty-transport-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118668363Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[netty-transport-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118670802Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[netty-transport-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118673485Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[netty-transport-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118694956Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118697898Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118700637Z",
+      "service" : "chat-service",
+      "line" : "\tat io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[netty-common-4.1.122.Final.jar!/:4.1.122.Final]"
+    }, {
+      "at" : "2026-08-06T00:53:35.118706207Z",
+      "service" : "chat-service",
+      "line" : "Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /172.31.46.124:27017"
+    }, {
+      "at" : "2026-08-06T00:53:35.118708856Z",
+      "service" : "chat-service",
+      "line" : "Caused by: java.net.ConnectException: Connection refused"
+    }, {
+      "at" : "2026-08-06T00:53:42.251529860Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:42.251+09:00\u001B[0;39m \u001B[32m INFO [traceId=6a73db166e5322a7df383f8412a96c4d,spanId=735e828dd0ed8557,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-2] [6a73db166e5322a7df383f8412a96c4d-735e828dd0ed8557] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Waiting for server to become available for operation with ID 401. Remaining time: 29999 ms. Selector: ReadPreferenceServerSelector{readPreference=primary}, topology description: {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017. The full response is {\"ok\": 0.0, \"errmsg\": \"interrupted at shutdown\", \"code\": 11600, \"codeName\": \"InterruptedAtShutdown\"}}}]."
+    }, {
+      "at" : "2026-08-06T00:53:42.251529860Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:42.251+09:00\u001B[0;39m \u001B[32m INFO [traceId=6a73db166e5322a7df383f8412a96c4d,spanId=735e828dd0ed8557,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-2] [6a73db166e5322a7df383f8412a96c4d-735e828dd0ed8557] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Waiting for server to become available for operation with ID 401. Remaining time: 29999 ms. Selector: ReadPreferenceServerSelector{readPreference=primary}, topology description: {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoNodeIsRecoveringException: Command failed with error 11600 (InterruptedAtShutdown): 'interrupted at shutdown' on server 172.31.46.124:27017. The full response is {\"ok\": 0.0, \"errmsg\": \"interrupted at shutdown\", \"code\": 11600, \"codeName\": \"InterruptedAtShutdown\"}}}]."
+    }, {
+      "at" : "2026-08-06T00:53:42.256550022Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:42.255+09:00\u001B[0;39m \u001B[32m INFO [traceId=NONE,spanId=NONE,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [31.46.124:27017] [                                                 ] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Exception in monitor thread while connecting to server 172.31.46.124:27017"
+    }, {
+      "at" : "2026-08-06T00:53:42.256594806Z",
+      "service" : "chat-service",
+      "line" : "com.mongodb.MongoSocketOpenException: Exception opening socket"
+    }, {
+      "at" : "2026-08-06T00:53:42.256694209Z",
+      "service" : "chat-service",
+      "line" : "Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /172.31.46.124:27017"
+    }, {
+      "at" : "2026-08-06T00:53:42.256697133Z",
+      "service" : "chat-service",
+      "line" : "Caused by: java.net.ConnectException: Connection refused"
+    }, {
+      "at" : "2026-08-06T00:53:52.291757163Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:52.291+09:00\u001B[0;39m \u001B[32m INFO [traceId=6a73db20d7504a562163749f221b664b,spanId=a9067f727dfe0126,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-5] [6a73db20d7504a562163749f221b664b-a9067f727dfe0126] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Waiting for server to become available for operation with ID 444. Remaining time: 29999 ms. Selector: ReadPreferenceServerSelector{readPreference=primary}, topology description: {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoSocketOpenException: Exception opening socket}, caused by {io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /172.31.46.124:27017}, caused by {java.net.ConnectException: Connection refused}}]."
+    }, {
+      "at" : "2026-08-06T00:53:52.291757163Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:52.291+09:00\u001B[0;39m \u001B[32m INFO [traceId=6a73db20d7504a562163749f221b664b,spanId=a9067f727dfe0126,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-5] [6a73db20d7504a562163749f221b664b-a9067f727dfe0126] \u001B[0;39m\u001B[36morg.mongodb.driver.cluster              \u001B[0;39m \u001B[2m:\u001B[0;39m Waiting for server to become available for operation with ID 444. Remaining time: 29999 ms. Selector: ReadPreferenceServerSelector{readPreference=primary}, topology description: {type=UNKNOWN, servers=[{address=172.31.46.124:27017, type=UNKNOWN, state=CONNECTING, exception={com.mongodb.MongoSocketOpenException: Exception opening socket}, caused by {io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /172.31.46.124:27017}, caused by {java.net.ConnectException: Connection refused}}]."
+    }, {
+      "at" : "2026-08-06T00:53:58.024916087Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:58.024+09:00\u001B[0;39m \u001B[33m WARN [traceId=6a73db166e5322a7df383f8412a96c4d,spanId=735e828dd0ed8557,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-2] [6a73db166e5322a7df383f8412a96c4d-735e828dd0ed8557] \u001B[0;39m\u001B[36mo.s.b.a.health.HealthEndpointSupport    \u001B[0;39m \u001B[2m:\u001B[0;39m Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (mongo) took 15774ms to respond"
+    }, {
+      "at" : "2026-08-06T00:53:58.024916087Z",
+      "service" : "chat-service",
+      "line" : "\u001B[2m2026-08-06T09:53:58.024+09:00\u001B[0;39m \u001B[33m WARN [traceId=6a73db166e5322a7df383f8412a96c4d,spanId=735e828dd0ed8557,userId=NONE]\u001B[0;39m \u001B[35m7\u001B[0;39m \u001B[2m--- [chat-service] [nio-8090-exec-2] [6a73db166e5322a7df383f8412a96c4d-735e828dd0ed8557] \u001B[0;39m\u001B[36mo.s.b.a.health.HealthEndpointSupport    \u001B[0;39m \u001B[2m:\u001B[0;39m Health contributor org.springframework.boot.actuate.autoconfigure.health.HealthEndpointConfiguration$AdaptedReactiveHealthContributors$1 (mongo) took 15774ms to respond"
+    } ],
+    "metrics" : [ {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, pool=HikariPool-1, service=auth-service}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.54:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-dnbs9, pool=HikariPool-1}",
+      "points" : 11,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:40:11Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:40:11Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl, pool=HikariPool-1}",
+      "points" : 44,
+      "firstAt" : "2026-08-06T00:49:11Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:49:11Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n, pool=HikariPool-1}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9, pool=HikariPool-1}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, pool=HikariPool-1, service=auth-service}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.54:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-dnbs9, pool=HikariPool-1}",
+      "points" : 11,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:40:11Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:40:11Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl, pool=HikariPool-1}",
+      "points" : 44,
+      "firstAt" : "2026-08-06T00:49:11Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:49:11Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n, pool=HikariPool-1}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9, pool=HikariPool-1}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.1.54:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-dnbs9}",
+      "points" : 23,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:43:11Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:43:11Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, service=auth-service}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 2.500000000000002E-5,
+      "last" : 2.500000000000002E-5,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:56:26Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=auth-service, cause=Metadata GC Threshold, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p, service=auth-service}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.54:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-dnbs9}",
+      "points" : 23,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:43:11Z",
+      "min" : 6.029772222222775E-5,
+      "max" : 2.0000000000000017E-4,
+      "last" : 6.029772222222775E-5,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 40,
+      "firstAt" : "2026-08-06T00:50:11Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 3.2499999999999933E-4,
+      "max" : 0.0010333333333333334,
+      "last" : 3.2499999999999933E-4,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 2.083333333333289E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:38:26Z", "2026-08-06T00:42:41Z ~ 2026-08-06T00:54:26Z", "2026-08-06T00:58:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 2.500000000000002E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:47:41Z", "2026-08-06T00:51:56Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-40-241, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-cph5l, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-45-39, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-9kvqt, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.51:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-lzp4p}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.54:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-dnbs9}",
+      "points" : 11,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:40:11Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 44,
+      "firstAt" : "2026-08-06T00:49:11Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=10.42.1.248:8080, job=integrations/kubernetes/kube-state-metrics, k8s_cluster_name=yogurtte-k3s-prod, source=kubernetes}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "mongodb_up",
+      "series" : "{__name__=mongodb_up, cluster=yogurtte-k3s-prod, instance=infra-server, job=mongodb, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_brokers",
+      "series" : "{__name__=kafka_brokers, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.fcm-tokens}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.fcm-tokens}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.fcm-tokens}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.notification-settings}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.notification-settings}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.notification-settings}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=chat.messages}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=chat.messages}",
+      "points" : 90,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:59:56Z" ]
+    }, {
+      "query" : "websocket_active_users",
+      "series" : "{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.54:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-dnbs9}",
+      "points" : 11,
+      "firstAt" : "2026-08-06T00:37:41Z",
+      "lastAt" : "2026-08-06T00:40:11Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:37:41Z ~ 2026-08-06T00:40:11Z" ]
+    }, {
+      "query" : "websocket_active_users",
+      "series" : "{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 44,
+      "firstAt" : "2026-08-06T00:49:11Z",
+      "lastAt" : "2026-08-06T00:59:56Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-06T00:49:11Z ~ 2026-08-06T00:59:56Z" ]
+    } ]
+  },
+  "serviceGraph" : {
+    "edges" : [ {
+      "kind" : "db",
+      "source" : "chat-service",
+      "target" : "mongodb",
+      "detail" : "",
+      "calls" : 14,
+      "maxMs" : 110.931,
+      "operations" : [ "insert", "find" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "db",
+      "source" : "chat-service",
+      "target" : "redis",
+      "detail" : "",
+      "calls" : 4,
+      "maxMs" : 96.618,
+      "operations" : [ "KEYS" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "db",
+      "source" : "content-service",
+      "target" : "redis",
+      "detail" : "",
+      "calls" : 3,
+      "maxMs" : 0.807,
+      "operations" : [ "GET", "INFO" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "jdbc",
+      "source" : "chat-service",
+      "target" : "mysql/content",
+      "detail" : "HikariPool-1",
+      "calls" : 12,
+      "maxMs" : 24007.333,
+      "operations" : [ ],
+      "errors" : [ ],
+      "events" : [ "acquired", "commit" ],
+      "attributes" : { }
+    }, {
+      "kind" : "jdbc",
+      "source" : "content-service",
+      "target" : "mysql/content",
+      "detail" : "HikariPool-1",
+      "calls" : 16,
+      "maxMs" : 68.426,
+      "operations" : [ ],
+      "errors" : [ ],
+      "events" : [ "acquired", "commit" ],
+      "attributes" : { }
+    }, {
+      "kind" : "messaging",
+      "source" : "content-service",
+      "target" : "kafka/user.notifications",
+      "detail" : "",
+      "calls" : 2,
+      "maxMs" : 15.774,
+      "operations" : [ "publish" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    }, {
+      "kind" : "messaging",
+      "source" : "kafka/user.notifications",
+      "target" : "chat-service",
+      "detail" : "",
+      "calls" : 2,
+      "maxMs" : 24008.411,
+      "operations" : [ "receive" ],
+      "errors" : [ ],
+      "events" : [ ],
+      "attributes" : { }
+    } ],
+    "empty" : false
+  },
+  "collectionFailures" : [ "Metric 'sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))' returned no series in this window; skipped." ]
+}

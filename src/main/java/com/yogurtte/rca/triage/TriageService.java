@@ -74,9 +74,20 @@ public class TriageService {
             Duration lookback = SurveyProperties.parse(surveyProperties.step(), Duration.ofMinutes(5));
             List<Signal> signals = SignalExtractor.extract(survey, lookback,
                     surveyProperties.zeroIsAbnormalSet());
-            List<Incident> incidents = Incident.cluster(signals, surveyProperties.clusterGapDuration());
-            log.info("signals={} incidents={} {}", signals.size(), incidents.size(),
+            List<Incident> clustered = Incident.cluster(signals, surveyProperties.clusterGapDuration());
+            // B-43: 상한은 여기 — 묶은 뒤다. 검색 단계에서 자르면 같은 지문이 슬롯을 독차지해
+            // 다른 종류의 후보가 밀린다(Tempo는 최신순으로 준다).
+            List<Incident> incidents = clustered.size() <= surveyProperties.incidentLimit()
+                    ? clustered
+                    : clustered.subList(0, surveyProperties.incidentLimit());
+            log.info("signals={} incidents={}{} {}", signals.size(), incidents.size(),
+                    clustered.size() > incidents.size() ? "(of " + clustered.size() + ", capped)" : "",
                     Incident.idsOf(incidents));
+            if (clustered.size() > incidents.size()) {
+                survey.failures().add("장애 후보가 " + clustered.size() + "건이라 상한 "
+                        + surveyProperties.incidentLimit() + "건으로 잘랐다 — 창에 신호가 많다는 뜻이니 "
+                        + "고른 후보 밖에도 장애가 있을 수 있다.");
+            }
 
             boolean includeRaw = surveyProperties.includeRaw();
             String context = surveyAssembler.assemble(survey, question, incidents, includeRaw);

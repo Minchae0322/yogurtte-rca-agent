@@ -303,6 +303,7 @@ api → service → collector(client) + analyzer → llm → notify → report
 | **대외용 종합 보고서** | [scoring/report.md](docs/scoring/report.md) - 장애 상황 + 채점 항목 + 결과 |
 | **에이전트가 어떻게 도는가 (그림·단계 A~Z·토큰 해부)** | [docs/workflow.md](docs/workflow.md) |
 | **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) - 토큰·비용 측정 기준 |
+| **B-17이 뭐였더라 (ID 색인)** | **[docs/changes.md](docs/changes.md)** - ID → 한 줄 → 상태 → 원문 위치. 새 ID를 만들면 여기 한 줄을 같이 넣는다 |
 | **다음 회차에 뭘 고칠 건가** | 점수 [docs/round-4/](docs/round-4/README.md) · **토큰 [docs/round-5/](docs/round-5/README.md)** - 변경 대기열 (회차별 `round-N/`) |
 | 전체 계획과 진입 게이트 | [docs/strategy.md](docs/strategy.md) |
 | 관측 파이프라인 구성·한계 | [docs/monitoring.md](docs/monitoring.md) |
