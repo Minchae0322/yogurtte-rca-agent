@@ -553,6 +553,42 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-08-07 (대외용 포트폴리오 docx + 🔴 관측 구조 실측 · 다이어그램 v15)**:
+
+  **① 포트폴리오** — [RCA-Agent-포트폴리오-v2.docx](RCA-Agent-포트폴리오-v2.docx).
+  회차 1~5를 **6쪽 6장**으로 압축했다(본문 10.5pt · 표 7 · 그림 2). 원칙 둘을 지켰다 —
+  **모든 수치를 저장소 기록과 1:1 대조**했고, **Top-1 적중률·Before/After 총점 비교를 넣지 않았다**
+  (자가 바뀌었고 정상 문항이 0회다). 절감치에는 *"저장 원본 전수 기준 · 실행 컨텍스트 귀속 미분리 ·
+  A/B 미실행"* 을 본문에 명시. 소스는 [포트폴리오-src/](포트폴리오-src/)
+  (`node build.js`로 재생성 · `html-to-docx`).
+
+  **② 🔴 관측 구조를 처음으로 실측했다** — 그동안 문서가 추정으로 적혀 있었다.
+  Mimir `kube_pod_info`·`kube_node_role` + 개발서버 `kubectl`로 확인:
+
+  | 확인 | 결과 |
+  |---|---|
+  | **Alloy 위치** | K3s 클러스터 안 `monitoring` ns. **하나가 아니라 넷** — `alloy-metrics-0`(StatefulSet) · `alloy-logs`(DaemonSet 2노드) · `alloy-receiver`(DaemonSet · **45-39 노드 핀**) · `alloy-operator` |
+  | **트레이스 경로** | 앱 → `alloy-receiver:9411`(Zipkin) → OTel Collector 파이프라인 → **OTLP** → Grafana Cloud Tempo. **앱이 직접 보내지 않는다** |
+  | 엔드포인트 | `application.yml` 기본값 `tempo.monitoring:9411`은 **안 쓰인다** — 배포 시 `TEMPO_ZIPKIN_ENDPOINT`로 덮인다 |
+  | 노드 | 4개 (worker 2 · control-plane 1 · edge 1). `alloy-logs`·`node-exporter`는 **`monitoring=enabled` 라벨 2노드에만** — 의도된 것 |
+  | RDS 메트릭 | **Mimir 메트릭 이름 465개 중 `aws_rds_*` 0건.** CloudWatch 미연결 |
+
+  🔴 **`ADR-001`의 "OTel Agent 안 씀"과 혼동 금지** — 그건 **앱의 javaagent**이고,
+  Alloy 안의 `otelcol.*`은 **수집 계층**이다. 계측은 Brave, 수집·전달은 OTel Collector.
+  포트폴리오에 이 한 줄이 필요하다.
+
+  🔴 **리소스 속성 일부를 Alloy가 만들고 지운다** — `k8sattributes`가 `k8s.deployment.name` 등을
+  붙이고, `transform`이 `process.*`·`host.ip`·`k8s.pod.uid` 등을 **전송 전에 삭제**한다.
+  `service.version` 부재(애초에 안 만듦)와 **원인이 다르다.**
+
+  **③ 다이어그램** — [monitoring_v15.drawio](monitoring_v15.drawio).
+  구 `monitoring.md`·`monitoring_clean.drawio` 폐기. Alloy를 클러스터 안으로,
+  RCA-Agent·LLM 경로 추가, **CloudWatch 선은 회색 `(미구현)`** 으로 표기(실측 0건이므로).
+
+  **다음** — CloudWatch → `alloy-metrics.extraConfig`. `forward_to` 대상은
+  `prometheus.remote_write.grafana_cloud_metrics.receiver`(설정 실측 확인).
+  **선행: `prometheus.relabel "infra_filter"` 규칙 확인** — 화이트리스트면 `aws_rds_*`가 조용히 버려진다.
+
 - **2026-08-06 (회차 5 IN-2 — **98 / 100 (판정 1건)** · 🔴 **창에 주입이 둘인데 서로의 무고함까지 증명했다** ·
   [in-2/round-5.md](in-2/round-5.md))**:
   주입 Kafka 브로커 다운 **정확히 3분**(`up{job="kafka"}` 0 구간 **04:47:20~04:50:20Z**, 채점자 실측
