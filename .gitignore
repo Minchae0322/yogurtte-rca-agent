@@ -19,3 +19,4 @@ gradle.properties
 # write-flow 첨부 이미지 (README만 추적)
 sweep-assets/*
 !sweep-assets/README.md
+node_modules/
