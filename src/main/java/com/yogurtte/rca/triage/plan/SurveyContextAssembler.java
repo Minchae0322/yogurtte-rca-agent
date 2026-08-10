@@ -21,7 +21,9 @@ public class SurveyContextAssembler {
     }
 
     /**
-     * @param includeRaw 스윕 원본 JSON 절을 실을지. 대조군 스위치이며 기본은 실는 쪽이다 —
+     * @param includeRaw 스윕 원본 JSON 절을 실을지. 대조군 스위치이며 <b>기본은 빼는 쪽</b>이다
+     *                   (2026-08-04 기본화) — 원본이 탐색 컨텍스트의 약 94%(38,445B 중 36KB)를
+     *                   먹는데 산출은 후보 번호 하나였다. 끈 뒤 45,991자 → 7,697자(-83%) 실측.
      *                   {@code rca.survey.include-raw} 참조.
      */
     public String assemble(SurveyResult survey, String question,

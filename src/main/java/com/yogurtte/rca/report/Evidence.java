@@ -42,6 +42,12 @@ public record Evidence(
      * @param trusted 값을 믿을 수 있는지. Tempo {@code /api/search}가 {@code durationMs} 33일짜리
      *                행이나 시작 시각 0인 행을 그대로 내려준 사례가 있다(CH-2 실측). 후보를 여러 건
      *                모아 정렬하면 <b>그 행이 항상 1위</b>가 되므로 표기해 두고 정렬에서 뺀다.
+     * @param serviceStats 트레이스가 지나간 <b>서비스 전부</b>와 서비스별 span 수 — 이미 렌더된
+     *                문자열이다 (예: {@code "chat-service 14 (err 1)"}). <b>루트만으로는 상류가
+     *                안 보인다</b>: {@code content → kafka → chat} 트레이스도 검색 목록에는
+     *                루트 하나만 뜨고, 탐색 단계는 span 원문을 받지 않아 되짚을 방법이 없다.
+     *                Tempo {@code /api/search} 응답의 {@code serviceStats}가 이 값을 이미 주고
+     *                있었고 파싱만 안 하고 있었다 (저장 응답 645건 중 52건이 2개 이상).
      */
     public record TraceHit(
             String traceId,
@@ -50,13 +56,25 @@ public record Evidence(
             long durationMs,
             String channel,
             Instant startedAt,
-            boolean trusted) {
+            boolean trusted,
+            List<String> serviceStats) {
 
         public static final String CHANNEL_ERROR = "error";
         public static final String CHANNEL_SLOW = "slow";
 
         public TraceHit {
             channel = (channel == null || channel.isBlank()) ? CHANNEL_ERROR : channel;
+            serviceStats = serviceStats == null ? List.of() : List.copyOf(serviceStats);
+        }
+
+        public TraceHit(String traceId, String rootServiceName, String rootTraceName, long durationMs,
+                        String channel, Instant startedAt, boolean trusted) {
+            this(traceId, rootServiceName, rootTraceName, durationMs, channel, startedAt, trusted, List.of());
+        }
+
+        /** 서비스가 둘 이상일 때만 쓸 값. 하나뿐이면 루트 이름이 이미 말하고 있다. */
+        public String crossServiceText() {
+            return serviceStats.size() < 2 ? "" : String.join(" · ", serviceStats);
         }
     }
 

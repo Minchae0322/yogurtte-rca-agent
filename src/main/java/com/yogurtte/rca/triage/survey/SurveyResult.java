@@ -32,9 +32,18 @@ public record SurveyResult(
         String traceSearchJson,
         String slowTraceSearchJson,
         String logRatesJson,
+        String logSignatureRatesJson,
         Map<String, String> metricsJson,
         List<String> failures,
         Map<String, Long> stepMillis) {
+
+    /** 지문 쿼리를 안 켠 회차와 테스트가 쓰는 형태. */
+    public SurveyResult(TimeWindow window, String timeExpression, String traceSearchJson,
+                        String slowTraceSearchJson, String logRatesJson,
+                        Map<String, String> metricsJson, List<String> failures, Map<String, Long> stepMillis) {
+        this(window, timeExpression, traceSearchJson, slowTraceSearchJson, logRatesJson, null,
+                metricsJson, failures, stepMillis);
+    }
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -111,7 +120,28 @@ public record SurveyResult(
                 durationMs,
                 channel,
                 startedAt,
-                startedAt != null && durationSane);
+                startedAt != null && durationSane,
+                serviceStatsOf(node));
+    }
+
+    /**
+     * {@code serviceStats: {"chat-service": {"spanCount":14, "errorCount":1}}} → 렌더된 줄 목록.
+     *
+     * <p><b>errorCount가 0이면 적지 않는다</b> — 어느 서비스에서 에러가 났는지가 신호이고,
+     * 0을 다 적으면 그 하나가 묻힌다. Tempo가 주는 순서를 그대로 둔다.
+     */
+    private static List<String> serviceStatsOf(JsonNode node) {
+        JsonNode stats = node.path("serviceStats");
+        if (!stats.isObject()) {
+            return List.of();
+        }
+        List<String> rendered = new java.util.ArrayList<>();
+        stats.properties().forEach(entry -> {
+            int spans = entry.getValue().path("spanCount").asInt(0);
+            int errors = entry.getValue().path("errorCount").asInt(0);
+            rendered.add(entry.getKey() + " " + spans + (errors > 0 ? " (err " + errors + ")" : ""));
+        });
+        return List.copyOf(rendered);
     }
 
     private static Long parseLong(String raw) {

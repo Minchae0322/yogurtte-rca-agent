@@ -20,3 +20,6 @@ gradle.properties
 sweep-assets/*
 !sweep-assets/README.md
 node_modules/
+
+# 실제 토큰이 들어간 백업본 — .env와 같이 막는다
+.env.bak-*

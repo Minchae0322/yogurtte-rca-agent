@@ -61,9 +61,15 @@ public final class SignalExtractor {
      *                       36개가 창 전체 · 컨텍스트 363,268자 · 정답 트레이스가 수집 상한에 밀림).
      */
     public static List<Signal> extract(SurveyResult survey, Duration lookback, Set<String> zeroIsAbnormal) {
-        return Stream.of(
-                        fromTraces(survey),
+        // 두 로그 곡선을 <b>함께</b> 싣는다. 대체가 아니다 —
+        //   총 건수 곡선  : 규모. WARN 등 예외가 안 딸린 줄까지 전부 센다
+        //   예외 클래스 곡선: 성격. 예외 클래스 줄만 세므로 스택 30줄이 30건이 되지 않는다
+        // 한쪽만 쓰면 잃는 것이 있다. 총 건수만 쓰면 무엇이 났는지 모르고(회차 1~6 상태),
+        // 예외만 쓰면 예외 없는 ERROR/WARN이 통째로 사라진다(08-05 창 실측: 78건 중 42건).
+        // 지문이 다르므로 군집 키가 갈려 서로 섞이지 않는다.
+        return Stream.of(fromTraces(survey),
                         fromLogRates(survey.logRatesJson(), lookback),
+                        fromLogRates(survey.logSignatureRatesJson(), lookback, true),
                         fromMetrics(survey.metricsJson(), zeroIsAbnormal))
                 .flatMap(List::stream)
                 .toList();
@@ -78,14 +84,26 @@ public final class SignalExtractor {
                         hit.startedAt().plusMillis(Math.max(0, hit.durationMs())),
                         Channel.TEMPO, Precision.EXACT,
                         hit.rootServiceName(), hit.rootTraceName(),
-                        "%s %s %,dms (%s 채널)".formatted(hit.rootServiceName(), hit.rootTraceName(),
-                                hit.durationMs(), hit.channel()),
+                        // 지나간 서비스는 설명에만 붙이고 지문(군집 키)에는 넣지 않는다 — 키에 넣으면
+                        // 같은 엔드포인트가 상류 조합마다 다른 후보로 흩어진다(Mimir 라벨과 같은 이유).
+                        "%s %s %,dms (%s 채널)%s".formatted(hit.rootServiceName(), hit.rootTraceName(),
+                                hit.durationMs(), hit.channel(),
+                                hit.crossServiceText().isEmpty() ? "" : "  [지나간 서비스: " + hit.crossServiceText() + "]"),
                         hit.traceId()))
                 .toList();
     }
 
     /** 구간은 {@code [ts - lookback, ts]} 다. {@code ts} 하나로 두면 최대 lookback만큼 어긋난다. */
     private static List<Signal> fromLogRates(String body, Duration lookback) {
+        return fromLogRates(body, lookback, false);
+    }
+
+    /**
+     * @param exceptionLines 이 곡선이 <b>예외 클래스 줄</b>을 센 것인가. 그러면 값의 뜻이
+     *                       "ERROR/WARN 줄 수"가 아니라 <b>"예외 발생 횟수"</b>다 — 두 곡선을
+     *                       함께 실으므로 문구로 구별하지 않으면 읽는 쪽이 더한다.
+     */
+    private static List<Signal> fromLogRates(String body, Duration lookback, boolean exceptionLines) {
         return parseMatrix(body).stream()
                 .flatMap(series -> series.valued().stream()
                         .filter(point -> point.value() != 0.0)
@@ -94,7 +112,7 @@ public final class SignalExtractor {
                                 Channel.LOKI, Precision.BUCKET,
                                 series.service(),
                                 series.logSignature(),
-                                "ERROR/WARN %s건 (%s ~ %s)".formatted(
+                                (exceptionLines ? "예외 %s건 (%s ~ %s)" : "ERROR/WARN %s건 (%s ~ %s)").formatted(
                                         point.raw(), point.at().minus(lookback), point.at()),
                                 "loki-rate")))
                 .toList();

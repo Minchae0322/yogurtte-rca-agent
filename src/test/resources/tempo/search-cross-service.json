@@ -1,0 +1,22 @@
+{
+ "traces": [
+  {
+   "traceID": "6a7037546e3404569c632181052c8516",
+   "rootServiceName": "content-service",
+   "rootTraceName": "http post /feeds/{feedId}/comments",
+   "startTimeUnixNano": "1785739092870260000",
+   "durationMs": 11643,
+   "serviceStats": {
+    "auth-service": {
+     "spanCount": 4
+    },
+    "chat-service": {
+     "spanCount": 14
+    },
+    "content-service": {
+     "spanCount": 28
+    }
+   }
+  }
+ ]
+}

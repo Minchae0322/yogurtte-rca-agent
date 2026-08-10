@@ -55,6 +55,7 @@ public class Surveyor {
 
         started = System.currentTimeMillis();
         String logRates = queryLogRates(correlationId, window, failures);
+        String logSignatureRates = queryLogSignatureRates(correlationId, window, failures);
         timings.put("lokiMs", System.currentTimeMillis() - started);
 
         started = System.currentTimeMillis();
@@ -66,7 +67,7 @@ public class Surveyor {
                 metrics.size(), surveyProperties.metricQueries().size(), failures.size(), timings);
 
         return new SurveyResult(window, timeExpression, traceSearch, slowTraceSearch,
-                logRates, metrics, failures, timings);
+                logRates, logSignatureRates, metrics, failures, timings);
     }
 
     /**
@@ -113,6 +114,25 @@ public class Surveyor {
                     window.start(), window.end(), surveyProperties.step());
         } catch (Exception e) {
             return failed("Loki 집계 쿼리", e, failures);
+        }
+    }
+
+    /**
+     * 같은 곡선을 <b>예외 클래스로 갈라서</b> 한 번 더 센다. 설정이 비어 있으면 아예 안 던진다.
+     *
+     * <p>기존 곡선({@link #queryLogRates})은 건드리지 않는다 — 총 건수는 그 쿼리가 계속 책임진다.
+     * 이 쿼리가 라인을 흘려도(정규식 불일치) 총 건수 신호가 남아 있어야 후보가 사라지지 않는다.
+     */
+    private String queryLogSignatureRates(String correlationId, TimeWindow window, List<String> failures) {
+        if (!surveyProperties.hasLogSignatureQuery()) {
+            return null;
+        }
+        try {
+            return lokiClient.queryRangeAggregate(correlationId, "survey-log-signature",
+                    surveyProperties.logSignatureQueryFor(collectProperties.appsPattern(null)),
+                    window.start(), window.end(), surveyProperties.step());
+        } catch (Exception e) {
+            return failed("Loki 지문 집계 쿼리", e, failures);
         }
     }
 

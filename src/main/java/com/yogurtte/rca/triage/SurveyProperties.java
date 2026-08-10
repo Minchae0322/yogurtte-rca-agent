@@ -55,6 +55,10 @@ public record SurveyProperties(
         int traceLimit,
         int incidentLimit,
         String logQuery,
+        // 로그 후보의 지문을 예외 클래스로 가르는 쿼리. 비워 두면 실행하지 않고 기존 동작 그대로다
+        // (지문 = ERROR/WARN 하나). 기본이 빈 값인 이유는 §3 — 회차를 baseline으로 고정한 뒤
+        // 한 번에 하나만 바꾼다. 켜기 전에 "이 신호가 실제로 도달하는가"를 먼저 재야 한다.
+        String logSignatureQuery,
         List<String> metricQueries,
         String clusterGap,
         String incidentPadExact,
@@ -164,6 +168,16 @@ public record SurveyProperties(
     /** 앱 셀렉터를 채운 실제 LogQL. */
     public String logQueryFor(String appsPattern) {
         return logQuery.contains("%s") ? logQuery.formatted(appsPattern) : logQuery;
+    }
+
+    /** 지문 쿼리를 쓰는가. 빈 값이면 기존 동작(지문 = {@code ERROR/WARN} 하나)이다. */
+    public boolean hasLogSignatureQuery() {
+        return logSignatureQuery != null && !logSignatureQuery.isBlank();
+    }
+
+    /** 앱 셀렉터를 채운 지문 LogQL. {@link #hasLogSignatureQuery()}가 참일 때만 부른다. */
+    public String logSignatureQueryFor(String appsPattern) {
+        return logSignatureQuery.contains("%s") ? logSignatureQuery.formatted(appsPattern) : logSignatureQuery;
     }
 
     private static String blankTo(String value, String fallback) {

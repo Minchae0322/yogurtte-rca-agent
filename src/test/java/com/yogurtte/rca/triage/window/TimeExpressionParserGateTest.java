@@ -27,7 +27,7 @@ class TimeExpressionParserGateTest {
     private static final Instant NOW = Instant.parse("2026-07-28T05:00:00Z");
 
     private final TimeExpressionParser parser = new TriageConfig().timeExpressionParser(
-            new SurveyProperties("Asia/Seoul", 24, 48, "5m", null, null, null, 20, 15, null, List.of(),
+            new SurveyProperties("Asia/Seoul", 24, 48, "5m", null, null, null, 20, 15, null, null, List.of(),
                     null, null, null, null, true));
 
     private record Pinned(String id, String question, int hours) {
