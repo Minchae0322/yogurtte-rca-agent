@@ -1,5 +1,8 @@
 # 후보(Incident)는 어떻게 만들어지는가 — 실제 응답으로 따라가기
 
+> **이 문서는 기록입니다.** 통합본이 SoT입니다 → [관측개선-통합.md](관측개선-통합.md)
+> (탐색 LLM 앞/뒤로 나눠 네 문서를 합쳤고, B-45 결론은 통합본이 최신입니다.)
+
 > **이 문서는 설명서다.** 왜 이 구조인지는 [incident-clustering.md](incident-clustering.md),
 > 규칙 원문은 [incident-clustering-spec.md](incident-clustering-spec.md)에 있다.
 > 여기서는 **저장된 실제 응답 하나가 후보 목록이 될 때까지**를 단계별로 따라간다.
