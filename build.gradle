@@ -57,5 +57,8 @@ tasks.named('test') {
     // 도구별 옵션도 그대로 넘긴다 (예: -Drca.tools.dump=true 로 접은 결과를 build/에 떨군다).
     systemProperty 'rca.tools.dump', System.getProperty('rca.tools.dump', 'false')
     systemProperty 'rca.tools.metric-summary', System.getProperty('rca.tools.metric-summary', 'false')
+    // 도구가 읽는 rca.* 는 전부 넘긴다 — 하나씩 나열하다 보니 새 도구를 만들 때마다
+    // "왜 프로퍼티가 안 넘어오지"로 시간을 버렸다(rca.curves · rca.live · rca.window).
+    System.properties.each { k, v -> if (k.toString().startsWith('rca.')) systemProperty k.toString(), v }
     testLogging { showStandardStreams = true }
 }

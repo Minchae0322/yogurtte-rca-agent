@@ -301,6 +301,7 @@ api → service → collector(client) + analyzer → llm → notify → report
 | 앵커 요건 (회차 1까지 · 보존) | [scoring/anchors-사용안함.md](docs/scoring/anchors-사용안함.md) |
 | **채점 항목을 어떻게 정했나** | [scoring/rubric-v3.md](docs/scoring/rubric-v3.md) - 탐색부터 원인 분석까지 |
 | **대외용 종합 보고서** | [scoring/report.md](docs/scoring/report.md) - 장애 상황 + 채점 항목 + 결과 |
+| **지금 무슨 쿼리가 나가나 · 상한이 몇인가** | **[docs/전체구조.md](docs/전체구조.md)** - 쿼리 전문 · 상한 전수 · 신호/후보 규칙 |
 | **에이전트가 어떻게 도는가 (그림·단계 A~Z·토큰 해부)** | [docs/workflow.md](docs/workflow.md) |
 | **어떤 숫자를 개선 근거로 쓰나** | [docs/measurement.md](docs/measurement.md) - 토큰·비용 측정 기준 |
 | **B-17이 뭐였더라 (ID 색인)** | **[docs/changes.md](docs/changes.md)** - ID → 한 줄 → 상태 → 원문 위치. 새 ID를 만들면 여기 한 줄을 같이 넣는다 |

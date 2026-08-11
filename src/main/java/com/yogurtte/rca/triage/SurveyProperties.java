@@ -13,7 +13,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param zone                 자연어 시간 표현을 해석할 표준시. "어젯밤"이 언제인지가 여기 달렸다.
  * @param defaultLookbackHours 질문에서 시간 표현을 못 찾았을 때의 기본 조회 폭.
  * @param maxWindowHours       상한. 이보다 넓게 요청되면 끝(end) 기준으로 잘라낸다.
- * @param step                 집계 해상도. 창이 넓으므로 분석 단계(15s)보다 성기게 잡는다.
+ * @param step                 집계 해상도. <b>쿼리의 range와 반드시 같이 움직여야 한다</b> —
+ *                             {@code step}만 줄이고 {@code [5m]}을 두면 값은 "직전 5분"인데
+ *                             {@code Signal.from}은 그만큼 안 당겨져 구간이 실제보다 좁게 표시된다.
+ *                             <p>5m → <b>1m</b> (2026-08-11). 5분 샘플이 3분짜리 Kafka 다운을
+ *                             15분 신호로 부풀려 조사 창이 25분이 됐다(IN-2 실측). 1분 해상도로
+ *                             다시 보니 로그도 04:48~04:51 <b>4분</b>에 몰려 있었다.
+ *                             <p>토큰과 무관하다 — {@code include-raw=false}라 스윕 응답은
+ *                             컨텍스트에 안 실린다(늘어나는 것은 조회 비용과 파싱뿐).
+ *                             실측 응답 43,041B → 99,096B · 신호 21 → 76 · 후보 8 → 12.
  * @param traceQuery           Tempo 검색 TraceQL. 기본은 에러 트레이스 전량.
  * @param slowTraceQuery       <b>지연 채널</b> TraceQL. {@code %s}에 임계값이 들어간다.
  *                             에러 쿼리와 <b>따로 던져 후보를 병합</b>한다 — 단일 쿼리
@@ -55,9 +63,8 @@ public record SurveyProperties(
         int traceLimit,
         int incidentLimit,
         String logQuery,
-        // 로그 후보의 지문을 예외 클래스로 가르는 쿼리. 비워 두면 실행하지 않고 기존 동작 그대로다
-        // (지문 = ERROR/WARN 하나). 기본이 빈 값인 이유는 §3 — 회차를 baseline으로 고정한 뒤
-        // 한 번에 하나만 바꾼다. 켜기 전에 "이 신호가 실제로 도달하는가"를 먼저 재야 한다.
+        // 로그 후보에 원인 예외를 붙이는 쿼리(B-45). 기본은 켜짐이고, `off`를 주면 실행하지 않아
+        // 기존 동작 그대로다(지문 = ERROR/WARN 하나) — 대조군 팔이 그 값을 쓴다.
         String logSignatureQuery,
         List<String> metricQueries,
         String clusterGap,
@@ -76,7 +83,7 @@ public record SurveyProperties(
         zone = blankTo(zone, "Asia/Seoul");
         defaultLookbackHours = defaultLookbackHours <= 0 ? 24 : defaultLookbackHours;
         maxWindowHours = maxWindowHours <= 0 ? 48 : maxWindowHours;
-        step = blankTo(step, "5m");
+        step = blankTo(step, "1m");
         traceQuery = blankTo(traceQuery, "{ status = error }");
         // status != error 를 붙여 에러 채널과 겹치지 않게 가른다 — 어느 채널로 도달했는지가 남아야 한다.
         slowTraceQuery = blankTo(slowTraceQuery, "{ duration > %s && status != error }");
@@ -99,7 +106,7 @@ public record SurveyProperties(
         // 상한을 올리는 것은 증상 대응이었고, 원인은 키 설계였다.
         incidentLimit = incidentLimit <= 0 ? 15 : incidentLimit;
         logQuery = blankTo(logQuery,
-                "sum by (service_name) (count_over_time({service_name=~\"%s\"} |~ \"ERROR|WARN\" [5m]))");
+                "sum by (service_name) (count_over_time({service_name=~\"%s\"} |~ \"ERROR|WARN\" [1m]))");
         // B-45: 로그 후보의 지문을 예외 클래스로 가른다. 기본 on (2026-08-11).
         //
         // 총 건수 곡선(logQuery)을 대체하지 않고 함께 실린다 — 예외가 안 딸린 ERROR/WARN이
@@ -115,7 +122,8 @@ public record SurveyProperties(
         metricQueries = metricQueries == null ? List.of() : List.copyOf(metricQueries);
         clusterGap = blankTo(clusterGap, "60s");
         incidentPadExact = blankTo(incidentPadExact, "2m");
-        incidentPadBucket = blankTo(incidentPadBucket, "5m");
+        // incidentPadBucket은 일부러 채우지 않는다 - 미설정이어야 incidentPadBucketDuration()의
+        // step × 2 유도가 돈다. 여기서 상수를 채우면 그 유도가 죽는다.
         // 빈 목록이면 0 구간 신호가 전부 사라진다 — 설정 누락과 "일부러 껐다"를 구별할 수 없으므로
         // null(미설정)일 때만 기본값을 채운다. 가용성 게이지 셋만 0이 이상이다.
         zeroIsAbnormal = zeroIsAbnormal == null
@@ -152,10 +160,26 @@ public record SurveyProperties(
 
     /**
      * 집계 해상도만큼 흐린 신호(메트릭 샘플 · 로그 버킷)의 창 여유.
-     * <b>기본이 step과 같다</b> — 버킷 하나가 담는 폭이 곧 시각의 불확실성이다.
+     *
+     * <p><b>기본값을 상수에서 {@code step × 2}로 바꿨다 (2026-08-11).</b> 버킷 하나가 담는 폭이
+     * 곧 시각의 불확실성이고, 앞뒤로 하나씩 덮으면 충분하다. 상수로 두면
+     * {@code step}을 바꿀 때 pad만 옛 전제에 남는다 — 실제로 5m → 1m 전환 뒤 신호는
+     * 15분에서 7분으로 좁혀졌는데 pad가 10분 그대로여서 <b>창의 59%가 여유</b>가 됐다.
+     *
+     * <p>pad가 컸던 원래 이유는 지금 구조에 없다. CH-3에서 창이 주입 1초 전에 끊겨 세 회차
+     * 연속 4점이던 시절에는 <b>모델이 창을 직접 써냈다</b> — 어디서 끊길지 알 수 없어 여유를
+     * 크게 줄 수밖에 없었다. 지금은 코드가 신호 시각에서 계산하므로 pad가 덮어야 하는 것은
+     * <b>샘플 사이 불확실성 하나</b>이고 그것은 정확히 {@code step}만큼이다.
+     *
+     * <p>명시적으로 주면 그 값을 쓴다({@code rca.survey.incident-pad-bucket}).
      */
     public Duration incidentPadBucketDuration() {
-        return parse(incidentPadBucket, Duration.ofMinutes(5));
+        return parse(incidentPadBucket, stepDuration().multipliedBy(2));
+    }
+
+    /** 집계 해상도. pad·lookback이 여기서 파생되므로 한 곳에서 읽는다. */
+    public Duration stepDuration() {
+        return parse(step, Duration.ofMinutes(1));
     }
 
     /** {@code 5m} · {@code 60s} · {@code 90} (초) 형태를 읽는다. */

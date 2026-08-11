@@ -33,7 +33,7 @@ import com.yogurtte.rca.triage.survey.SurveyResult;
 @EnabledIfSystemProperty(named = "rca.tools", matches = "true")
 class LiveWindowReplayTool {
 
-    private static final Path DIR = Path.of("build/live");
+    private static final Path DIR = Path.of(System.getProperty("rca.live", "build/live"));
     private static final int INCIDENT_LIMIT = 30;
 
     @Test
@@ -51,9 +51,9 @@ class LiveWindowReplayTool {
         }
 
         System.out.println("=====LIVE=====");
-        System.out.println("창 " + window.start() + " ~ " + window.end());
-        run("B-45 off", window, metrics, null);
-        run("B-45 on ", window, metrics, read("loki-exc.json"));
+        System.out.println("창 " + window.start() + " ~ " + window.end() + "  (" + DIR + ")");
+        run(System.getProperty("rca.arm", "arm"), window, metrics,
+                java.nio.file.Files.exists(DIR.resolve("loki-exc.json")) ? read("loki-exc.json") : null);
         System.out.println("=====END=====");
     }
 
@@ -62,15 +62,20 @@ class LiveWindowReplayTool {
                 read("tempo-error.json"), read("tempo-slow.json"), read("loki-count.json"), exc,
                 metrics, List.of(), Map.of());
 
-        List<Signal> signals = SignalExtractor.extract(survey, Duration.ofMinutes(5),
+        List<Signal> signals = SignalExtractor.extract(survey, Duration.parse("PT" + System.getProperty("rca.step", "5") + "M"),
                 Set.of("up", "mongodb_up", "kafka_brokers"));
         List<Incident> clustered = Incident.cluster(signals, Duration.ofSeconds(60));
         List<Incident> shown = clustered.size() <= INCIDENT_LIMIT
                 ? clustered : clustered.subList(0, INCIDENT_LIMIT);
         String context = new SurveyContextAssembler().assemble(survey, "최근 오류를 확인해줘", shown, false);
 
-        System.out.printf("%n[%s] 신호 %d · 후보 %d%s · 컨텍스트 %,d자%n", arm, signals.size(), clustered.size(),
-                clustered.size() > shown.size() ? " (상한 " + INCIDENT_LIMIT + "로 잘림)" : "", context.length());
+        com.yogurtte.rca.collector.TimeWindow probe2 = com.yogurtte.rca.triage.incident.Incident.unionWindow(
+                shown, Duration.ofMinutes(2), Duration.ofMinutes(5), window);
+        long widthMin = java.time.Duration.between(probe2.start(), probe2.end()).toMinutes();
+        System.out.printf("%n[%s] 신호 %d · 후보 %d%s · 컨텍스트 %,d자 · 전체 선택 시 창 %d분 (%s ~ %s)%n",
+                arm, signals.size(), clustered.size(),
+                clustered.size() > shown.size() ? " (상한 " + INCIDENT_LIMIT + "로 잘림)" : "", context.length(),
+                widthMin, probe2.start(), probe2.end());
         shown.stream().filter(i -> i.channel() == com.yogurtte.rca.triage.incident.Channel.LOKI)
                 .forEach(i -> System.out.println(i.describe()));
     }

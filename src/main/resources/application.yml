@@ -142,7 +142,14 @@ rca:
     zone: ${RCA_SURVEY_ZONE:Asia/Seoul}
     default-lookback-hours: ${RCA_SURVEY_LOOKBACK_HOURS:24}
     max-window-hours: ${RCA_SURVEY_MAX_WINDOW_HOURS:48}
-    step: ${RCA_SURVEY_STEP:5m}
+    # 집계 해상도. 아래 쿼리들의 [1m] range와 **반드시 같이 움직인다** — step만 줄이면
+    # 값은 '직전 5분'인데 Signal.from은 1분만 당겨져 구간이 실제보다 좁게 표시된다.
+    #
+    # 5m → 1m (2026-08-11). 5분 샘플이 3분짜리 Kafka 다운을 15분 신호로 부풀려 조사 창이
+    # 25분이 됐다(IN-2 실측: up 1→0 이 '앞 샘플~뒤 샘플' 5분 구간이라 셋이 물려 15분).
+    # 1분 해상도로 다시 보니 로그도 04:48~04:51 4분에 몰려 있었다.
+    # 스윕 응답 43,041B → 99,096B 이지만 include-raw=false 라 컨텍스트와 무관하다.
+    step: ${RCA_SURVEY_STEP:1m}
     # TraceQL. ${} 플레이스홀더를 쓰지 않는다 — 중괄호가 플레이스홀더 문법과 겹친다.
     # 덮어쓰려면 환경변수 RCA_SURVEY_TRACE_QUERY를 쓰면 된다 (relaxed binding이 알아서 매핑한다).
     trace-query: '{ status = error }'
@@ -158,7 +165,7 @@ rca:
     trace-limit: ${RCA_SURVEY_TRACE_LIMIT:20}
     # 서비스별 ERROR/WARN 발생률. 라인 필터를 쓰는 이유는 collect의 errorWarnQuery와 같다 —
     # 평문 Logback이라 logfmt 파서가 level 필드를 만들지 못한다.
-    log-query: 'sum by (service_name) (count_over_time({service_name=~"%s"} |~ "ERROR|WARN" [5m]))'
+    log-query: 'sum by (service_name) (count_over_time({service_name=~"%s"} |~ "ERROR|WARN" [1m]))'
     # 부재가 곧 신호인 것들을 우선한다. up이 0으로 꺾이는 것이 트레이스 무신호 장애(AU-2)에서
     # 유일한 도달 경로였고, 에러 트레이스 검색만으로는 정의된 12문항 중 6문항을 못 찾는다.
     #
@@ -171,11 +178,11 @@ rca:
     # 방향을 메트릭마다 지정한다 — 생사 신호는 떨어진 것이 신호고, 누적 신호는 올라간 것이 신호다.
     # 한계: 스크레이프 간격(15s)이 하한이다. 그보다 짧은 장애는 샘플 자체가 없어 이것으로도 안 보인다.
     metric-queries:
-      - "min_over_time(up[5m])"
-      - "min_over_time(mongodb_up[5m])"
-      - "min_over_time(kafka_brokers[5m])"
-      - "max_over_time(kafka_consumergroup_lag[5m])"
-      - "max_over_time(websocket_active_users[5m])"
+      - "min_over_time(up[1m])"
+      - "min_over_time(mongodb_up[1m])"
+      - "min_over_time(kafka_brokers[1m])"
+      - "max_over_time(kafka_consumergroup_lag[1m])"
+      - "max_over_time(websocket_active_users[1m])"
     # 대조군 스위치. true = 후보 + 원본, false(기본) = 후보만.
     #
     # 탐색 LLM의 산출은 사실상 후보 번호 하나다 — 창·서비스·traceId는 고른 후보에서 코드가
