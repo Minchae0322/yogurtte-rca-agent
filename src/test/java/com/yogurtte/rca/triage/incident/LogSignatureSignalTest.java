@@ -49,17 +49,20 @@ class LogSignatureSignalTest {
     }
 
     @Test
-    void 예외_클래스가_지문이_되어_후보가_갈린다() {
+    void 예외는_후보를_가르지_않고_한_후보_안에_줄로_들어간다() {
         List<Signal> signals = SignalExtractor.extract(survey(COUNT_ONLY, WITH_EXC), LOOKBACK);
 
-        // 대체가 아니라 병렬이다 — 총 건수 곡선(규모)과 예외 곡선(성격)을 함께 싣는다.
-        assertThat(signals).extracting(Signal::key).containsExactlyInAnyOrder(
-                "LOKI|chat-service|ERROR/WARN",
-                "LOKI|chat-service|QueryTimeoutException",
-                "LOKI|chat-service|MongoSocketOpenException");
+        // 지문을 예외 이름으로 두면 같은 서비스·같은 시각이 후보 둘로 서고, 읽는 쪽이
+        // 서로 다른 사건으로 셀 수 있다(실측: 후보 8 → 12 · CH-1 창 13 → 17).
+        // 그래서 키는 ERROR/WARN 하나로 두고 예외 이름은 설명(what)으로 내린다.
+        assertThat(signals).extracting(Signal::key).containsOnly("LOKI|chat-service|ERROR/WARN");
 
         List<Incident> incidents = Incident.cluster(signals, Duration.ofSeconds(60));
-        assertThat(incidents).hasSize(3);
+        assertThat(incidents).hasSize(1);
+        assertThat(incidents.get(0).describe())
+                .contains("ERROR/WARN 23건")
+                .contains("예외 QueryTimeoutException 19건")
+                .contains("예외 MongoSocketOpenException 4건");
     }
 
     @Test
@@ -105,7 +108,7 @@ class LogSignatureSignalTest {
     void 갈린_후보도_건수는_각자_유지한다() {
         List<Signal> signals = SignalExtractor.extract(survey(COUNT_ONLY, WITH_EXC), LOOKBACK);
 
-        assertThat(signals).anySatisfy(s -> assertThat(s.what()).contains("예외 19건"));
-        assertThat(signals).anySatisfy(s -> assertThat(s.what()).contains("예외 4건"));
+        assertThat(signals).anySatisfy(s -> assertThat(s.what()).contains("예외 QueryTimeoutException 19건"));
+        assertThat(signals).anySatisfy(s -> assertThat(s.what()).contains("예외 MongoSocketOpenException 4건"));
     }
 }

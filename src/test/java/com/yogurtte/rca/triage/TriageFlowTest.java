@@ -92,6 +92,11 @@ class TriageFlowTest {
         server.stubFor(get(urlPathEqualTo("/api/search"))
                 .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo("{}"))
                 .willReturn(aResponse().withStatus(200).withBody("{\"traces\":[]}")));
+        // B-46 대조군 지목 검색(rootName). 이 창에 정상 사례가 없다는 응답 — 수집이 멈추지 않고
+        // "대조군 없음"이 실패 목록에 남는 경로를 흐름 테스트가 함께 지난다.
+        server.stubFor(get(urlPathEqualTo("/api/search"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.containing("rootName"))
+                .willReturn(aResponse().withStatus(200).withBody("{\"traces\":[]}")));
 
         // 스윕은 집계(step 있음), 심층은 원본 라인(direction 있음) — 같은 엔드포인트지만 응답 모양이 다르다.
         server.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
@@ -197,8 +202,8 @@ class TriageFlowTest {
         assertThat(llmClient.analysisContext()).contains("2026-07-27T17:29:00Z");
         assertThat(llmClient.analysisContext()).contains("notification-consume");
 
-        // 트레이스 검색은 세 번 — 에러·지연 채널(스윕)에 후보 무조건 검색(B-9)이 더해진다.
-        server.verify(3, com.github.tomakehurst.wiremock.client.WireMock
+        // 트레이스 검색은 네 번 — 에러·지연 채널(스윕) + 대조군 지목(B-46) + 후보 검색(B-9).
+        server.verify(4, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/search")));
         server.verify(1, com.github.tomakehurst.wiremock.client.WireMock
                 .getRequestedFor(urlPathEqualTo("/api/traces/abc123")));

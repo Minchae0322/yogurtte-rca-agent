@@ -91,9 +91,27 @@ public record SurveyProperties(
         // 스윕 창 1시간에서도 61건이다. 최대 실측치의 3배 여유.
         traceLimit = traceLimit <= 0 ? 200 : traceLimit;
         // B-43: LLM이 실제로 읽는 단위의 상한. 트레이스 건수와 비례하지 않는다.
+        //
+        // 15 유지 (2026-08-11). B-45를 켤 때 잠깐 20·30으로 올렸다가 되돌렸다 —
+        // 예외 이름을 후보 <b>키</b>로 쓰던 판에서는 후보가 8 → 12 · CH-1 창 13 → 17로 불어
+        // 상한에 걸렸는데(시각 순 절삭에 두 번째 에피소드의 Tempo 후보 둘이 날아갔다),
+        // 이름을 키가 아니라 설명 줄로 내리자 후보 수가 불변이 됐다(라이브 8 → 8 · 재생 13 → 13).
+        // 상한을 올리는 것은 증상 대응이었고, 원인은 키 설계였다.
         incidentLimit = incidentLimit <= 0 ? 15 : incidentLimit;
         logQuery = blankTo(logQuery,
                 "sum by (service_name) (count_over_time({service_name=~\"%s\"} |~ \"ERROR|WARN\" [5m]))");
+        // B-45: 로그 후보의 지문을 예외 클래스로 가른다. 기본 on (2026-08-11).
+        //
+        // 총 건수 곡선(logQuery)을 대체하지 않고 함께 실린다 — 예외가 안 딸린 ERROR/WARN이
+        // 08-05 창 실측 78건 중 42건이라, 이 곡선만 쓰면 그만큼이 통째로 사라진다.
+        //
+        // 라인 필터가 logQuery와 다른 것이 핵심이다. 예외 클래스는 ERROR 헤더 줄이 아니라
+        // **그다음 줄**에 있어서 "ERROR|WARN"으로는 닿지 못한다(실측 부착률 5.5%/0%).
+        // 클래스명으로 시작하는 줄만 세면 예외 1건 = 1줄이고, "    at ..." 프레임은 공백으로,
+        // "Caused by:"는 대문자로 시작해 자동으로 빠진다 — 스택 인플레이션이 없다.
+        //
+        // 끄려면 RCA_SURVEY_LOG_SIGNATURE_QUERY=off (대조군 팔).
+        logSignatureQuery = blankTo(logSignatureQuery, DEFAULT_LOG_SIGNATURE_QUERY);
         metricQueries = metricQueries == null ? List.of() : List.copyOf(metricQueries);
         clusterGap = blankTo(clusterGap, "60s");
         incidentPadExact = blankTo(incidentPadExact, "2m");
@@ -170,9 +188,41 @@ public record SurveyProperties(
         return logQuery.contains("%s") ? logQuery.formatted(appsPattern) : logQuery;
     }
 
-    /** 지문 쿼리를 쓰는가. 빈 값이면 기존 동작(지문 = {@code ERROR/WARN} 하나)이다. */
+    /**
+     * 지문 곡선 기본값 — 예외 클래스가 <b>어디에 찍혔든</b> 센다.
+     *
+     * <p>라인 필터가 두 갈래인 이유는 예외 클래스가 두 자리에 나타나기 때문이다 (실측).
+     * <pre>
+     * ① 스택 첫 줄     org.springframework.dao.QueryTimeoutException: Redis command…   ← 줄 시작
+     * ② 헤더 줄 인라인  ERROR [traceId=…] … com.mongodb.MongoTimeoutException: …        ← 줄 중간
+     * </pre>
+     * ①만 보면 08-05 창의 {@code MongoTimeoutException} 7건을 놓치고, ②만 보면
+     * {@code DataAccessResourceFailureException} 32건을 놓친다. 그래서 합집합이다.
+     *
+     * <p><b>레벨(ERROR/WARN)은 ①에 걸지 않는다</b> — 스택 첫 줄에는 레벨 토큰이 없다.
+     * 그래서 WARN으로 찍힌 예외도 ①이 잡는다. 대신 ②에서는 레벨을 요구해
+     * {@code "    at …"} 프레임이 딸려 들어오는 것을 막는다 — <b>예외 1건 = 1줄</b>이 유지된다.
+     *
+     * <p>{@code | exc !~ `.*\.[a-z]\..*`} 는 Logback이 축약한 <b>로거 이름</b>을 걷어낸다.
+     * 축약형은 중간 세그먼트가 한 글자다({@code mc.e.t.a.c.e.GlobalException}) — 이것이
+     * 합집합에서 유일하게 들어오던 오탐이었고, 이 필터를 붙이자 두 창 모두 오탐 0이 됐다.
+     */
+    private static final String DEFAULT_LOG_SIGNATURE_QUERY =
+            "sum by (service_name, exc, cause) (count_over_time({service_name=~\"%s\"} "
+            + "|~ `^[a-z][\\w.]*\\.[A-Z][\\w$]*(Exception|Error|Throwable)"
+            + "|^Caused by: [a-z][\\w.]*\\.[A-Z][\\w$]*(Exception|Error|Throwable)"
+            + "|(ERROR|WARN).*[a-z][\\w.]*\\.[A-Z][\\w$]*(Exception|Error|Throwable)` "
+            + "| regexp `(?P<cause>Caused by: )?(?P<exc>[a-z][\\w.]*\\.[A-Z][\\w$]*"
+            + "(?:Exception|Error|Throwable))` "
+            + "| exc !~ `.*\\.[a-z]\\..*` [5m]))";
+
+    /** 대조군 팔로 끄는 값. 빈 문자열은 "설정 안 함"이라 기본값으로 채워지므로 따로 둔다. */
+    private static final String OFF = "off";
+
+    /** 지문 쿼리를 쓰는가. {@code RCA_SURVEY_LOG_SIGNATURE_QUERY=off} 면 안 던진다. */
     public boolean hasLogSignatureQuery() {
-        return logSignatureQuery != null && !logSignatureQuery.isBlank();
+        return logSignatureQuery != null && !logSignatureQuery.isBlank()
+                && !OFF.equalsIgnoreCase(logSignatureQuery.trim());
     }
 
     /** 앱 셀렉터를 채운 지문 LogQL. {@link #hasLogSignatureQuery()}가 참일 때만 부른다. */

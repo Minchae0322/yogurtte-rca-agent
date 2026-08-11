@@ -99,22 +99,67 @@ public final class SignalExtractor {
     }
 
     /**
-     * @param exceptionLines 이 곡선이 <b>예외 클래스 줄</b>을 센 것인가. 그러면 값의 뜻이
-     *                       "ERROR/WARN 줄 수"가 아니라 <b>"예외 발생 횟수"</b>다 — 두 곡선을
-     *                       함께 실으므로 문구로 구별하지 않으면 읽는 쪽이 더한다.
+     * @param exceptionLines 이 곡선이 <b>예외 클래스 줄</b>을 센 것인가.
+     *
+     * <p><b>지문은 두 곡선이 같다({@code ERROR/WARN}).</b> 예외 이름을 지문으로 쓰면 키가
+     * 갈려 같은 서비스·같은 시각이 후보 둘로 서고, 읽는 쪽이 <b>서로 다른 사건으로 셀 수
+     * 있다.</b> 실제로 그것 때문에 후보가 8 → 12, CH-1 창은 13 → 17로 불어 상한까지 건드렸다.
+     *
+     * <p>그래서 예외 이름은 <b>설명 줄로 내린다.</b> 키가 같으니 기존 군집 규칙이 알아서
+     * 한 후보로 묶고, 후보 안에서 줄로 갈린다 — 합치는 코드를 따로 만들지 않는다.
+     *
+     * <pre>
+     * ## INC-1  chat-service | ERROR/WARN
+     * - ERROR/WARN 42건 (03:55 ~ 04:00)
+     * - 예외 org.springframework.dao.QueryTimeoutException 19건 (03:45 ~ 03:50)
+     * </pre>
+     *
+     * <p>값의 뜻이 다르다는 것은 문구로 남긴다 — {@code ERROR/WARN N건}은 줄 수,
+     * {@code 예외 X N건}은 그 클래스가 찍힌 줄 수다. <b>더하면 안 된다</b>(겹치는 부분이 있다).
      */
     private static List<Signal> fromLogRates(String body, Duration lookback, boolean exceptionLines) {
-        return parseMatrix(body).stream()
-                .flatMap(series -> series.valued().stream()
+        List<Series> series = parseMatrix(body);
+        return (exceptionLines ? deepestOnly(series) : series).stream()
+                .flatMap(s -> s.valued().stream()
                         .filter(point -> point.value() != 0.0)
                         .map(point -> new Signal(
                                 point.at().minus(lookback), point.at(),
                                 Channel.LOKI, Precision.BUCKET,
-                                series.service(),
-                                series.logSignature(),
-                                (exceptionLines ? "예외 %s건 (%s ~ %s)" : "ERROR/WARN %s건 (%s ~ %s)").formatted(
-                                        point.raw(), point.at().minus(lookback), point.at()),
+                                s.service(),
+                                exceptionLines ? "ERROR/WARN" : s.logSignature(),
+                                exceptionLines
+                                        ? "%s %s %s건 (%s ~ %s)".formatted(
+                                                s.isCause() ? "원인 예외" : "예외",
+                                                s.logSignature(), point.raw(),
+                                                point.at().minus(lookback), point.at())
+                                        : "ERROR/WARN %s건 (%s ~ %s)".formatted(
+                                                point.raw(), point.at().minus(lookback), point.at()),
                                 "loki-rate")))
+                .toList();
+    }
+
+    /**
+     * 같은 (서비스 · 버킷)에 <b>원인 예외가 있으면 최상위는 뺀다.</b>
+     *
+     * <p>최상위는 프레임워크 래퍼라 무슨 의존성인지 말해주지 않는다 —
+     * {@code QueryTimeoutException} 은 "느렸다"까지고 {@code RedisCommandTimeoutException} 이
+     * "Redis였다"를 말한다. 둘을 다 실으면 같은 사건이 두 줄로 서고 개수가 1:1이라 더하기 쉽다.
+     *
+     * <p><b>원인이 없으면 최상위를 남긴다.</b> 앱이 직접 던진 예외는 체인이 없다 —
+     * 실측 08-05 창의 {@code RestApiException} 이 그 경우이고, 무조건 원인만 남기면
+     * 그런 예외가 지문에서 통째로 사라진다.
+     */
+    private static List<Series> deepestOnly(List<Series> series) {
+        Set<String> bucketsWithCause = series.stream()
+                .filter(Series::isCause)
+                .flatMap(s -> s.valued().stream().map(point -> s.service() + "|" + point.at()))
+                .collect(java.util.stream.Collectors.toSet());
+        if (bucketsWithCause.isEmpty()) {
+            return series;
+        }
+        return series.stream()
+                .map(s -> s.isCause() ? s : s.without(bucketsWithCause))
+                .filter(s -> !s.valued().isEmpty())
                 .toList();
     }
 
@@ -289,6 +334,24 @@ public final class SignalExtractor {
         String logSignature() {
             String exc = label("exc");
             return exc == null ? "ERROR/WARN" : exc;
+        }
+
+        /**
+         * {@code Caused by:} 줄에서 뽑힌 예외인가. 최상위 예외는 Spring의 일반 래퍼라
+         * 무슨 의존성인지 말해주지 않는다 — 원인 줄이 그것을 말한다(실측: 최상위
+         * {@code QueryTimeoutException} 뒤에 {@code RedisCommandTimeoutException}).
+         * 개수가 1:1이므로 <b>더하면 두 배로 세는 것</b>이라 문구로 구별한다.
+         */
+        boolean isCause() {
+            return label("cause") != null;
+        }
+
+        /** {@code service|버킷시각} 이 목록에 있는 점만 뺀 같은 시리즈. */
+        Series without(Set<String> serviceBuckets) {
+            List<Point> kept = points.stream()
+                    .filter(point -> !serviceBuckets.contains(service() + "|" + point.at()))
+                    .toList();
+            return new Series(labels, kept);
         }
 
         /** 샘플 간격을 응답에서 추론한다 — 설정된 step과 실제가 다를 수 있다. */

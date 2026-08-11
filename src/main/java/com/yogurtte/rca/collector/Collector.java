@@ -37,6 +37,12 @@ public class Collector {
     /** {@code max-traces <= 0}(상한 없음)일 때 창을 훑는 폭. Tempo 검색은 limit이 필수다. */
     private static final int SEARCH_SCAN_LIMIT = 200;
 
+    /** 대조군 지목 검색 폭. 같은 루트 이름이라 몇 건 안 나온다(IN-2 실측 2건). */
+    private static final int CONTRAST_SEARCH_LIMIT = 20;
+
+    /** 대조군 상한. 탐색이 여러 후보를 고르면 루트 이름도 여럿이라 하나로는 부족하다. */
+    private static final int MAX_CONTRAST_TRACES = 3;
+
     private final TempoClient tempoClient;
     private final LokiClient lokiClient;
     private final MimirClient mimirClient;
@@ -80,8 +86,10 @@ public class Collector {
 
         TimeWindow window = resolveWindow(scope, traces.values().stream().findFirst().orElse(null), failures);
 
-        // --- B-9: 창 안 후보 트레이스로 남은 자리를 채운다 ---
+        // --- B-46: 대조군 1건. 후보 채우기보다 먼저다 (아래 collectContrast javadoc) ---
         started = System.currentTimeMillis();
+        collectContrast(scope, window, traces, failures);
+        // --- B-9: 창 안 후보 트레이스로 남은 자리를 채운다 ---
         collectCandidates(scope, window, traces, failures);
         timings.put("tempoCandidatesMs", System.currentTimeMillis() - started);
 
@@ -239,6 +247,94 @@ public class Collector {
     }
 
     /** Tempo /api/search 응답의 {@code traces[].traceID}. */
+    /**
+     * <b>대조군 1건을 지목해서 가져온다</b> (B-46) — 조사 대상과 <b>같은 루트 이름</b>의
+     * 트레이스 중 가장 짧은 것.
+     *
+     * <p>앵커가 요구하는 B(대조군)는 <i>"정상 발행이 몇 ms인지"</i> 처럼 <b>같은 동작의 정상
+     * 사례</b>다. 그런데 정상 트레이스는 스윕의 두 필터({@code status = error} ·
+     * {@code duration > 임계값})에 <b>구조적으로 안 걸린다</b> — 정상이니까.
+     *
+     * <p>창 안 후보 검색({@link #ANY_TRACE_QUERY})이 그것을 메우라고 있었는데 <b>메우지
+     * 못했다.</b> Tempo 검색은 최신순으로 limit만큼 주는데, IN-2 실측에서 25분 창의 최신 20건이
+     * 전부 {@code security filterchain} 잡트레이스였고 정작 문제의 04:48 트레이스도 정상 발행
+     * 트레이스도 그 안에 없었다. 그래서 <b>지목 검색</b>({@code rootName})으로 따로 가져온다.
+     *
+     * <p><b>정답을 심는 것이 아니다</b> — 루트 이름은 탐색 LLM이 고른 트레이스에서 읽고,
+     * "정상"의 정의도 새로 만들지 않는다. 같은 이름 중 <b>가장 짧은 것</b>을 쓸 뿐이다.
+     *
+     * <p>상한과 별개로 1건을 더 받는다. 상한의 목적은 <i>무관한</i> 트레이스가 컨텍스트를
+     * 먹는 것을 막는 것인데, 대조군은 무관하지 않다.
+     */
+    private void collectContrast(Scope scope, TimeWindow window,
+                                 LinkedHashMap<String, String> traces, ArrayList<String> failures) {
+        if (scope.window() == null || traces.isEmpty()) {
+            return;
+        }
+        // 지목된 트레이스의 <b>루트 이름마다</b> 하나씩. 하나만 가져오면 탐색이 여러 후보를
+        // 고른 회차에서 엉뚱한 것의 대조군이 온다 — IN-2 재실행에서 실제로 스케줄러
+        // 트레이스의 대조군이 왔고 정작 발행 트레이스는 비교 대상이 없었다.
+        LinkedHashSet<String> rootNames = new LinkedHashSet<>();
+        for (String traceJson : traces.values()) {
+            String name = rootNameOf(traceJson);
+            if (name != null && !name.isBlank() && !name.contains("\"")) {
+                rootNames.add(name);
+            }
+        }
+        int fetched = 0;
+        for (String rootName : rootNames) {
+            if (fetched >= MAX_CONTRAST_TRACES) {
+                break;
+            }
+            fetched += collectContrastFor(scope, window, rootName, traces, failures) ? 1 : 0;
+        }
+    }
+
+    /** @return 대조군을 실제로 담았으면 true */
+    private boolean collectContrastFor(Scope scope, TimeWindow window, String rootName,
+                                       LinkedHashMap<String, String> traces, ArrayList<String> failures) {
+        try {
+            String body = tempoClient.search(scope.correlationId() + "-contrast",
+                    "{ rootName = \"" + rootName + "\" }", window.start(), window.end(), CONTRAST_SEARCH_LIMIT);
+            String shortest = null;
+            long shortestMs = Long.MAX_VALUE;
+            for (JsonNode hit : MAPPER.readTree(body).path("traces")) {
+                String id = hit.path("traceID").asText("");
+                long ms = hit.path("durationMs").asLong(Long.MAX_VALUE);
+                if (!id.isEmpty() && !traces.containsKey(id) && ms < shortestMs) {
+                    shortestMs = ms;
+                    shortest = id;
+                }
+            }
+            if (shortest == null) {
+                failures.add("대조군 없음 — '" + rootName + "' 의 정상 사례가 이 창에 없다. "
+                        + "정상값과 비교할 대상이 컨텍스트에 없으니 절대값만으로 판단하지 말 것.");
+                return false;
+            }
+            traces.put(shortest, tempoClient.fetchTrace(shortest));
+            log.info("contrast trace: {} ({}ms) for rootName '{}'", shortest, shortestMs, rootName);
+            return true;
+        } catch (Exception e) {
+            failures.add("대조군 트레이스 수집 실패: " + describe(e));
+            log.warn("contrast trace fetch failed for {}: {}", scope.correlationId(), e.toString());
+            return false;
+        }
+    }
+
+    /** 부모가 없는 span의 이름. 없으면 null. */
+    private static String rootNameOf(String traceJson) {
+        try {
+            for (TraceSpans.Span span : TraceSpans.parse(traceJson)) {
+                if (span.parentSpanId() == null || span.parentSpanId().isBlank()) {
+                    return span.name();
+                }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
+    }
+
     private static List<String> traceIdsOf(String searchBody) {
         ArrayList<String> out = new ArrayList<>();
         if (searchBody == null || searchBody.isBlank()) {
