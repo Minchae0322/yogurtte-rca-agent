@@ -121,7 +121,7 @@ public record SurveyProperties(
         logSignatureQuery = blankTo(logSignatureQuery, DEFAULT_LOG_SIGNATURE_QUERY);
         metricQueries = metricQueries == null ? List.of() : List.copyOf(metricQueries);
         clusterGap = blankTo(clusterGap, "60s");
-        incidentPadExact = blankTo(incidentPadExact, "2m");
+        incidentPadExact = blankTo(incidentPadExact, "0s");
         // incidentPadBucket은 일부러 채우지 않는다 - 미설정이어야 incidentPadBucketDuration()의
         // step × 2 유도가 돈다. 여기서 상수를 채우면 그 유도가 죽는다.
         // 빈 목록이면 0 구간 신호가 전부 사라진다 — 설정 누락과 "일부러 껐다"를 구별할 수 없으므로
@@ -153,13 +153,18 @@ public record SurveyProperties(
         return parse(clusterGap, Duration.ofSeconds(60));
     }
 
-    /** 시각이 ms 단위로 정확한 신호(트레이스 span)의 창 여유. */
+    /**
+     * TEMPO 후보의 창 여유. <b>기본 0</b> — span 시각은 ms 단위로 정확해 덮을 불확실성이 없다.
+     *
+     * <p>2m이던 것을 0으로 내렸다(2026-08-11). 근거는 {@code Incident.window} 표에 있다.
+     */
     public Duration incidentPadExactDuration() {
-        return parse(incidentPadExact, Duration.ofMinutes(2));
+        return parse(incidentPadExact, Duration.ZERO);
     }
 
     /**
-     * 집계 해상도만큼 흐린 신호(메트릭 샘플 · 로그 버킷)의 창 여유.
+     * MIMIR 후보의 창 여유. <b>로그는 여기에 해당하지 않는다</b> — Loki 신호는 구간이
+     * {@code [ts - lookback, ts]}라 폭이 이미 들어 있고 pad가 0이다({@code Incident.window}).
      *
      * <p><b>기본값을 상수에서 {@code step × 2}로 바꿨다 (2026-08-11).</b> 버킷 하나가 담는 폭이
      * 곧 시각의 불확실성이고, 앞뒤로 하나씩 덮으면 충분하다. 상수로 두면

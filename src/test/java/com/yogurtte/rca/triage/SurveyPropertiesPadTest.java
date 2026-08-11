@@ -19,7 +19,7 @@ class SurveyPropertiesPadTest {
     private static SurveyProperties with(String step, String padBucket) {
         return new SurveyProperties("Asia/Seoul", 24, 48, step,
                 "{ status = error }", "{ duration > %s && status != error }", "3s",
-                20, 15, null, null, List.of(), "60s", "2m", padBucket, List.of(), true);
+                20, 15, null, null, List.of(), "60s", null, padBucket, List.of(), true);
     }
 
     @Test
@@ -33,5 +33,11 @@ class SurveyPropertiesPadTest {
     @DisplayName("명시하면 그 값을 쓴다")
     void 설정하면_그대로() {
         assertThat(with("1m", "5m").incidentPadBucketDuration()).isEqualTo(Duration.ofMinutes(5));
+    }
+
+    @Test
+    @DisplayName("TEMPO 여유는 0이다 — span 시각에 불확실성이 없다")
+    void exact_pad는_0() {
+        assertThat(with("1m", null).incidentPadExactDuration()).isEqualTo(Duration.ZERO);
     }
 }

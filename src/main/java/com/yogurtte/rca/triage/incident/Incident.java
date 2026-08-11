@@ -71,14 +71,38 @@ public record Incident(
     }
 
     /**
-     * 조사 창을 <b>신호 시각과 정밀도에서 계산한다.</b>
+     * 조사 창을 <b>신호 시각과 채널에서 계산한다.</b>
      *
-     * <p>여유를 임의로 정하지 않는다. 트레이스 span은 ms 단위로 정확하니 작게, 메트릭 샘플과
-     * 로그 발생률 버킷은 애초에 집계 해상도만큼 흐리니 그만큼 준다. LLM이 만든 창 끝에 여유를
-     * 덧대는 방식(추측을 추측으로 보정)은 이 계산이 대신한다.
+     * <p>여유를 임의로 정하지 않는다. LLM이 만든 창 끝에 여유를 덧대는 방식(추측을 추측으로
+     * 보정)은 이 계산이 대신한다.
+     *
+     * <p><b>정밀도가 아니라 채널로 가른다 (2026-08-11).</b> {@code BUCKET} 하나로 묶여 있던
+     * 로그와 메트릭은 <b>불확실성 구조가 다르다</b> — 코드가 그렇게 만들고 있었다.
+     *
+     * <table>
+     *   <tr><th>채널</th><th>신호 구간</th><th>남은 불확실성</th><th>pad</th></tr>
+     *   <tr><td>TEMPO</td><td>span 시각 (ms 정확)</td><td>없다</td><td>0</td></tr>
+     *   <tr><td>LOKI</td><td>{@code [ts - lookback, ts]}</td><td><b>없다 — 폭이 이미 구간에 있다</b></td><td>0</td></tr>
+     *   <tr><td>MIMIR</td><td>샘플 시각 그대로 (점)</td><td>앞뒤로 최대 1 step</td><td>{@code bucketPad}</td></tr>
+     * </table>
+     *
+     * <p>메트릭만 남기는 이유는 {@code SignalExtractor}가 로그에는 이미
+     * <i>"구간은 {@code [ts - lookback, ts]} 다"</i>로 폭을 넣어 두었고 메트릭에는 안 넣었기
+     * 때문이다. 첫 이상 샘플이 00:39:05면 전이는 00:38:05~00:39:05 어디서든 일어났을 수 있다.
+     *
+     * <p><b>여기를 줄일 때의 위험은 하나다 — 온셋을 자르는 것.</b> CH-3가 창이 주입 1초 전에
+     * 끊겨 세 회차 연속 4점이던 실패가 그 유형이고, 주입이 23초짜리면 통째로 사라진다.
+     * 그래서 메트릭에는 {@code step}이 아니라 <b>앞뒤로 {@code step × 2}</b>를 남긴다.
+     *
+     * @param exactPad  TEMPO 채널의 여유. 기본 0 — span 시각에 불확실성이 없다
+     * @param bucketPad MIMIR 채널의 여유. 샘플 간격에서 유도된다({@code step × 2})
      */
     public TimeWindow window(Duration exactPad, Duration bucketPad, TimeWindow sweep) {
-        Duration pad = precision() == Precision.EXACT ? exactPad : bucketPad;
+        Duration pad = switch (channel()) {
+            case MIMIR -> bucketPad;
+            case LOKI -> Duration.ZERO;
+            case TEMPO -> exactPad;
+        };
         Instant start = firstAt().minus(pad);
         Instant end = lastAt().plus(pad);
         if (sweep == null) {
