@@ -52,6 +52,16 @@ class TriageFlowTest {
     /** 2026-07-28T05:00Z = 14:00 KST → "어젯밤"은 07-27T09:00Z ~ 07-27T21:00Z. */
     private static final Instant NOW = Instant.parse("2026-07-28T05:00:00Z");
 
+    /**
+     * B-53 이후의 후보 검색 쿼리. 기본값이 바뀌면 이 테스트가 먼저 깨지도록 문자열을 박아 둔다.
+     *
+     * <p>대조군 검색({@code rootName = "..."})과 <b>둘 다 rootName을 쓴다</b> — WireMock은
+     * 나중에 등록된 스텁을 우선하므로 {@code containing("rootName")} 으로 두면 후보 검색까지
+     * 대조군 스텁이 가로챈다. 후보는 정확 일치로, 대조군은 {@code "rootName = "} 로 가른다.
+     */
+    private static final String CANDIDATE_QUERY =
+            "{ rootName !~ \"security filterchain.*|INFO.*|task .*\" }";
+
     private WireMockServer server;
     private TriageService triageService;
     private ScriptedLlmClient llmClient;
@@ -90,12 +100,12 @@ class TriageFlowTest {
                         """.formatted(nanos(base.plusSeconds(600))))));
         // B-9 후보 채널(무조건 검색): 기본은 빈 결과 — 후보는 스윕이 넘긴 것만 남는다.
         server.stubFor(get(urlPathEqualTo("/api/search"))
-                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo("{}"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo(CANDIDATE_QUERY))
                 .willReturn(aResponse().withStatus(200).withBody("{\"traces\":[]}")));
         // B-46 대조군 지목 검색(rootName). 이 창에 정상 사례가 없다는 응답 — 수집이 멈추지 않고
         // "대조군 없음"이 실패 목록에 남는 경로를 흐름 테스트가 함께 지난다.
         server.stubFor(get(urlPathEqualTo("/api/search"))
-                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.containing("rootName"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.containing("rootName = "))
                 .willReturn(aResponse().withStatus(200).withBody("{\"traces\":[]}")));
 
         // 스윕은 집계(step 있음), 심층은 원본 라인(direction 있음) — 같은 엔드포인트지만 응답 모양이 다르다.
@@ -351,7 +361,7 @@ class TriageFlowTest {
         // 상한 3이던 시절에는 "대표 1 + 후보 2"가 전부라, 정답이 4번째면 실리지 않았다.
         // 순서에 의미가 없으므로(신호가 만들어진 순서일 뿐) 밀린 것이 정답일 수 있다.
         server.stubFor(get(urlPathEqualTo("/api/search"))
-                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo("{}"))
+                .withQueryParam("q", com.github.tomakehurst.wiremock.client.WireMock.equalTo(CANDIDATE_QUERY))
                 .willReturn(aResponse().withStatus(200).withBody("""
                         {"traces":[{"traceID":"cand1"},{"traceID":"cand2"},{"traceID":"cand3"},
                                    {"traceID":"cand4"},{"traceID":"cand5"}]}

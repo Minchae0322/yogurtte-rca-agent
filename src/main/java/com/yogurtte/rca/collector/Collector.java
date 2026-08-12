@@ -30,9 +30,10 @@ public class Collector {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** B-9 후보 검색 TraceQL. 상태를 거르지 않는다 — 정답이 <b>정상 트레이스</b>인 문항이 있다
-     *  (AU-2: "정상 요청에 auth 호출 span이 없다"가 요건이라 error/slow 채널 어디에도 안 걸린다). */
-    private static final String ANY_TRACE_QUERY = "{}";
+    // B-9 후보 검색 TraceQL은 {@link CollectProperties#candidateTraceQuery()}가 만든다.
+    // 상태는 거르지 않는다 — 정답이 <b>정상 트레이스</b>인 문항이 있다 (AU-2: "정상 요청에
+    // auth 호출 span이 없다"가 요건이라 error/slow 채널 어디에도 안 걸린다).
+    // 거르는 것은 상태가 아니라 <b>span 1개짜리 고아 트레이스</b>뿐이다 (B-53).
 
     /** {@code max-traces <= 0}(상한 없음)일 때 창을 훑는 폭. Tempo 검색은 limit이 필수다. */
     private static final int SEARCH_SCAN_LIMIT = 200;
@@ -169,6 +170,15 @@ public class Collector {
         if (scope.window() == null) {
             return;
         }
+        // B-57: 창 후보 채우기를 끈다 (기본). 이 채널은 네 조사 연속 정보량 0이었다 —
+        // 회차 6 AP-1·AP-2·AP-3에서 후보 20건이 20건 다 잡트레이스였고(B-53으로 해소),
+        // 회차 7에서는 노이즈를 걷고 창별 배분까지 넣었는데도(B-55) 정답이 최신순에 밀려
+        // 또 안 실렸다. 그때마다 컨텍스트만 +21~131% 늘었다.
+        // 정답 트레이스는 지목분(스윕이 찾은 것)과 대조군(B-46)이 나른다.
+        if (!properties.candidateFill()) {
+            log.info("candidate fill off (B-57): traces={} — 지목분과 대조군만 싣는다", traces.size());
+            return;
+        }
         // max-traces <= 0 이면 상한 없음. 창 안 트레이스를 전부 딥 페치한다.
         boolean unbounded = properties.maxTraces() <= 0;
         int slots = unbounded ? Integer.MAX_VALUE : properties.maxTraces() - traces.size();
@@ -176,26 +186,33 @@ public class Collector {
             return;
         }
 
-        LinkedHashSet<String> ids = new LinkedHashSet<>();
         // 로그와 같은 이유로 창별로 검색한다 — 합집합 창으로 훑으면 후보 사이 빈 구간의
         // 무관한 트레이스가 상한을 차지한다.
+        //
+        // B-55: 창을 <b>전부</b> 검색한 뒤 라운드로빈으로 뽑는다. 예전에는 `ids.size() < slots`를
+        // 루프 조건에 걸어 선착순으로 담았는데, 첫 창이 예산을 다 먹으면 <b>뒤 창은 검색조차
+        // 안 나갔다.</b> AP-2 회차 6에서 실제로 그렇게 됐다 — w1(AP-1의 창)이 슬롯 4개를 다
+        // 채워서 w2(팔로우 NPE, 조사 대상 그 자체)는 후보 검색이 아예 없었고, 그 창에 있던
+        // 팔로우 트레이스를 못 받아 근거 항목이 25점 만점 대신 18점이 됐다.
         List<TimeWindow> searchWindows = scope.logWindows(window);
-        for (int i = 0; i < searchWindows.size() && ids.size() < slots; i++) {
+        List<List<String>> perWindow = new ArrayList<>();
+        for (int i = 0; i < searchWindows.size(); i++) {
             TimeWindow w = searchWindows.get(i);
             try {
                 String body = tempoClient.search(scope.correlationId() + "-candidates"
                                 + (searchWindows.size() > 1 ? "-w" + (i + 1) : ""),
-                        ANY_TRACE_QUERY, w.start(), w.end(),
+                        properties.candidateTraceQuery(), w.start(), w.end(),
                         // Tempo /api/search는 limit이 필수라 "무제한"이어도 숫자를 줘야 한다.
                         // ponytail: 상한 없음 = 한 번에 SEARCH_SCAN_LIMIT까지. 이보다 트레이스가
                         // 많은 창이 실제로 나오면 페이지네이션을 붙인다.
                         unbounded ? SEARCH_SCAN_LIMIT : properties.maxTraces() * 2);
-                traceIdsOf(body).stream().filter(id -> !traces.containsKey(id)).forEach(ids::add);
+                perWindow.add(traceIdsOf(body).stream().filter(id -> !traces.containsKey(id)).toList());
             } catch (Exception e) {
                 failures.add("Tempo 후보 검색 실패 — 트레이스는 탐색이 지목한 것뿐이다: " + describe(e));
                 log.warn("tempo candidate search failed for {}: {}", scope.correlationId(), e.toString());
             }
         }
+        LinkedHashSet<String> ids = interleave(perWindow, slots);
 
         int added = 0;
         for (String id : ids) {
@@ -210,8 +227,39 @@ public class Collector {
                 log.warn("candidate trace fetch failed for {}: {}", id, e.toString());
             }
         }
-        log.info("traces collected: {} (지목 {} + 창 후보 {} · slots={})",
-                traces.size(), traces.size() - added, added, slots);
+        log.info("traces collected: {} (지목 {} + 창 후보 {} · slots={} · 창 {}개 {})",
+                traces.size(), traces.size() - added, added, slots,
+                searchWindows.size(), perWindow.stream().map(List::size).toList());
+    }
+
+    /**
+     * 창별 후보 목록을 <b>라운드로빈</b>으로 섞어 상한만큼 뽑는다 (B-55).
+     *
+     * <p>창마다 최소 1건이 보장된다 — 창이 3개면 1번씩 돌고 나서 2번째를 돈다. 남는 창이 없으면
+     * (짧은 창이 먼저 소진되면) 남은 창끼리 계속 채우므로 <b>슬롯이 놀지 않는다.</b>
+     *
+     * <p>창 안 순서는 Tempo가 준 순서(최신순)를 그대로 둔다 — 관련도 정렬은 별개 항목(B-38)이고,
+     * 여기서 같이 건드리면 어느 쪽이 점수를 움직였는지 못 가린다.
+     */
+    static LinkedHashSet<String> interleave(List<List<String>> perWindow, int slots) {
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        for (int round = 0; ids.size() < slots; round++) {
+            boolean any = false;
+            for (List<String> w : perWindow) {
+                if (round >= w.size()) {
+                    continue;
+                }
+                any = true;
+                ids.add(w.get(round));
+                if (ids.size() >= slots) {
+                    break;
+                }
+            }
+            if (!any) {
+                break;
+            }
+        }
+        return ids;
     }
 
     /**
@@ -255,7 +303,7 @@ public class Collector {
      * 사례</b>다. 그런데 정상 트레이스는 스윕의 두 필터({@code status = error} ·
      * {@code duration > 임계값})에 <b>구조적으로 안 걸린다</b> — 정상이니까.
      *
-     * <p>창 안 후보 검색({@link #ANY_TRACE_QUERY})이 그것을 메우라고 있었는데 <b>메우지
+     * <p>창 안 후보 검색({@link CollectProperties#candidateTraceQuery()})이 그것을 메우라고 있었는데 <b>메우지
      * 못했다.</b> Tempo 검색은 최신순으로 limit만큼 주는데, IN-2 실측에서 25분 창의 최신 20건이
      * 전부 {@code security filterchain} 잡트레이스였고 정작 문제의 04:48 트레이스도 정상 발행
      * 트레이스도 그 안에 없었다. 그래서 <b>지목 검색</b>({@code rootName})으로 따로 가져온다.
@@ -311,14 +359,98 @@ public class Collector {
                         + "정상값과 비교할 대상이 컨텍스트에 없으니 절대값만으로 판단하지 말 것.");
                 return false;
             }
-            traces.put(shortest, tempoClient.fetchTrace(shortest));
-            log.info("contrast trace: {} ({}ms) for rootName '{}'", shortest, shortestMs, rootName);
+            String full = tempoClient.fetchTrace(shortest);
+            String kept = properties.contrastFold() ? foldToRootService(full) : full;
+            traces.put(shortest, kept);
+            if (kept.length() < full.length()) {
+                // 모델이 "성공 트레이스에 하류가 없다"를 신호로 오독하지 않도록 누락을 밝힌다.
+                failures.add("대조군 " + shortest + " 은 <b>루트 서비스 구간만</b> 실었다 (B-47) — "
+                        + "커밋까지는 남기고 하류 서비스(비동기 팬아웃) span은 뺐다. "
+                        + "그 부재를 정상/이상 판단의 근거로 쓰지 말 것.");
+            }
+            log.info("contrast trace: {} ({}ms) for rootName '{}' · {}B -> {}B",
+                    shortest, shortestMs, rootName, full.length(), kept.length());
             return true;
         } catch (Exception e) {
             failures.add("대조군 트레이스 수집 실패: " + describe(e));
             log.warn("contrast trace fetch failed for {}: {}", scope.correlationId(), e.toString());
             return false;
         }
+    }
+
+    /**
+     * 대조군에서 <b>루트 서비스 구간만</b> 남긴다 (B-47).
+     *
+     * <p><b>대조군은 성공 트레이스라서 실패 트레이스보다 크다.</b> 실패는 예외 지점에서 끊기지만
+     * 성공은 커밋 → 메시지 발행 → 컨슈머 수신 → 후속 처리까지 완주한다. AP-1 실측으로
+     * 정답 트레이스 <b>8,761B</b> 대 대조군 <b>31,272B</b>였고, 상위 span 15개 중 8개가
+     * 대조군의 하류(알림 팬아웃)였다.
+     *
+     * <p><b>대조에 필요한 것은 루트 경로의 차분이다</b> — 같은 엔드포인트가 정상일 때
+     * 어디까지 어떻게 갔는지. 커밋 이후의 비동기 팬아웃은 그 판단에 쓰이지 않는다
+     * (AP-1 리포트도 그 구간을 <i>"댓글 실패와는 무관한 별개"</i>로 분리해 썼다).
+     *
+     * <p><b>루트 서비스 기준으로 자른다</b> — 다른 서비스의 batch를 통째로 뺀다. 발행 span
+     * ({@code publish ...})은 발행자 쪽에 찍히므로 <b>남는다</b>; 빠지는 것은 수신 이후다.
+     * AP-1이 근거로 쓴 <i>"성공 트레이스에는 publish span이 있다"</i>가 그대로 성립한다.
+     *
+     * <p>자를 것이 없으면(단일 서비스 트레이스) 원본을 그대로 돌려준다.
+     */
+    static String foldToRootService(String traceJson) {
+        try {
+            JsonNode root = MAPPER.readTree(traceJson);
+            JsonNode batches = root.path("batches");
+            if (!batches.isArray() || batches.size() <= 1) {
+                return traceJson;
+            }
+            String rootService = null;
+            for (JsonNode batch : batches) {
+                if (hasRootSpan(batch)) {
+                    rootService = serviceOf(batch);
+                    break;
+                }
+            }
+            if (rootService == null) {
+                return traceJson;
+            }
+            ArrayNode kept = MAPPER.createArrayNode();
+            for (JsonNode batch : batches) {
+                if (rootService.equals(serviceOf(batch))) {
+                    kept.add(batch);
+                }
+            }
+            if (kept.isEmpty() || kept.size() == batches.size()) {
+                return traceJson;
+            }
+            ((ObjectNode) root).set("batches", kept);
+            return MAPPER.writeValueAsString(root);
+        } catch (Exception e) {
+            // 접기가 실패하면 원본을 싣는다 — 크기보다 근거 보존이 먼저다.
+            return traceJson;
+        }
+    }
+
+    /** Tempo 응답은 배포에 따라 scopeSpans / instrumentationLibrarySpans 둘 다 온다. */
+    private static boolean hasRootSpan(JsonNode batch) {
+        for (String key : List.of("scopeSpans", "instrumentationLibrarySpans")) {
+            for (JsonNode scope : batch.path(key)) {
+                for (JsonNode span : scope.path("spans")) {
+                    if (span.path("parentSpanId").asText("").isBlank()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String serviceOf(JsonNode batch) {
+        for (JsonNode attr : batch.path("resource").path("attributes")) {
+            if ("service.name".equals(attr.path("key").asText())) {
+                return attr.path("value").path("stringValue").asText(null);
+            }
+        }
+        return null;
     }
 
     /** 부모가 없는 span의 이름. 없으면 null. */

@@ -75,4 +75,32 @@ class CollectPropertiesTest {
 
         assertThat(query).startsWith("{service_name=~\"content-service|auth-service|chat-service\"}");
     }
+
+    // --- B-53: 후보 검색에서 잡트레이스를 뺀다 ---
+
+    private CollectProperties withExclude(String exclude) {
+        return new CollectProperties(120, "content-service", "service_name",
+                1000, "15s", List.of("up"), 102400, 30, 3, true, exclude, true, true);
+    }
+
+    @Test
+    void 기본값은_고아_트레이스_셋을_뺀다() {
+        // 창 470건 중 96%가 이것들이었다 (AP-1 회차 6 실측). 제외 후 10건, 전부 실제 요청.
+        assertThat(properties.candidateTraceQuery())
+                .isEqualTo("{ rootName !~ \"security filterchain.*|INFO.*|task .*\" }");
+    }
+
+    @Test
+    void 비우면_제외_이전으로_돌아간다() {
+        // 대조군 스위치. 두 팔을 같은 후보 집합으로 비교할 수 있어야 한다.
+        assertThat(withExclude("").candidateTraceQuery()).isEqualTo("{}");
+        assertThat(withExclude(null).candidateTraceQuery()).isEqualTo("{}");
+    }
+
+    @Test
+    void 큰따옴표가_들어오면_제외를_포기한다() {
+        // TraceQL 문자열이 깨지면 셀렉터가 조용히 빈 결과를 낸다 — 라벨 결함으로 조사 6회를
+        // 날린 전례가 있어, 깨진 쿼리보다 제외 없는 쿼리를 택한다.
+        assertThat(withExclude("bad\"name").candidateTraceQuery()).isEqualTo("{}");
+    }
 }

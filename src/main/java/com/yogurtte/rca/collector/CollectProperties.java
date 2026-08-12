@@ -3,6 +3,7 @@ package com.yogurtte.rca.collector;
 import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 /**
  * @param apps     Loki 셀렉터 값 (정규식 대안). <b>Alloy가 붙이는 실제 값</b>이어야 한다 —
@@ -30,7 +31,41 @@ public record CollectProperties(
         int maxTraceBytes,
         int topSpans,
         int maxTraces,
-        boolean metricSummary) {
+        boolean metricSummary,
+        String candidateExcludeRoots,
+        boolean candidateFill,
+        boolean contrastFold) {
+
+    /**
+     * 창 후보 검색에서 뺄 루트 span 이름 (정규식). 빈 값이면 제외 없이 {@code {}}.
+     *
+     * <p>이 값들은 <b>span 1개짜리 고아 트레이스</b>다 — {@code security filterchain after}가
+     * 부모도 자식도 없이 홀로 트레이스를 이룬다(1건 약 2.2KB). 계측이 필터체인 span을 HTTP
+     * 요청 span의 자식으로 붙이지 못해서 생기는 것이라 <b>원래는 앱 계측 결함</b>이지만,
+     * 앱을 고치면 이후 모든 회차의 관측 조건이 바뀌므로 조사 도구 쪽에서 막는다.
+     */
+    static final String DEFAULT_EXCLUDE_ROOTS = "security filterchain.*|INFO.*|task .*";
+
+    /**
+     * 생성자가 둘이면 Spring이 바인딩 대상을 못 고르고 기본 생성자를 찾다 죽는다
+     * ({@code No default constructor found}). 정규 생성자를 명시한다.
+     */
+    @ConstructorBinding
+    public CollectProperties {
+    }
+
+    /**
+     * 기존 호출부(테스트 다수)를 위한 기본값 생성자.
+     *
+     * <p>{@code candidateFill}은 <b>true</b>로 둔다 — 운영 기본값(application.yml)은 꺼져 있지만,
+     * 끄는 결정을 되돌릴 때를 위해 <b>채우기 로직 자체는 테스트가 계속 지키게</b> 한다.
+     */
+    public CollectProperties(int windowPaddingSeconds, String apps, String appLabel, int logLimit,
+            String metricStep, List<String> metricQueries, int maxTraceBytes, int topSpans,
+            int maxTraces, boolean metricSummary) {
+        this(windowPaddingSeconds, apps, appLabel, logLimit, metricStep, metricQueries,
+                maxTraceBytes, topSpans, maxTraces, metricSummary, DEFAULT_EXCLUDE_ROOTS, true, true);
+    }
 
     /**
      * ERROR/WARN 로그. {@code {service_name=~"..."} |~ "ERROR|WARN"}
@@ -116,6 +151,32 @@ public record CollectProperties(
         String ids = String.join("|", traceIds);
         return "{%s=~\"%s\"} |~ \"%s\" != \"%s\""
                 .formatted(appLabel, appsPattern(services), ids, DEBUG_EXCLUDE);
+    }
+
+    /**
+     * B-53 — 창 안 후보 트레이스 검색 쿼리.
+     *
+     * <p><b>{@code {}} 로 두면 창의 96%가 잡트레이스다.</b> AP-1 회차 6의 5분 창 실측:
+     * 470건 중 {@code security filterchain} 360 · {@code INFO} 90 · 스케줄러 2건.
+     * Tempo는 최신순으로 주고 후보 채우기는 관련도 정렬 없이 앞에서 담으므로,
+     * AP-1·AP-2·AP-3 <b>세 조사 모두 후보 검색 20건이 20건 다 잡트레이스</b>였다
+     * (AP-1 기준 19,152B = 트레이스 채널의 32.4%가 정보량 0).
+     *
+     * <p>같은 창에 제외를 걸면 <b>470 → 10건</b>이고 남는 것이 전부 실제 요청이다.
+     * 정답 트레이스와 대조군(B-46이 따로 가져오던 것)이 <b>둘 다 자연히 들어온다.</b>
+     *
+     * <p><b>빈 값이 대조군 스위치다</b> — {@code RCA_CANDIDATE_EXCLUDE_ROOTS=} 로 비우면
+     * {@code {}} 로 돌아가 제외 이전과 바이트 단위로 같은 후보 집합이 나온다.
+     *
+     * <p>큰따옴표가 든 값은 TraceQL 문자열을 깨뜨리므로 제외를 포기하고 {@code {}} 로 간다 —
+     * 셀렉터가 조용히 망가져 빈 결과가 나오는 것보다 낫다(라벨 결함으로 조사 6회를 날린 전례).
+     */
+    public String candidateTraceQuery() {
+        if (candidateExcludeRoots == null || candidateExcludeRoots.isBlank()
+                || candidateExcludeRoots.contains("\"")) {
+            return "{}";
+        }
+        return "{ rootName !~ \"%s\" }".formatted(candidateExcludeRoots);
     }
 
     /**
