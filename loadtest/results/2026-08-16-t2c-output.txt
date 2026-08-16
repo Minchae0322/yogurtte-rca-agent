@@ -1,0 +1,80 @@
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (7m55.8s), 047/200 VUs, 883 complete and 69 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (7m56.8s), 042/200 VUs, 885 complete and 72 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (7m57.8s), 037/200 VUs, 887 complete and 75 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (7m58.8s), 032/200 VUs, 888 complete and 79 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (7m59.8s), 027/200 VUs, 890 complete and 82 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (8m00.8s), 022/200 VUs, 892 complete and 85 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (8m01.8s), 017/200 VUs, 893 complete and 89 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (8m02.8s), 012/200 VUs, 895 complete and 92 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (8m03.8s), 007/200 VUs, 897 complete and 95 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+running (8m04.8s), 002/200 VUs, 898 complete and 99 interrupted iterations
+default ↓ [ 100% ] 068/200 VUs  6m0s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=99.83%
+
+    ws_connecting
+    ✓ 'p(99)<1000' p(99)=632.1ms
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1798   3.706641/s
+    checks_succeeded...: 99.83% 1795 out of 1798
+    checks_failed......: 0.16%  3 out of 1798
+
+    ✓ ws status 101
+    ✗ STOMP CONNECTED
+      ↳  99% — ✓ 896 / ✗ 3
+
+    HTTP
+    http_req_duration..............: avg=202.31ms min=138.3ms med=188.94ms max=480.44ms p(90)=242.55ms p(95)=332.8ms 
+      { expected_response:true }...: avg=202.31ms min=138.3ms med=188.94ms max=480.44ms p(90)=242.55ms p(95)=332.8ms 
+    http_req_failed................: 0.00%  0 out of 50
+    http_reqs......................: 50     0.103077/s
+
+    EXECUTION
+    iteration_duration.............: avg=1m0s     min=1m0s    med=1m0s     max=1m1s     p(90)=1m0s     p(95)=1m0s    
+    iterations.....................: 899    1.85332/s
+    vus............................: 2      min=0        max=200
+    vus_max........................: 200    min=200      max=200
+
+    NETWORK
+    data_received..................: 71 MB  147 kB/s
+    data_sent......................: 4.9 MB 10 kB/s
+
+    WEBSOCKET
+    ws_connecting..................: avg=124.53ms min=26.63ms med=102.01ms max=1.33s    p(90)=193.28ms p(95)=240.85ms
+    ws_msgs_received...............: 149650 308.508775/s
+    ws_msgs_sent...................: 17110  35.272871/s
+    ws_session_duration............: avg=1m0s     min=1m0s    med=1m0s     max=1m1s     p(90)=1m0s     p(95)=1m0s    
+    ws_sessions....................: 999    2.059474/s
+
+
+
+
+running (8m05.1s), 000/200 VUs, 899 complete and 100 interrupted iterations
+default ✓ [ 100% ] 000/200 VUs  6m0s

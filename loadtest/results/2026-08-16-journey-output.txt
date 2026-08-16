@@ -1,0 +1,120 @@
+
+running (19m22.0s), 004/200 VUs, 2095 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m23.0s), 004/200 VUs, 2095 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m24.0s), 004/200 VUs, 2095 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m25.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m26.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m27.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m28.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m29.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m30.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m31.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m32.0s), 002/200 VUs, 2097 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m33.0s), 001/200 VUs, 2098 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m34.0s), 001/200 VUs, 2098 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m35.0s), 001/200 VUs, 2098 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+running (19m36.0s), 001/200 VUs, 2098 complete and 0 interrupted iterations
+sessions ↓ [ 100% ] 011/200 VUs  19m0s  0.09 iters/s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{name:GET /chat/rooms}
+    ✓ 'p(95)<300' p(95)=92.95ms
+
+    http_req_duration{name:GET /feeds/{id}}
+    ✓ 'p(95)<200' p(95)=77.41ms
+
+    http_req_duration{name:GET /feeds/scroll}
+    ✓ 'p(95)<300' p(95)=82.54ms
+    ✓ 'p(99)<600' p(99)=194.33ms
+
+    http_req_duration{name:POST /feeds/{id}/reactions}
+    ✓ 'p(95)<400' p(95)=83.26ms
+
+    http_req_duration{name:POST /login}
+    ✓ 'p(95)<400' p(95)=246.9ms
+
+    http_req_failed
+    ✓ 'rate<0.005' rate=0.00%
+
+    iteration_duration
+    ✓ 'p(95)<90000' p(95)=1m0s
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 10281   8.739509/s
+    checks_succeeded...: 100.00% 10281 out of 10281
+    checks_failed......: 0.00%   0 out of 10281
+
+    ✓ scroll 200
+    ✓ detail 200
+    ✓ battles 200
+    ✓ reaction 200
+    ✓ rooms 200
+
+    HTTP
+    http_req_duration.......................: avg=60.14ms  min=26.36ms med=55.39ms  max=1.2s     p(90)=69.22ms  p(95)=107.36ms
+      { expected_response:true }............: avg=60.14ms  min=26.36ms med=55.39ms  max=1.2s     p(90)=69.22ms  p(95)=107.36ms
+      { name:GET /chat/rooms }..............: avg=40.92ms  min=26.36ms med=32.55ms  max=330.56ms p(90)=54.55ms  p(95)=92.95ms 
+      { name:GET /feeds/{id} }..............: avg=56.9ms   min=41.74ms med=51.83ms  max=314.26ms p(90)=62.31ms  p(95)=77.41ms 
+      { name:GET /feeds/scroll }............: avg=63.94ms  min=48.96ms med=58.44ms  max=909.24ms p(90)=68.81ms  p(95)=82.54ms 
+      { name:POST /feeds/{id}/reactions }...: avg=54.43ms  min=36.19ms med=47.9ms   max=336.01ms p(90)=69.78ms  p(95)=83.26ms 
+      { name:POST /login }..................: avg=180.41ms min=129.1ms med=164.24ms max=1.2s     p(90)=194.66ms p(95)=246.9ms 
+    http_req_failed.........................: 0.00%  0 out of 10527
+    http_reqs...............................: 10527  8.948624/s
+
+    EXECUTION
+    iteration_duration......................: avg=32.35s   min=15.94s  med=29.86s   max=1m17s    p(90)=47.13s   p(95)=1m0s    
+    iterations..............................: 2098   1.783434/s
+    vus.....................................: 1      min=0          max=72 
+    vus_max.................................: 200    min=200        max=200
+
+    NETWORK
+    data_received...........................: 198 MB 168 kB/s
+    data_sent...............................: 5.2 MB 4.4 kB/s
+
+    WEBSOCKET
+    ws_connecting...........................: avg=39.28ms  min=25.56ms med=31.72ms  max=575.17ms p(90)=44.22ms  p(95)=84.37ms 
+    ws_msgs_received........................: 213    0.181064/s
+    ws_msgs_sent............................: 426    0.362127/s
+    ws_session_duration.....................: avg=29.54s   min=20.07s  med=29.74s   max=39.97s   p(90)=37.7s    p(95)=38.61s  
+    ws_sessions.............................: 213    0.181064/s
+
+
+
+
+running (19m36.4s), 000/200 VUs, 2098 complete and 1 interrupted iterations
+sessions ✓ [ 100% ] 001/200 VUs  19m0s  0.09 iters/s

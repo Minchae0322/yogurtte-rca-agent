@@ -1,0 +1,120 @@
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m10.0s), 20/55 VUs, 16971 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m11.0s), 20/55 VUs, 16971 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m12.0s), 20/55 VUs, 16971 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m13.0s), 20/55 VUs, 16971 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m14.0s), 18/55 VUs, 16973 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m15.0s), 16/55 VUs, 16975 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m16.0s), 12/55 VUs, 16979 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m17.0s), 08/55 VUs, 16983 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m18.0s), 04/55 VUs, 16987 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+running (10m19.0s), 01/55 VUs, 16990 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ↓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{name:GET /chat/rooms}
+    ✗ 'p(95)<300' p(95)=1.8s
+
+    http_req_duration{name:GET /feeds/{id}}
+    ✓ 'p(95)<200' p(95)=109.2ms
+
+    http_req_duration{name:GET /feeds/scroll}
+    ✓ 'p(95)<300' p(95)=132.74ms
+    ✗ 'p(99)<500' p(99)=500.14ms
+
+    http_req_duration{name:POST /login}
+    ✗ 'p(95)<400' p(95)=672.9ms
+
+    http_req_failed
+    ✓ 'rate<0.005' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 31764   51.296126/s
+    checks_succeeded...: 100.00% 31764 out of 31764
+    checks_failed......: 0.00%   0 out of 31764
+
+    ✓ scroll 200
+    ✓ rooms 200
+    ✓ detail 200
+
+    HTTP
+    http_req_duration..............: avg=85.34ms  min=27.76ms  med=60.52ms  max=3.29s    p(90)=107.09ms p(95)=198.34ms
+      { expected_response:true }...: avg=85.34ms  min=27.76ms  med=60.52ms  max=3.29s    p(90)=107.09ms p(95)=198.34ms
+      { name:GET /chat/rooms }.....: avg=466.45ms min=27.76ms  med=298.56ms max=3.29s    p(90)=1.15s    p(95)=1.8s    
+      { name:GET /feeds/{id} }.....: avg=67.88ms  min=40.94ms  med=56.64ms  max=1.18s    p(90)=84.76ms  p(95)=109.2ms 
+      { name:GET /feeds/scroll }...: avg=80ms     min=48.43ms  med=62.78ms  max=1.42s    p(90)=97.22ms  p(95)=132.74ms
+      { name:POST /login }.........: avg=305.8ms  min=142.87ms med=230.81ms max=2.02s    p(90)=504.57ms p(95)=672.9ms 
+    http_req_failed................: 0.00%  0 out of 32694
+    http_reqs......................: 32694  52.797996/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.95s    min=1.09s    med=1.12s    max=33.54s   p(90)=1.37s    p(95)=3.23s   
+    iterations.....................: 16991  27.439002/s
+    vus............................: 1      min=0          max=55
+    vus_max........................: 55     min=55         max=55
+
+    NETWORK
+    data_received..................: 513 MB 828 kB/s
+    data_sent......................: 14 MB  22 kB/s
+
+    WEBSOCKET
+    ws_connecting..................: avg=98.76ms  min=26.96ms  med=92.47ms  max=601.33ms p(90)=190.88ms p(95)=208.08ms
+    ws_msgs_received...............: 400    0.645966/s
+    ws_msgs_sent...................: 2800   4.521759/s
+    ws_session_duration............: avg=30.09s   min=30.02s   med=30.09s   max=30.6s    p(90)=30.19s   p(95)=30.2s   
+    ws_sessions....................: 400    0.645966/s
+
+
+
+
+running (10m19.2s), 00/55 VUs, 16991 complete and 0 interrupted iterations
+auth ✓ [ 100% ] 5 VUs   10m0s
+chat ✓ [ 100% ] 20 VUs  10m0s
+read ✓ [ 100% ] 30 VUs  10m0s
+time="2026-08-16T17:51:14+09:00" level=error msg="thresholds on metrics 'http_req_duration{name:GET /chat/rooms}, http_req_duration{name:GET /feeds/scroll}, http_req_duration{name:POST /login}' have been crossed"
