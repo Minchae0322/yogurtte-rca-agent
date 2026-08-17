@@ -1,0 +1,40 @@
+  █ THRESHOLDS 
+
+    http_req_duration{name:POST /feeds/{id}/reactions}
+    ✗ 'p(99)<1000' p(99)=2.86s
+
+    http_req_failed
+    ✓ 'rate<0.05' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 40679   162.550048/s
+    checks_succeeded...: 100.00% 40679 out of 40679
+    checks_failed......: 0.00%   0 out of 40679
+
+    ✓ reaction 200
+
+    HTTP
+    http_req_duration.......................: avg=1.03s min=29.4ms  med=637.1ms  max=3.92s p(90)=2.35s p(95)=2.52s
+      { expected_response:true }............: avg=1.03s min=29.4ms  med=637.1ms  max=3.92s p(90)=2.35s p(95)=2.52s
+      { name:POST /feeds/{id}/reactions }...: avg=1.03s min=29.4ms  med=640.91ms max=3.92s p(90)=2.36s p(95)=2.52s
+    http_req_failed.........................: 0.00% 0 out of 40730
+    http_reqs...............................: 40730 162.75384/s
+
+    EXECUTION
+    iteration_duration......................: avg=1.03s min=29.59ms med=641.07ms max=3.93s p(90)=2.36s p(95)=2.52s
+    iterations..............................: 40679 162.550048/s
+    vus.....................................: 2     min=0          max=200
+    vus_max.................................: 200   min=200        max=200
+
+    NETWORK
+    data_received...........................: 34 MB 138 kB/s
+    data_sent...............................: 18 MB 70 kB/s
+
+
+
+
+running (4m10.3s), 000/200 VUs, 40679 complete and 0 interrupted iterations
+default ✓ [ 100% ] 000/200 VUs  4m0s
+time="2026-08-17T23:24:58+09:00" level=error msg="thresholds on metrics 'http_req_duration{name:POST /feeds/{id}/reactions}' have been crossed"

@@ -1,0 +1,50 @@
+default   [  99% ] 019/200 VUs  3m57.3s/4m00.0s
+
+running (4m09.0s), 013/200 VUs, 12859 complete and 0 interrupted iterations
+default   [  99% ] 013/200 VUs  3m58.3s/4m00.0s
+
+running (4m10.0s), 006/200 VUs, 12915 complete and 0 interrupted iterations
+default   [ 100% ] 006/200 VUs  3m59.3s/4m00.0s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{name:POST /feeds/{id}/reactions}
+    ✗ 'p(99)<1000' p(99)=8.82s
+
+    http_req_failed
+    ✓ 'rate<0.05' rate=0.01%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 12952  51.66282/s
+    checks_succeeded...: 99.98% 12950 out of 12952
+    checks_failed......: 0.01%  2 out of 12952
+
+    ✗ reaction 200
+      ↳  99% — ✓ 12950 / ✗ 2
+
+    HTTP
+    http_req_duration.......................: avg=3.25s min=12.67ms med=2.39s max=9.23s p(90)=6.43s p(95)=6.58s
+      { expected_response:true }............: avg=3.25s min=34.24ms med=2.39s max=9.23s p(90)=6.43s p(95)=6.58s
+      { name:POST /feeds/{id}/reactions }...: avg=3.26s min=12.67ms med=2.4s  max=9.23s p(90)=6.44s p(95)=6.58s
+    http_req_failed.........................: 0.01%  2 out of 13003
+    http_reqs...............................: 13003  51.866249/s
+
+    EXECUTION
+    iteration_duration......................: avg=3.26s min=13.67ms med=2.4s  max=9.23s p(90)=6.44s p(95)=6.58s
+    iterations..............................: 12952  51.66282/s
+    vus.....................................: 6      min=0          max=200
+    vus_max.................................: 200    min=200        max=200
+
+    NETWORK
+    data_received...........................: 12 MB  48 kB/s
+    data_sent...............................: 5.8 MB 23 kB/s
+
+
+
+
+running (4m10.7s), 000/200 VUs, 12952 complete and 0 interrupted iterations
+default ✓ [ 100% ] 000/200 VUs  4m0s
+time="2026-08-17T23:20:35+09:00" level=error msg="thresholds on metrics 'http_req_duration{name:POST /feeds/{id}/reactions}' have been crossed"

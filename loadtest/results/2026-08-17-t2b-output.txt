@@ -1,0 +1,60 @@
+running (5m58.0s), 023/500 VUs, 20677 complete and 0 interrupted iterations
+default   [  99% ] 023/500 VUs  5m57.5s/6m00.0s
+
+running (5m59.0s), 014/500 VUs, 20743 complete and 0 interrupted iterations
+default   [ 100% ] 014/500 VUs  5m58.5s/6m00.0s
+
+running (6m00.0s), 006/500 VUs, 20799 complete and 0 interrupted iterations
+default   [ 100% ] 006/500 VUs  5m59.5s/6m00.0s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{name:GET /feeds/{id}}
+    ✗ 'p(99)<500' p(99)=4.85s
+
+    http_req_duration{name:GET /feeds/hot}
+    ✗ 'p(99)<800' p(99)=4.53s
+
+    http_req_duration{name:GET /feeds/scroll}
+    ✗ 'p(99)<800' p(99)=4.73s
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 62439   173.125401/s
+    checks_succeeded...: 100.00% 62439 out of 62439
+    checks_failed......: 0.00%   0 out of 62439
+
+    ✓ scroll 200
+    ✓ hot 200
+    ✓ detail 200
+
+    HTTP
+    http_req_duration..............: avg=1.84s min=20.21ms  med=1.93s max=6.9s  p(90)=3.74s p(95)=4s    
+      { expected_response:true }...: avg=1.84s min=20.21ms  med=1.93s max=6.9s  p(90)=3.74s p(95)=4s    
+      { name:GET /feeds/{id} }.....: avg=1.92s min=39.74ms  med=2.02s max=6.9s  p(90)=3.84s p(95)=4.08s 
+      { name:GET /feeds/hot }......: avg=1.72s min=20.21ms  med=1.8s  max=6.67s p(90)=3.62s p(95)=3.85s 
+      { name:GET /feeds/scroll }...: avg=1.89s min=49.03ms  med=1.99s max=6.86s p(90)=3.79s p(95)=4.03s 
+    http_req_failed................: 0.00%  0 out of 62441
+    http_reqs......................: 62441  173.130946/s
+
+    EXECUTION
+    iteration_duration.............: avg=5.54s min=118.43ms med=6.19s max=14.8s p(90)=9.51s p(95)=10.36s
+    iterations.....................: 20813  57.708467/s
+    vus............................: 6      min=1          max=500
+    vus_max........................: 500    min=500        max=500
+
+    NETWORK
+    data_received..................: 709 MB 2.0 MB/s
+    data_sent......................: 25 MB  68 kB/s
+
+
+
+
+running (6m00.7s), 000/500 VUs, 20813 complete and 0 interrupted iterations
+default ✓ [ 100% ] 000/500 VUs  6m0s
+time="2026-08-17T23:15:57+09:00" level=error msg="thresholds on metrics 'http_req_duration{name:GET /feeds/hot}, http_req_duration{name:GET /feeds/scroll}, http_req_duration{name:GET /feeds/{id}}' have been crossed"
