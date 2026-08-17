@@ -5,8 +5,8 @@
 //   커넥션이 락 대기로 묶여 HikariCP 가 먼저 마른다.
 //
 // 대조군을 같이 돌려야 "락 때문"이 증명된다:
-//   실험군  k6 run loadtest/d-hotkey-reaction.js                 (한 피드에 집중)
-//   대조군  k6 run loadtest/d-hotkey-reaction.js -e SPREAD=1     (여러 피드로 분산)
+//   실험군  k6 run autoscaling/loadtest/d-hotkey-reaction.js                 (한 피드에 집중)
+//   대조군  k6 run autoscaling/loadtest/d-hotkey-reaction.js -e SPREAD=1     (여러 피드로 분산)
 // 같은 VU·같은 시간에 처리량(http_reqs)과 p99 가 갈리면 원인은 부하량이 아니라 락이다.
 //
 // 볼 것: hikaricp_connections_pending · hikaricp_connections_acquire_seconds ·

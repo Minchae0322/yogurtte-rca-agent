@@ -1,6 +1,6 @@
 // 부하테스트용 계정 생성. 회원가입(/user/auth/signup)은 이메일 인증코드가 필요해서 못 쓰고,
 // POST /api/user (UserController.createUser) 는 인증·인증코드 없이 바로 만들어진다.
-//   k6 run loadtest/seed-users.js -e USER_COUNT=300
+//   k6 run autoscaling/loadtest/seed-users.js -e USER_COUNT=300
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { check } from 'k6';

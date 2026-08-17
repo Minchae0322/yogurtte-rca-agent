@@ -7,8 +7,8 @@
 // CONNECT/DISCONNECT 핸들러와 presence 등록/해제 경로를 때린다. 서버 재시작 직후 클라이언트가
 // 일제히 재접속하는 상황이 이 모양이다.
 //
-//   k6 run loadtest/j-ws-storm.js -e VUS=1000               (연결 유지)
-//   k6 run loadtest/j-ws-storm.js -e VUS=500 -e RECONNECT=1 (재접속 폭풍)
+//   k6 run autoscaling/loadtest/j-ws-storm.js -e VUS=1000               (연결 유지)
+//   k6 run autoscaling/loadtest/j-ws-storm.js -e VUS=500 -e RECONNECT=1 (재접속 폭풍)
 //
 // 볼 것: chat 의 열린 소켓 수 · Redis 키 증가와 TTL 회수 여부 · DISCONNECT 후 정리 누락(세션 누수) ·
 //        JVM 스레드 수. OS 의 파일 디스크립터 한계(ulimit -n)에 k6 쪽이 먼저 걸릴 수 있으니 확인할 것.

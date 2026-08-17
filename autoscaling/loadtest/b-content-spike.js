@@ -5,7 +5,7 @@
 //   /feeds/hot     hotScore 정렬 + 오프셋 페이징
 //   /feeds/{id}    단건 상세
 // 토큰은 VU 당 1회만 발급(setup)해서 auth 부하가 content 측정에 섞이지 않게 한다.
-//   k6 run loadtest/b-content-spike.js -e CONTENT_URL=https://<INGRESS>/api
+//   k6 run autoscaling/loadtest/b-content-spike.js -e CONTENT_URL=https://<INGRESS>/api
 import http from 'k6/http';
 import { check, group } from 'k6';
 import { CONTENT, account, login, bearer, feedIds } from './lib/common.js';

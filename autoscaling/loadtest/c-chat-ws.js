@@ -2,7 +2,7 @@
 // 흐름: CONNECT(Bearer + X-Device-Id) → SUBSCRIBE /topic/chatroom/{roomId} → 3초마다 SEND /app/chat/send
 // 부하 지점: 동시 세션 레지스트리(로컬 + Redis presence) · 메시지당 Mongo 저장 ·
 //            DirectChatMessageSender 가 senderId 조회로 auth-service 를 호출하는 구간(캐시 miss 시 부하 전파)
-//   k6 run loadtest/c-chat-ws.js -e CHAT_WS_URL=wss://<INGRESS>/api/ws/websocket -e VUS=200
+//   k6 run autoscaling/loadtest/c-chat-ws.js -e CHAT_WS_URL=wss://<INGRESS>/api/ws/websocket -e VUS=200
 import ws from 'k6/ws';
 import { check } from 'k6';
 import { CHAT_WS, tokenPool, pick } from './lib/common.js';

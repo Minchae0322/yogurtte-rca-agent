@@ -11,7 +11,7 @@
 //
 // 볼 것(서버측): user_fallback_total · content→auth client span 지속시간(Tempo) ·
 //               "[user-fallback]" 로그(Loki) · auth 의 tomcat_threads_busy
-//   k6 run loadtest/f-cascade.js
+//   k6 run autoscaling/loadtest/f-cascade.js
 import http from 'k6/http';
 import { check } from 'k6';
 import { CONTENT, AUTH, account, PASSWORD, tokenPool, bearer, pick, feedIds } from './lib/common.js';

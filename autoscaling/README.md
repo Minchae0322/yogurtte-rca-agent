@@ -335,7 +335,7 @@ Phase 3-1 예시의 "480MB → 300MB"보다 출발점이 높다(590~926Mi). 절�
 
 따라서 Phase 1에서 실제 남는 일:
 1. **WS 세션 수 Gauge 재구현** - 기존 `websocket_active_users`는 **실연결 200개에서도 0**
-   (부하시험으로 구현 결함 확정, [실행 1회차](../loadtest/results/2026-08-16-실행-1회차.md) 소급 관측 절).
+   (부하시험으로 구현 결함 확정, [실행 1회차](loadtest/results/2026-08-16-실행-1회차.md) 소급 관측 절).
    SimpUserRegistry 기반이 Bearer 인증 세션을 못 세는 것으로 보이며, 세션 카운트 방식으로 교체.
 2. Kafka consumer lag 지표 확인 - `kafka_consumergroup_lag`는 Mimir에 이미 존재(RCA 트랙 사용 중).
 3. MySQL 익스포터 부재 - T3-D에서 `innodb_row_lock_*` 조회 불가였다. 넣으면 락 실측이 3중 근거가 된다.
@@ -343,7 +343,7 @@ Phase 3-1 예시의 "480MB → 300MB"보다 출발점이 높다(590~926Mi). 절�
 
 ## D. Baseline(Phase 2)의 상당 부분이 이미 실측돼 있다 - 단, 경로가 다르다
 
-[부하테스트 실행 1회차](../loadtest/results/2026-08-16-실행-1회차.md)에서 로드맵 시나리오
+[부하테스트 실행 1회차](loadtest/results/2026-08-16-실행-1회차.md)에서 로드맵 시나리오
 A(=T2-A)·B(=T2-B)·C(=T2-C)를 이미 실행했다. **before 수치로 쓸 수 있는 것들:**
 
 | 로드맵 시나리오 | 실측 (1회차) | 무너진 지점 |

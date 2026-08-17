@@ -5,9 +5,9 @@
 //   spike       0 → 극대 → 0. 순간 폭주와 회복 시간(오토스케일/커넥션풀 복구)을 본다
 //   soak        저부하 1시간. 누수(힙·커넥션·FD)를 본다. 짧은 테스트로는 절대 안 보이는 것
 //
-//   k6 run loadtest/stress.js -e PROFILE=breakpoint -e TARGET=feeds-scroll -e RPS_MAX=2000
-//   k6 run loadtest/stress.js -e PROFILE=spike      -e TARGET=login
-//   k6 run loadtest/stress.js -e PROFILE=soak       -e TARGET=feeds-scroll -e DURATION=1h
+//   k6 run autoscaling/loadtest/stress.js -e PROFILE=breakpoint -e TARGET=feeds-scroll -e RPS_MAX=2000
+//   k6 run autoscaling/loadtest/stress.js -e PROFILE=spike      -e TARGET=login
+//   k6 run autoscaling/loadtest/stress.js -e PROFILE=soak       -e TARGET=feeds-scroll -e DURATION=1h
 //
 // 볼 것: breakpoint 는 중단 시점의 RPS, spike 는 임계값 복귀까지 걸린 시간,
 //        soak 는 jvm_memory_used_bytes 기울기와 hikaricp_connections_active 의 우상향 여부.

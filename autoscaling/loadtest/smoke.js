@@ -1,6 +1,6 @@
 // T0. 스모크 - 부하가 아니라 "경로가 살아있나" 확인. 다른 모든 시나리오의 선행 조건.
 // 1 VU 1회. 하나라도 깨지면 뒤 시나리오 결과는 볼 필요가 없다.
-//   k6 run loadtest/smoke.js
+//   k6 run autoscaling/loadtest/smoke.js
 import http from 'k6/http';
 import ws from 'k6/ws';
 import { check } from 'k6';

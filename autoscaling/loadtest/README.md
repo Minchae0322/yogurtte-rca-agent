@@ -36,8 +36,8 @@ loadtest/
 인증 없이 열려 있는 `POST /api/user`로 만든다.
 
 ```bash
-k6 run loadtest/seed-users.js -e USER_COUNT=300
-k6 run loadtest/smoke.js          # 여기서 깨지면 아래는 볼 필요 없다
+k6 run autoscaling/loadtest/seed-users.js -e USER_COUNT=300
+k6 run autoscaling/loadtest/smoke.js          # 여기서 깨지면 아래는 볼 필요 없다
 ```
 
 `load1@test.com ~ loadN@test.com` / 비밀번호 `test1234!` (`-e PASSWORD=`로 변경).
@@ -56,8 +56,8 @@ k6 run loadtest/smoke.js          # 여기서 깨지면 아래는 볼 필요 없
 | 쓰는 목적 | 경로별 SLO 기준선 | 실제 사용 패턴에서의 체감 성능 |
 
 ```bash
-k6 run loadtest/journey.js              # 초당 2세션 (~100 동시 사용자)
-k6 run loadtest/journey.js -e RATE=6    # 성수기 가정
+k6 run autoscaling/loadtest/journey.js              # 초당 2세션 (~100 동시 사용자)
+k6 run autoscaling/loadtest/journey.js -e RATE=6    # 성수기 가정
 ```
 
 여정: 앱 진입(10%만 실제 로그인) → 피드 무한스크롤 2~3장 → 상세 열람 → 일부만 리액션 →
@@ -85,7 +85,7 @@ think time 없는 50 VU 는 사람 50명이 아니라 수백 명분의 요청을
 ### A. 로그인 폭주 (auth)
 
 ```bash
-k6 run loadtest/a-login-burst.js
+k6 run autoscaling/loadtest/a-login-burst.js
 ```
 
 요청 1건마다 **BCrypt 검증 + JWT 서명 + refresh_token upsert**. BCrypt 는 의도적으로 CPU 를 태우므로
@@ -94,7 +94,7 @@ k6 run loadtest/a-login-burst.js
 ### B. 콘텐츠 조회 스파이크 (content)
 
 ```bash
-k6 run loadtest/b-content-spike.js
+k6 run autoscaling/loadtest/b-content-spike.js
 ```
 
 `/feeds/scroll`(과거 N+1 실측 지점 — 피드 11건에 쿼리 23회, `default_batch_fetch_size` 주석·NF-11) ·
@@ -104,7 +104,7 @@ k6 run loadtest/b-content-spike.js
 ### C. 채팅 동시접속 (chat)
 
 ```bash
-k6 run loadtest/c-chat-ws.js -e VUS=200
+k6 run autoscaling/loadtest/c-chat-ws.js -e VUS=200
 ```
 
 `CONNECT` → `SUBSCRIBE /topic/chatroom/{roomId}` → 3초마다 `SEND /app/chat/send`.
@@ -117,8 +117,8 @@ k6 run loadtest/c-chat-ws.js -e VUS=200
 ### D. 핫키 락 경합 (content) — 대조군 필수
 
 ```bash
-k6 run loadtest/d-hotkey-reaction.js              # 실험군: 한 피드에 집중
-k6 run loadtest/d-hotkey-reaction.js -e SPREAD=1  # 대조군: 여러 피드로 분산
+k6 run autoscaling/loadtest/d-hotkey-reaction.js              # 실험군: 한 피드에 집중
+k6 run autoscaling/loadtest/d-hotkey-reaction.js -e SPREAD=1  # 대조군: 여러 피드로 분산
 ```
 
 `FeedReactionService.toggleReaction` 이 `findByIdWithPessimisticLock` 으로 **feed 행을 잠근다.**
@@ -130,8 +130,8 @@ k6 run loadtest/d-hotkey-reaction.js -e SPREAD=1  # 대조군: 여러 피드로 
 ### E. 게스트 스와이프 폭주 (content)
 
 ```bash
-k6 run loadtest/e-guest-swipe-flood.js                  # 고정 gid: 멱등 덮어쓰기(update)
-k6 run loadtest/e-guest-swipe-flood.js -e NEW_GUEST=1   # 매번 새 gid: insert 폭증
+k6 run autoscaling/loadtest/e-guest-swipe-flood.js                  # 고정 gid: 멱등 덮어쓰기(update)
+k6 run autoscaling/loadtest/e-guest-swipe-flood.js -e NEW_GUEST=1   # 매번 새 gid: insert 폭증
 ```
 
 `POST /battles/{id}/swipe` 는 **로그인 없이 통한다**(비로그인은 `gid` 쿠키로 식별).
@@ -143,7 +143,7 @@ D 가 명시적 락 경합이라면 이쪽은 **같은 행 update 경합**이다
 ### F. 서비스 간 캐스케이드 (auth → content)
 
 ```bash
-k6 run loadtest/f-cascade.js
+k6 run autoscaling/loadtest/f-cascade.js
 ```
 
 auth 를 먼저 포화시키고 30초 뒤 content 읽기를 얹는다. content 는 작성자 정보를 auth 에서 가져오는데
@@ -156,9 +156,9 @@ content 쪽 임계값(p99<3000, 실패율<1%)이 깨지면 **격리가 안 된 �
 ### G/H/I. 한계 탐색 (`stress.js`)
 
 ```bash
-k6 run loadtest/stress.js -e PROFILE=breakpoint -e TARGET=feeds-scroll -e RPS_MAX=2000
-k6 run loadtest/stress.js -e PROFILE=spike      -e TARGET=login
-k6 run loadtest/stress.js -e PROFILE=soak       -e TARGET=feeds-scroll -e DURATION=1h
+k6 run autoscaling/loadtest/stress.js -e PROFILE=breakpoint -e TARGET=feeds-scroll -e RPS_MAX=2000
+k6 run autoscaling/loadtest/stress.js -e PROFILE=spike      -e TARGET=login
+k6 run autoscaling/loadtest/stress.js -e PROFILE=soak       -e TARGET=feeds-scroll -e DURATION=1h
 ```
 
 모양만 다르고 대상은 같아야 비교가 된다. `TARGET`: `feeds-scroll`(기본) · `feed-detail` · `hot` · `login`.
@@ -170,8 +170,8 @@ k6 run loadtest/stress.js -e PROFILE=soak       -e TARGET=feeds-scroll -e DURATI
 ### J. WS 연결 폭주 (chat)
 
 ```bash
-k6 run loadtest/j-ws-storm.js -e VUS=1000                # 연결 유지
-k6 run loadtest/j-ws-storm.js -e VUS=500 -e RECONNECT=1  # 재접속 폭풍
+k6 run autoscaling/loadtest/j-ws-storm.js -e VUS=1000                # 연결 유지
+k6 run autoscaling/loadtest/j-ws-storm.js -e VUS=500 -e RECONNECT=1  # 재접속 폭풍
 ```
 
 C 가 메시지 처리 부하라면 이건 **연결 유지 부하**다. 메시지를 하나도 안 보내도
@@ -184,7 +184,7 @@ k6 쪽 `ulimit -n` 에 먼저 걸릴 수 있으니 확인하고 돌릴 것.
 ### K. 대용량 업로드 (content)
 
 ```bash
-k6 run loadtest/k-upload.js -e SIZE_MB=10 -e VUS=20
+k6 run autoscaling/loadtest/k-upload.js -e SIZE_MB=10 -e VUS=20
 ```
 
 `max-file-size` / `max-request-size` 가 **1GB** 로 열려 있다. 동시에 몇 개만 들어와도 톰캣 스레드가

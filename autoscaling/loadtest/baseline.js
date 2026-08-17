@@ -1,7 +1,7 @@
 // T1. 기준선 - 평상시 트래픽 형태를 10분 고정 부하로 흘려 SLO 기준선을 만든다.
 // 이 숫자가 있어야 A~F 의 "몇 배 느려졌다"가 성립한다. 극한 시나리오보다 먼저 돌린다.
 // 세 서비스를 동시에 태우되 VU 는 실제 비율에 가깝게: 읽기 >> 로그인 > 채팅.
-//   k6 run loadtest/baseline.js
+//   k6 run autoscaling/loadtest/baseline.js
 import http from 'k6/http';
 import ws from 'k6/ws';
 import { check, sleep } from 'k6';

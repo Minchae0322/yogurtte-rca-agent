@@ -11,9 +11,9 @@
 //
 // 사용자 구성은 실제 비율에 맞춘다(수정하려면 MIX 조정): 대부분은 읽기만 하고 일부만 쓴다.
 //
-//   k6 run loadtest/journey.js                      # 초당 2세션 (~100 동시)
-//   k6 run loadtest/journey.js -e RATE=6            # 성수기 가정
-//   k6 run loadtest/journey.js -e DURATION=30m
+//   k6 run autoscaling/loadtest/journey.js                      # 초당 2세션 (~100 동시)
+//   k6 run autoscaling/loadtest/journey.js -e RATE=6            # 성수기 가정
+//   k6 run autoscaling/loadtest/journey.js -e DURATION=30m
 import http from 'k6/http';
 import ws from 'k6/ws';
 import { check, group, sleep } from 'k6';

@@ -5,7 +5,7 @@
 // 요청 수 기준 부하테스트로는 절대 안 잡히는 종류의 한계다.
 //
 // 기본값은 작게 잡았다. 올릴 때는 k6 쪽 메모리(파일 크기 x VU)를 먼저 계산할 것.
-//   k6 run loadtest/k-upload.js -e SIZE_MB=10 -e VUS=20
+//   k6 run autoscaling/loadtest/k-upload.js -e SIZE_MB=10 -e VUS=20
 //
 // 볼 것: tomcat_threads_busy(업로드 시간만큼 점유) · 디스크 사용량과 임시파일 정리 여부 ·
 //        업로드 중 다른 API 의 p99(스레드 굶주림). 운영 환경에서는 돌리지 말 것.
