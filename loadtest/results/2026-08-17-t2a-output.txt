@@ -1,0 +1,60 @@
+default ↓ [ 100% ] 101/300 VUs  6m0s
+
+running (6m13.0s), 024/300 VUs, 2215 complete and 65 interrupted iterations
+default ↓ [ 100% ] 101/300 VUs  6m0s
+
+running (6m14.0s), 018/300 VUs, 2220 complete and 66 interrupted iterations
+default ↓ [ 100% ] 101/300 VUs  6m0s
+
+running (6m15.0s), 015/300 VUs, 2223 complete and 66 interrupted iterations
+default ↓ [ 100% ] 101/300 VUs  6m0s
+
+running (6m16.0s), 010/300 VUs, 2228 complete and 66 interrupted iterations
+default ↓ [ 100% ] 101/300 VUs  6m0s
+
+running (6m17.0s), 003/300 VUs, 2235 complete and 66 interrupted iterations
+default ↓ [ 100% ] 101/300 VUs  6m0s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(99)<500' p(99)=49.4s
+
+    http_req_failed
+    ✗ 'rate<0.01' rate=29.75%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 4476   11.866862/s
+    checks_succeeded...: 70.24% 3144 out of 4476
+    checks_failed......: 29.75% 1332 out of 4476
+
+    ✗ status 200
+      ↳  70% — ✓ 1572 / ✗ 666
+    ✗ accessToken 발급
+      ↳  70% — ✓ 1572 / ✗ 666
+
+    HTTP
+    http_req_duration..............: avg=31.49s min=163.84ms med=35.53s max=51.8s p(90)=46.93s p(95)=47.79s
+      { expected_response:true }...: avg=27.88s min=163.84ms med=31.75s max=51.8s p(90)=47.36s p(95)=48.27s
+    http_req_failed................: 29.75% 666 out of 2238
+    http_reqs......................: 2238   5.933431/s
+
+    EXECUTION
+    iteration_duration.............: avg=31.5s  min=163.99ms med=35.53s max=51.8s p(90)=46.93s p(95)=47.8s 
+    iterations.....................: 2238   5.933431/s
+    vus............................: 3      min=1           max=300
+    vus_max........................: 300    min=300         max=300
+
+    NETWORK
+    data_received..................: 4.2 MB 11 kB/s
+    data_sent......................: 955 kB 2.5 kB/s
+
+
+
+
+running (6m17.2s), 000/300 VUs, 2238 complete and 66 interrupted iterations
+default ✓ [ 100% ] 000/300 VUs  6m0s
+time="2026-08-17T23:02:51+09:00" level=error msg="thresholds on metrics 'http_req_duration, http_req_failed' have been crossed"
