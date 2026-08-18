@@ -1,0 +1,60 @@
+time="2026-08-18T19:13:36+09:00" level=warning msg="Request Failed" error="Post \"https://yogurtte.com/api/auth/login\": request timeout"
+time="2026-08-18T19:13:36+09:00" level=warning msg="Request Failed" error="Post \"https://yogurtte.com/api/auth/login\": request timeout"
+time="2026-08-18T19:13:36+09:00" level=warning msg="Request Failed" error="Post \"https://yogurtte.com/api/auth/login\": request timeout"
+
+running (07m00.0s), 0758/1200 VUs, 20459 complete and 0 interrupted iterations
+default   [  62% ] 0758/1200 VUs  06m47.6s/11m00.0s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{name:GET /feeds/{id}}
+    ✓ 'p(99)<3000' p(99)=230.34ms
+
+    http_req_duration{name:GET /feeds/scroll}
+    ✓ 'p(99)<3000' p(99)=252.06ms
+
+    http_req_duration{name:POST /login}
+    ✗ 'p(99)<10000' p(99)=1m0s
+
+    http_req_failed
+    ✗ 'rate<0.05' rate=5.05%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 20485  48.777737/s
+    checks_succeeded...: 94.92% 19446 out of 20485
+    checks_failed......: 5.07%  1039 out of 20485
+
+    ✓ scroll 200
+    ✗ login 200
+      ↳  56% — ✓ 1349 / ✗ 1039
+    ✓ detail 200
+    ✓ rooms 200
+
+    HTTP
+    http_req_duration..............: avg=4.32s   min=23.13ms  med=59.2ms   max=1m0s   p(90)=11.3s    p(95)=41.12s 
+      { expected_response:true }...: avg=1.85s   min=23.13ms  med=58.57ms  max=59.97s p(90)=114.46ms p(95)=12.25s 
+      { name:GET /feeds/{id} }.....: avg=62.94ms min=40.74ms  med=54.4ms   max=1.68s  p(90)=71.17ms  p(95)=84.37ms
+      { name:GET /feeds/scroll }...: avg=71.26ms min=49.56ms  med=61.5ms   max=1.66s  p(90)=80.99ms  p(95)=99.88ms
+      { name:POST /login }.........: avg=35.91s  min=159.12ms med=35.01s   max=1m0s   p(90)=1m0s     p(95)=1m0s   
+    http_req_failed................: 5.05%  1039 out of 20536
+    http_reqs......................: 20536  48.899176/s
+
+    EXECUTION
+    iteration_duration.............: avg=4.63s   min=324.39ms med=360.88ms max=1m0s   p(90)=11.77s   p(95)=41.44s 
+    iterations.....................: 20459  48.715828/s
+    vus............................: 758    min=0             max=758 
+    vus_max........................: 1200   min=1200          max=1200
+
+    NETWORK
+    data_received..................: 284 MB 676 kB/s
+    data_sent......................: 9.6 MB 23 kB/s
+
+
+
+
+running (07m00.0s), 0000/1200 VUs, 20459 complete and 758 interrupted iterations
+default ✗ [  62% ] 0536/1200 VUs  06m47.7s/11m00.0s
+time="2026-08-18T19:13:36+09:00" level=error msg="thresholds on metrics 'http_req_duration{name:POST /login}, http_req_failed' were crossed; at least one has abortOnFail enabled, stopping test prematurely"

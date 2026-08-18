@@ -1,0 +1,933 @@
+{
+  "traceId" : "scan-1786974960",
+  "question" : "어젯밤(8월 17일) 밤 11시 전후로 로그인이 너무 느리거나 아예 안 된다는 문의가 여러 건 들어왔다. 원인을 조사해줘",
+  "mode" : "rca",
+  "startedAt" : "2026-08-18T10:04:22.680319Z",
+  "llmProvider" : "claude-cli",
+  "llmModel" : "claude-opus-5",
+  "llmTurns" : 1,
+  "promptSource" : "./prompts/system-prompt.md",
+  "analysis" : "## 1. 원인 후보 랭킹 (최대 3개)\n\n1. **auth-service의 HikariCP 커넥션 풀 고갈** — 활성 10개 포화 + 대기 190건, 30초 획득 타임아웃 만료로 로그인 지연·500 발생 (근접 원인, 사실상 확정)\n2. **로그인 요청 동시성 급증이 풀·스레드 용량을 초과** (1번을 유발한 상위 원인 후보)\n3. **커넥션 1건당 점유 시간(쿼리/트랜잭션 소요) 증가** (1번을 유발한 대안 상위 원인 후보 — 데이터 부족)\n\n---\n\n## 2. 후보별 근거\n\n### 후보 1. auth-service HikariCP 커넥션 풀 고갈\n\n- **근거**\n  - 메트릭 `hikaricp_connections_active{application=\"auth-service\", pod=auth-service-5999bb9f5c-zrvgl}`: 13:57:15까지 0 → **13:58:30 이후 계속 10** → 14:03:30부터 0. 정체 구간 내내 상수 10이라 **풀 상한이 10으로 추정**됨(실제 설정값 `hikaricp_connections_max`는 미수집).\n  - 같은 pod의 `hikaricp_connections_pending`: **최대 190 (13:59:30)**, 13:58:30=135 · 14:01:00=188 · 14:02:00=190 · 14:03:15=166 → 14:03:30 이후 0. 커넥션을 못 받고 대기 중인 스레드가 190개.\n  - 로그 원문: `o.h.e.jdbc.spi.SqlExceptionHelper - HikariPool-1 - Connection is not available, request timed out after 30000ms.` → `org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager for transaction` → `Caused by: java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms.`\n  - 스택 최상단 앱 코드: `com.example.toyauth.app.auth.controller.AuthController.login(AuthController.java:45)`, 그 바로 위가 `CglibAopProxy$DynamicAdvisedInterceptor.intercept` → 트랜잭션 프록시 진입 시점에 커넥션 획득 실패.\n  - 트레이스 21건 중 창 내 20건이 전부 `http post /login`, `durNs` 30.2~32.6초. 소요의 거의 전부가 자식 span `secured request`(예: `31,817,405,000ns` / 전체 `31,822,652,000ns`)에 몰려 있고, `security filterchain before/after`는 0.09~76ms에 불과 → 지연은 필터체인이 아니라 컨트롤러/트랜잭션 구간.\n  - 정상 비교군: 창 직전 트레이스 `6a8313125113bbc0444801b0ed95e323`(13:56:34)는 동일 `POST /login`이 **147,848,000ns(147ms)**. 즉 같은 엔드포인트가 147ms → 30,000ms+로 200배 악화.\n  - 스레드 이름이 `http-nio-8081-exec-2`에서 `exec-148`까지 증가 → Tomcat 워커가 DB 대기로 전부 묶임.\n- **확신도: 높음**\n- **대기·지연 구간 판정**\n  - *커넥션 획득 대기(상한 = HikariCP `connectionTimeout` 30000ms, 예외 메시지에서 직접 확인)*\n    - **만료된 건**: 실측 대기 `30000ms`(traceId 6a83135bfe4e71bf…, 6a83135b582134ed…, 6a83135ff894b5aa…), `30001ms`(6a83139bc643c27d…), `30002ms`(6a83139c095c2391…), `30079ms`(6a83139dc8a58c92…) → **모두 상한 도달·만료**. 최종 상태: **실패**. 로그 `RequestLoggingFilter - [HTTP] POST /api/login 500 - 30210ms / 30191ms / 30202ms / 30322ms / 30123ms`로 **HTTP 500 응답 확정**. 재시도 span·로그는 없음 → 서버 측 재시도 **없음(폐기)**.\n    - **만료 안 된 건**: 나머지 17건은 총 30.8~32.6초에 `status=200 / outcome=SUCCESS`(예: `[HTTP-SLOW] POST /api/login 200 - 32406ms`) → 30초 만료 전에 커넥션을 획득해 **최종 상태 성공(200)**. 다만 \"총 소요\"만 있을 뿐 **대기 구간만의 실측치를 분리할 span/로그가 없어, 각 건의 순수 대기 시간 자체는 판정 불가**.\n  - *Tomcat 수용 큐 대기 / 클라이언트(브라우저·게이트웨이) 타임아웃*: 상한 설정값이 데이터에 없음 → **판정 불가**.\n- **반증 데이터**: 없음. (보강 반증 배제: `up{job=auth-service}`는 전 구간 1로 파드 재시작·다운 아님, `rate(jvm_gc_pause_seconds_sum[5m])` 최대 0.0161 = **CPU 시간의 약 1.6%**로 GC 정지는 30초 지연을 설명하지 못함.)\n\n### 후보 2. 로그인 요청 동시성 급증이 용량을 초과\n\n- **근거**\n  - Tomcat 워커 스레드 번호가 `exec-2`(13:56:39) → `exec-77`(13:58:17) → `exec-147/148`(13:59:21~24)로 단조 증가 → 동시 처리 중인 요청 수가 계속 늘어남.\n  - 지연이 **1093ms(13:56:39) → 2~4초(13:56:5x) → 5~10초(13:57:1x~3x) → 20~30초(13:58:1x)** 로 톱니 없이 단조 상승 후, 14:03:30 이후 `pending`이 0으로 복귀하며 자연 소멸 → 외부 개입 없이 유입이 줄자 해소되는 **대기행렬 포화의 전형적 형태**.\n  - 배포/재시작 흔적 없음: 전 구간 동일 pod `auth-service-5999bb9f5c-zrvgl`, `up`=1 상수 → 코드 변경보다 부하 변화로 설명하는 편이 자연스러움.\n  - auth-service는 관측된 인스턴스가 **1개**(content-service는 `…-sp24n`, `…-v2pw9` 2개) → 수평 여유가 없음.\n- **확신도: 중간** (요청량 지표 `http_server_requests_seconds_count{application=\"auth-service\"}`를 수집하지 못해, 유입 증가를 직접 계측한 값이 없음. 스레드 번호·큐 길이라는 간접 증거뿐)\n- **대기·지연 구간 판정**: 위 후보 1의 판정과 동일(30초 상한, 3건 만료→500 실패 / 17건 미만료→200 성공). 유입 자체의 상한(레이트리밋·큐 용량)은 데이터 없음 → **판정 불가**.\n- **반증 데이터**\n  - 대기 190건이 유입 급증만으로 생기려면 커넥션 회전이 정상이어야 하는데, 대기 190·대기시간 30초(Little의 법칙: 처리율 ≈ 190/30 ≈ 6.3 req/s, 커넥션 10개 기준 **1건당 점유 ≈ 1.6초**)는 평시 요청 전체가 147ms였던 것과 맞지 않음 → 순수 유입 증가만으로는 설명이 부족하고 후보 3이 함께 작용했을 가능성을 시사.\n\n### 후보 3. 커넥션 1건당 점유 시간(쿼리/트랜잭션 소요) 증가\n\n- **근거**\n  - 위 반증에서 도출된 추정 점유 시간 **약 1.6초/건** vs 평시 요청 전체 **147ms** → 커넥션을 잡고 있는 시간이 10배 이상으로 보임.\n  - `secured request` span이 전체 소요의 99% 이상을 차지하고 그 아래 DB/외부호출 자식 span이 **하나도 없음**(트레이스 고지: \"span 4개와 속성은 하나도 빠지지 않았다\") → 지연이 계측되지 않은 구간(JDBC 대기/실행)에 숨어 있음.\n- **확신도: 낮음** (전부 간접 추정. DB 서버 지표, `hikaricp_connections_usage_seconds`/`acquire` 히스토그램, 슬로우 쿼리 로그 중 **어느 것도 수집되지 않음** → **데이터 부족**)\n- **대기·지연 구간 판정**: 쿼리 실행 시간의 실측치와 상한(`statement_timeout` 등) 모두 데이터에 없음 → **판정 불가**.\n- **반증 데이터**\n  - auth-service의 DB가 어떤 엔진인지, 그 부하 지표가 데이터에 전혀 없음. 다만 같은 클러스터의 `mongodb_up`=1, `kafka_brokers`=1, `redis`/`node-infra` `up`=1로 **공용 인프라 전반의 장애 징후는 없음** → \"DB 서버 전체 다운\"류 원인은 배제됨.\n  - content-service(2개 파드)와 chat-service의 `hikaricp_connections_active`/`pending`이 **전 구간 0** → 공용 DB의 전역 성능 저하였다면 다른 서비스에도 흔적이 남아야 하나 없음. 단, 이들 서비스는 창 내내 DB를 거의 쓰지 않아(활성 0) **민감도가 낮은 반증**임.\n\n### 데이터 공백 (결론 확신도 하향 요인)\n\n- 조사 지시문이 참조하는 **\"호출 그래프\" 절이 실제 데이터에 존재하지 않음**. 수집된 21개 트레이스의 모든 span은 `service.name=auth-service` 단일 서비스이며, auth→content/chat 등 서비스 간 호출 span은 **한 건도 관측되지 않음**. 따라서 서비스 간 전파는 전제하지 않았다.\n- 수집 실패: `content-service`의 401 카운터 시리즈 없음 → content-service 연루 여부를 이 지표로는 확인 불가(단, content-service의 커넥션 지표가 전 구간 0이므로 결론에 미치는 영향은 작음).\n- 창 시작 시점(13:56:00)의 **첫 로그가 이미 `[HTTP-SLOW] 1093ms`** → 장애 시작 시각이 조회창보다 앞설 수 있어, 발단(트리거)은 이 데이터로 확정 불가.\n\n---\n\n## 3. 권장 다음 조치\n\n### 이미 발생한 피해: 복구 가능한가\n\n- **부분 복구 가능**.\n  - **데이터 정합성 피해는 없음**: 실패 경로가 `CannotCreateTransactionException: Could not open JPA EntityManager for transaction`, 즉 **트랜잭션을 열기도 전에** 실패했다. 부분 커밋·중간 상태 쓰기가 발생할 수 없다. 별도 데이터 정정 작업 불필요.\n  - **500을 받은 로그인 요청 자체는 서버 측에서 되돌릴 수 없음**(응답이 이미 반환됨). 로그인은 재실행해도 부작용이 없으므로 **사용자 재시도로 완전 복구**된다. 현재 `pending`/`active`가 0이므로 지금 재시도하면 성공한다.\n  - **200이지만 30초 이상 걸린 17건**은 클라이언트가 먼저 끊었다면 사용자 체감상 실패했을 수 있다. 클라이언트/게이트웨이 타임아웃 설정값이 데이터에 없어 **실제 사용자 도달 여부는 판정 불가** → 게이트웨이 액세스 로그로 확인 필요.\n  - 영향 범위: `POST /api/login` 한정, pod `auth-service-5999bb9f5c-zrvgl`, 대략 13:56:39~14:03:30 UTC(22:56~23:03 KST). 문의 시각과 일치.\n\n### 재발 방지\n\n- **먼저 계측 공백을 메울 것** (지금 근본 원인을 후보 2/3으로 좁힐 수 없는 이유가 이것):\n  - `http_server_requests_seconds_count{application=\"auth-service\", uri=\"/login\"}` 요청량·상태코드 rate\n  - `hikaricp_connections_max` / `min_idle` / `timeout_total` / `acquire`·`usage` 히스토그램 (커넥션 점유 시간을 직접 측정 → 후보 2 vs 3 판별)\n  - auth DB 서버 지표(연결 수, 슬로우 쿼리, CPU) — **현재 이 DB에 대한 지표가 전무함**\n  - auth 파드 CPU/스로틀링, `tomcat_threads_busy`/`max`\n  - JDBC span 계측 활성화(현재 `secured request` 아래에 DB span이 없어 30초의 소재를 트레이스로 특정할 수 없음)\n- **용량·격리 조치**:\n  - 풀 상한(추정 10) 재산정 및 auth-service 수평 확장(현재 인스턴스 1개, content-service는 2개).\n  - `POST /api/login`에 동시성 제한/부하 차단(bulkhead·큐 상한)을 두어, 초과분은 30초 매달리지 말고 **즉시 503으로 빠르게 실패**시키기. 지금은 190개 요청이 30초씩 Tomcat 스레드를 점유해 장애를 증폭시켰다.\n  - 커넥션 획득 타임아웃 30초는 로그인 UX 대비 과도 — 수 초 수준으로 낮추는 것을 검토.\n  - `AuthController.login(AuthController.java:45)`의 트랜잭션 경계 점검: 트랜잭션 안에 불필요한 I/O가 포함돼 있으면 커넥션 점유 시간이 그만큼 늘어난다.\n- **알람**: `hikaricp_connections_pending > 0`이 1분 이상 지속, `hikaricp_connections_active == max` 지속, `/api/login` p99 > 1s. 이번 건은 `pending`이 6분간 100 이상이었는데 사용자 문의로 인지됐다.\n\n### 복구 확인\n\n- **이미 확인된 회복 신호**: `hikaricp_connections_pending`이 14:03:30~14:07:00 전 구간 0, `hikaricp_connections_active`도 같은 구간 0. 트레이스·에러 로그도 13:59:26 이후 끊김. `up{job=auth-service}`는 전 구간 1로 파드 교체 없이 자연 회복.\n- **추가로 확인할 것**:\n  - 합성 로그인 요청 1건을 실행해 응답시간이 평시(≈150ms)로 돌아왔는지 확인.\n  - 14:07 이후 현재까지 `[HTTP-SLOW] POST /api/login`, `HikariPool-1 - Connection is not available` 로그가 0건인지 재조회(이번 창은 14:07에서 끊겨 있음).\n  - `/api/login`의 5xx 비율과 p95/p99 지연을 24시간 관찰 — 유입 패턴(후보 2)이 원인이라면 같은 시간대에 재발할 수 있다.",
+  "inputTokens" : 170757,
+  "outputTokens" : 9912,
+  "cacheReadTokens" : 15560,
+  "cacheCreationTokens" : 155195,
+  "costUsd" : 1.80754,
+  "totalElapsedMs" : 170255,
+  "timings" : {
+    "tempoMs" : 6224,
+    "lokiMs" : 489,
+    "mimirMs" : 787,
+    "assembleMs" : 29,
+    "llmMs" : 159064
+  },
+  "contextChars" : 265041,
+  "coverage" : {
+    "windowStart" : "2026-08-17T13:56:00Z",
+    "windowEnd" : "2026-08-17T14:07:00Z",
+    "windowSeconds" : 660,
+    "traceBytes" : 127540,
+    "traceSpans" : 84,
+    "traceTrimmed" : true,
+    "candidateTraces" : 21,
+    "candidateTraceBytes" : 127540,
+    "errorWarnLogBytes" : 239795,
+    "traceIdLogBytes" : 14673,
+    "metricsBytes" : 104940,
+    "metricsCollected" : [ "hikaricp_connections_active", "hikaricp_connections_pending", "rate(jvm_gc_pause_seconds_sum[5m])", "up", "mongodb_up", "kafka_brokers", "kafka_consumergroup_lag", "websocket_active_users" ],
+    "metricsMissing" : [ "sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))" ],
+    "promptChars" : 779,
+    "contextChars" : 265041,
+    "contextTokens" : -1,
+    "overheadTokens" : 21601,
+    "metricSummarized" : true
+  },
+  "triage" : {
+    "timeExpression" : "명시적 from/to",
+    "timeConfidence" : "EXACT",
+    "surveyStart" : "2026-08-17T13:50:00Z",
+    "surveyEnd" : "2026-08-17T14:10:00Z",
+    "chosenStart" : "2026-08-17T13:56:00Z",
+    "chosenEnd" : "2026-08-17T14:07:00Z",
+    "services" : [ "auth-service" ],
+    "traceId" : "6a8313998ffffec2a18e55e626e90016",
+    "traceCandidates" : [ {
+      "traceId" : "6a83139d32114d538c0983e015ac06fd",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32433,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:53.999117Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139da8966f81abf12c62445d2692",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32096,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:53.816146Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139dc8a58c92473e4d9e1c04f142",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 30286,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:53.312689Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139d4afbee98edb1f0ee0862278d",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31415,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:53.210858Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139c8467f75dad7fffc2f2db9929",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32586,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:52.915763Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139c095c239146100e8005555fcd",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 30191,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:52.534389Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139c2ff262f6e236d870a1575a3d",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32038,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:52.368874Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139c07eb0c8b8a5a3d54a7f6283d",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31487,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:52.218678Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139cc53fecb5a59ec9ddd4e8bef8",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31488,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:52.215016Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139b7172e6aa7cd0d98baa38eca0",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32225,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:51.899194Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139bc643c27da967435e2333f585",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 30211,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:51.804944Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139b323e140917bdcadcf598040a",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31780,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:51.522730Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139b0b6568484427ce2f7a70fc30",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32000,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:51.206136Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139b089fb0a239c9601c26408014",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 30787,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:51.112908Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139b85f991ec1df1c5ae611c7dba",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31906,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:51.012032Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139a2093750007d02d52210791dc",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32204,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:50.717965Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139a60ac003aab6922e6c9f20c0e",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32225,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:50.500033Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a83139a9c4a8e999b2948813a670236",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31382,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:50.220151Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a8313999759b3bfdaaee9723089a99a",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 32406,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:49.804324Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    }, {
+      "traceId" : "6a8313998ffffec2a18e55e626e90016",
+      "rootServiceName" : "auth-service",
+      "rootTraceName" : "http post /login",
+      "durationMs" : 31822,
+      "channel" : "slow",
+      "startedAt" : "2026-08-17T13:58:49.599758Z",
+      "trusted" : true,
+      "serviceStats" : [ "auth-service 3" ]
+    } ],
+    "reason" : "INC-2의 /login 31초 지연과 INC-1의 auth-service JDBC 커넥션 예외는 같은 시각·같은 서비스에서 관측된 한 장애의 하류(증상)와 상류(원인 예외) 지문이므로 함께 조사해야 한다.",
+    "evidence" : [ "auth-service http post /login 지연 트레이스 31,822ms x20건 (2026-08-17T13:58:49.599758Z~13:59:26.432117Z, TEMPO 시각 정확) — 문의 시각(한국시간 23시 전후)과 일치", "auth-service ERROR/WARN 91건 (13:56~13:57Z), x7회 60초 간격으로 14:03Z까지 반복 — 지연 트레이스보다 약 3분 먼저 시작", "원인 예외 java.sql.SQLTransientConnectionException 55건 + org.hibernate.exception.JDBCConnectionException 55건 (13:58~13:59Z), 각 x9회 60초 간격으로 14:07Z까지 — HikariCP 커넥션 획득 실패/풀 고갈 지문", "Tempo 에러 검색 '{ status = error }' 0건 — 5xx가 아니라 커넥션 대기로 응답만 지연되는 장애임을 뒷받침 (에러 0건을 정상 근거로 쓰지 않음)", "up / mongodb_up / kafka_brokers / kafka_consumergroup_lag / websocket_active_users 모두 수집되고 이상 0건 — 파드 소실·Kafka·WebSocket 계열 원인은 배제되고 auth-service의 RDB 경로로 좁혀짐" ],
+    "planParsed" : true,
+    "notes" : [ "창을 후보 [INC-1, INC-2] 의 신호 시각에서 계산했다 (2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z)" ],
+    "promptSource" : "./prompts/triage-prompt.md",
+    "analysis" : "## 1. 판단\n\n8월 17일 22:56~23:07 KST(13:56~14:07Z) 사이 auth-service에서 로그인 장애가 있었다. `/login` POST가 31.8초까지 늘어진 지연 트레이스가 20건 잡혔고(13:58:49~13:59:26Z), 같은 시각 auth-service 로그에 `SQLTransientConnectionException`·`JDBCConnectionException`이 각 55건씩 9회 반복 발생했다 — DB 커넥션 풀 고갈로 로그인 요청이 커넥션을 기다리다 타임아웃되는 전형적인 지문이다. Tempo 에러 검색이 0건인 것도 이 판단과 모순되지 않는다: 에러 응답이 아니라 \"성공하지만 극단적으로 느린\" 형태의 장애라 지연 채널에만 걸린다.\n\n## 2. 계획\n\n```json\n{\n  \"incidentIds\": [\"INC-1\", \"INC-2\"],\n  \"services\": [\"auth-service\"],\n  \"evidence\": [\n    \"auth-service http post /login 지연 트레이스 31,822ms x20건 (2026-08-17T13:58:49.599758Z~13:59:26.432117Z, TEMPO 시각 정확) — 문의 시각(한국시간 23시 전후)과 일치\",\n    \"auth-service ERROR/WARN 91건 (13:56~13:57Z), x7회 60초 간격으로 14:03Z까지 반복 — 지연 트레이스보다 약 3분 먼저 시작\",\n    \"원인 예외 java.sql.SQLTransientConnectionException 55건 + org.hibernate.exception.JDBCConnectionException 55건 (13:58~13:59Z), 각 x9회 60초 간격으로 14:07Z까지 — HikariCP 커넥션 획득 실패/풀 고갈 지문\",\n    \"Tempo 에러 검색 '{ status = error }' 0건 — 5xx가 아니라 커넥션 대기로 응답만 지연되는 장애임을 뒷받침 (에러 0건을 정상 근거로 쓰지 않음)\",\n    \"up / mongodb_up / kafka_brokers / kafka_consumergroup_lag / websocket_active_users 모두 수집되고 이상 0건 — 파드 소실·Kafka·WebSocket 계열 원인은 배제되고 auth-service의 RDB 경로로 좁혀짐\"\n  ],\n  \"reason\": \"INC-2의 /login 31초 지연과 INC-1의 auth-service JDBC 커넥션 예외는 같은 시각·같은 서비스에서 관측된 한 장애의 하류(증상)와 상류(원인 예외) 지문이므로 함께 조사해야 한다.\",\n  \"dismissed\": [\n    {\"incidentId\": \"INC-3\", \"why\": \"content-service의 TimeoutException 1~2건 규모로 로그인 경로와 무관하고 14:01Z 이후 시작되어 /login 지연(13:58Z)보다 늦으므로, auth-service 장애의 하류 파급일 가능성은 있으나 로그인 문의의 직접 원인 후보로는 우선순위가 낮다.\"}\n  ]\n}\n```",
+    "inputTokens" : 25047,
+    "outputTokens" : 1247,
+    "costUsd" : 0.13381500000000002,
+    "contextChars" : 2353,
+    "promptChars" : 1399,
+    "surveyMs" : 3871,
+    "llmMs" : 22273,
+    "surveyFailures" : [ "Tempo 에러 검색 '{ status = error }'이 이 창에서 0건이다. 트레이스가 생성되지 않는 장애(컨슈머 전멸·파드 부재)이거나 에러가 아닌 형태의 장애(200 성공 + 지연)일 수 있으니 이 사실 자체를 근거로 쓸 것." ],
+    "incidentCandidates" : [ "## INC-1  auth-service  |  ERROR/WARN\n- 구간: 2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 91건 (2026-08-17T13:56:00Z ~ 2026-08-17T13:57:00Z)  [x7회 · 2026-08-17T13:56:00Z~2026-08-17T14:03:00Z · 평균 60초 간격]\n- 원인 예외 java.sql.SQLTransientConnectionException 55건 (2026-08-17T13:58:00Z ~ 2026-08-17T13:59:00Z)  [x9회 · 2026-08-17T13:58:00Z~2026-08-17T14:07:00Z · 평균 60초 간격]\n- 원인 예외 org.hibernate.exception.JDBCConnectionException 55건 (2026-08-17T13:58:00Z ~ 2026-08-17T13:59:00Z)  [x9회 · 2026-08-17T13:58:00Z~2026-08-17T14:07:00Z · 평균 60초 간격]\n- 같은 시각의 다른 후보: INC-2, INC-3  (인과 여부는 판단하지 않았다)\n", "## INC-2  auth-service  |  http post /login\n- 구간: 2026-08-17T13:58:49.599758Z ~ 2026-08-17T13:59:26.432117Z  (TEMPO · 시각 정확)\n- auth-service http post /login 31,822ms (slow 채널)  [x20회 · 2026-08-17T13:58:49.599758Z~2026-08-17T13:59:26.432117Z · 평균 0초 간격]\n- traceId: 6a8313998ffffec2a18e55e626e90016, 6a8313999759b3bfdaaee9723089a99a (+18건)\n- 같은 시각의 다른 후보: INC-1  (인과 여부는 판단하지 않았다)\n", "## INC-3  content-service  |  ERROR/WARN\n- 구간: 2026-08-17T14:01:00Z ~ 2026-08-17T14:06:00Z  (LOKI · 집계 해상도만큼 흐림)\n- ERROR/WARN 2건 (2026-08-17T14:01:00Z ~ 2026-08-17T14:02:00Z)\n- 예외 java.util.concurrent.TimeoutException 1건 (2026-08-17T14:01:00Z ~ 2026-08-17T14:02:00Z)  [x5회 · 2026-08-17T14:01:00Z~2026-08-17T14:06:00Z · 평균 60초 간격]\n- 같은 시각의 다른 후보: INC-1  (인과 여부는 판단하지 않았다)\n" ],
+    "chosenIncidentIds" : [ "INC-1", "INC-2" ],
+    "dismissedIncidentIds" : [ "INC-3 — content-service의 TimeoutException 1~2건 규모로 로그인 경로와 무관하고 14:01Z 이후 시작되어 /login 지연(13:58Z)보다 늦으므로, auth-service 장애의 하류 파급일 가능성은 있으나 로그인 문의의 직접 원인 후보로는 우선순위가 낮다." ],
+    "rawIncluded" : false
+  },
+  "evidence" : {
+    "investigatedTraceId" : "6a8313998ffffec2a18e55e626e90016",
+    "rawPrefix" : "scan-1786974960",
+    "spanCount" : 84,
+    "topSpans" : [ {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32586.105,
+      "startedAt" : "2026-08-17T13:58:52.915763Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32505.244,
+      "startedAt" : "2026-08-17T13:58:52.916241Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32433.699,
+      "startedAt" : "2026-08-17T13:58:53.999117Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32423.195,
+      "startedAt" : "2026-08-17T13:58:54.007821Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32406.544,
+      "startedAt" : "2026-08-17T13:58:49.804324Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32405.678,
+      "startedAt" : "2026-08-17T13:58:49.804793Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32225.526,
+      "startedAt" : "2026-08-17T13:58:50.500033Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32225.478,
+      "startedAt" : "2026-08-17T13:58:51.899194Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32218.924,
+      "startedAt" : "2026-08-17T13:58:50.505929Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32210.715,
+      "startedAt" : "2026-08-17T13:58:51.906828Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32204.289,
+      "startedAt" : "2026-08-17T13:58:50.717965Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32203.583,
+      "startedAt" : "2026-08-17T13:58:50.718363Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32096.491,
+      "startedAt" : "2026-08-17T13:58:53.816146Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "secured request",
+      "durationMs" : 32090.639,
+      "startedAt" : "2026-08-17T13:58:53.821500Z"
+    }, {
+      "service" : "auth-service",
+      "name" : "http post /login",
+      "durationMs" : 32038.938,
+      "startedAt" : "2026-08-17T13:58:52.368874Z"
+    } ],
+    "logLinesTotal" : 1029,
+    "logSamples" : [ {
+      "at" : "2026-08-17T13:56:39.215750020Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:39\u001B[0;39m \u001B[2m[http-nio-8081-exec-2]\u001B[0;39m \u001B[33m WARN [traceId=6a8313160f0cfead7285ebc7e30e0016,spanId=7285ebc7e30e0016,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1093ms"
+    }, {
+      "at" : "2026-08-17T13:56:39.301203797Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:39\u001B[0;39m \u001B[2m[http-nio-8081-exec-4]\u001B[0;39m \u001B[33m WARN [traceId=6a831316ba856c8b39f1ef80f6c648d8,spanId=39f1ef80f6c648d8,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1002ms"
+    }, {
+      "at" : "2026-08-17T13:56:40.610724568Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:40\u001B[0;39m \u001B[2m[http-nio-8081-exec-8]\u001B[0;39m \u001B[33m WARN [traceId=6a83131735b2993fb36104d56f159d2c,spanId=b36104d56f159d2c,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1311ms"
+    }, {
+      "at" : "2026-08-17T13:56:40.617782545Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:40\u001B[0;39m \u001B[2m[http-nio-8081-exec-10]\u001B[0;39m \u001B[33m WARN [traceId=6a8313170f291c9eaec86fbd7c109855,spanId=aec86fbd7c109855,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1297ms"
+    }, {
+      "at" : "2026-08-17T13:56:40.701513921Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:40\u001B[0;39m \u001B[2m[http-nio-8081-exec-5]\u001B[0;39m \u001B[33m WARN [traceId=6a831317163c22087fb877460f367c7a,spanId=7fb877460f367c7a,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1301ms"
+    }, {
+      "at" : "2026-08-17T13:56:40.713768704Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:40\u001B[0;39m \u001B[2m[http-nio-8081-exec-9]\u001B[0;39m \u001B[33m WARN [traceId=6a8313178ad4dbbbd2ac0d39169bd841,spanId=d2ac0d39169bd841,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1198ms"
+    }, {
+      "at" : "2026-08-17T13:56:41.513890623Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:41\u001B[0;39m \u001B[2m[http-nio-8081-exec-11]\u001B[0;39m \u001B[33m WARN [traceId=6a831318787cc1146d14616661e39cdf,spanId=6d14616661e39cdf,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1215ms"
+    }, {
+      "at" : "2026-08-17T13:56:41.900851147Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:41\u001B[0;39m \u001B[2m[http-nio-8081-exec-6]\u001B[0;39m \u001B[33m WARN [traceId=6a831318c21ea491dbda0d9f7bbad10d,spanId=dbda0d9f7bbad10d,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1183ms"
+    }, {
+      "at" : "2026-08-17T13:56:42.214755860Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:42\u001B[0;39m \u001B[2m[http-nio-8081-exec-3]\u001B[0;39m \u001B[33m WARN [traceId=6a831318a8270caeffee111c48128a3f,spanId=ffee111c48128a3f,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1514ms"
+    }, {
+      "at" : "2026-08-17T13:56:42.401788288Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:42\u001B[0;39m \u001B[2m[http-nio-8081-exec-1]\u001B[0;39m \u001B[33m WARN [traceId=6a831318d8257df2b5e953599e21d911,spanId=b5e953599e21d911,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1600ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.014704058Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-8]\u001B[0;39m \u001B[33m WARN [traceId=6a831319a60d9eb63cee2133bb183048,spanId=3cee2133bb183048,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1502ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.116839421Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-5]\u001B[0;39m \u001B[33m WARN [traceId=6a8313196544382e610d949af0e0738e,spanId=610d949af0e0738e,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1516ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.303586968Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-9]\u001B[0;39m \u001B[33m WARN [traceId=6a831319fab5c8965229f2e042146f6e,spanId=5229f2e042146f6e,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1501ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.320801526Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-2]\u001B[0;39m \u001B[33m WARN [traceId=6a8313191515a3be38b7da3ca119e7a3,spanId=38b7da3ca119e7a3,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1406ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.616995325Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-11]\u001B[0;39m \u001B[33m WARN [traceId=6a83131a349247a32542c6535d4cbb27,spanId=2542c6535d4cbb27,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1317ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.624299733Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-4]\u001B[0;39m \u001B[33m WARN [traceId=6a83131afa761235f81e87243e61538e,spanId=f81e87243e61538e,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1424ms"
+    }, {
+      "at" : "2026-08-17T13:56:43.769382194Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:43\u001B[0;39m \u001B[2m[http-nio-8081-exec-6]\u001B[0;39m \u001B[33m WARN [traceId=6a83131ace217756e2c8bac4940abd0d,spanId=e2c8bac4940abd0d,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1349ms"
+    }, {
+      "at" : "2026-08-17T13:56:44.501252819Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:44\u001B[0;39m \u001B[2m[http-nio-8081-exec-5]\u001B[0;39m \u001B[33m WARN [traceId=6a83131bbed0c5bb6e4dab67b966c10a,spanId=6e4dab67b966c10a,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1102ms"
+    }, {
+      "at" : "2026-08-17T13:56:44.769779615Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:44\u001B[0;39m \u001B[2m[http-nio-8081-exec-2]\u001B[0;39m \u001B[33m WARN [traceId=6a83131bd2718ef9f0a7924cd5c6c5c4,spanId=f0a7924cd5c6c5c4,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1067ms"
+    }, {
+      "at" : "2026-08-17T13:56:44.810803047Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:44\u001B[0;39m \u001B[2m[http-nio-8081-exec-11]\u001B[0;39m \u001B[33m WARN [traceId=6a83131b6a83338bf5083945f9281c6d,spanId=f5083945f9281c6d,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1012ms"
+    }, {
+      "at" : "2026-08-17T13:56:45.104244782Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:45\u001B[0;39m \u001B[2m[http-nio-8081-exec-8]\u001B[0;39m \u001B[33m WARN [traceId=6a83131bab466651fbe41ccf538859ed,spanId=fbe41ccf538859ed,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 2089ms"
+    }, {
+      "at" : "2026-08-17T13:56:45.209975965Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:45\u001B[0;39m \u001B[2m[http-nio-8081-exec-1]\u001B[0;39m \u001B[33m WARN [traceId=6a83131b87fc73639fdbb57cd5b7acbd,spanId=9fdbb57cd5b7acbd,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 2040ms"
+    }, {
+      "at" : "2026-08-17T13:56:45.211878843Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:45\u001B[0;39m \u001B[2m[http-nio-8081-exec-3]\u001B[0;39m \u001B[33m WARN [traceId=6a83131b5a311dd441989ae522b85cff,spanId=41989ae522b85cff,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 2109ms"
+    }, {
+      "at" : "2026-08-17T13:56:45.517880006Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:45\u001B[0;39m \u001B[2m[http-nio-8081-exec-10]\u001B[0;39m \u001B[33m WARN [traceId=6a83131b3a54b944d8d63580165848c1,spanId=d8d63580165848c1,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 2200ms"
+    }, {
+      "at" : "2026-08-17T13:56:45.840196309Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:45\u001B[0;39m \u001B[2m[http-nio-8081-exec-9]\u001B[0;39m \u001B[33m WARN [traceId=6a83131bd4c2d8333b67052419130c49,spanId=3b67052419130c49,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 2139ms"
+    }, {
+      "at" : "2026-08-17T13:56:46.402310479Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:46\u001B[0;39m \u001B[2m[http-nio-8081-exec-6]\u001B[0;39m \u001B[33m WARN [traceId=6a83131c013ca972ce4c4de87c20850e,spanId=ce4c4de87c20850e,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1890ms"
+    }, {
+      "at" : "2026-08-17T13:56:46.469775779Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:46\u001B[0;39m \u001B[2m[http-nio-8081-exec-4]\u001B[0;39m \u001B[33m WARN [traceId=6a83131cb2f36470e14f4eb33a799904,spanId=e14f4eb33a799904,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 2169ms"
+    }, {
+      "at" : "2026-08-17T13:56:46.601729922Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:46\u001B[0;39m \u001B[2m[http-nio-8081-exec-5]\u001B[0;39m \u001B[33m WARN [traceId=6a83131cb277510ae13eb792f2a5c5db,spanId=e13eb792f2a5c5db,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1789ms"
+    }, {
+      "at" : "2026-08-17T13:56:46.616465618Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:56:46\u001B[0;39m \u001B[2m[http-nio-8081-exec-2]\u001B[0;39m \u001B[33m WARN [traceId=6a83131cc1d83470ff6923c5c03bc6fb,spanId=ff6923c5c03bc6fb,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP-SLOW] POST /api/login 200 - 1717ms"
+    }, {
+      "at" : "2026-08-17T13:58:17.010786679Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:17\u001B[0;39m \u001B[2m[http-nio-8081-exec-77]\u001B[0;39m \u001B[31mERROR [traceId=6a83135bfe4e71bf4ac9cabe0d37e646,spanId=09965ed483aefe92,userId=NONE]\u001B[0;39m \u001B[36mo.h.e.jdbc.spi.SqlExceptionHelper\u001B[0;39m \u001B[2m-\u001B[0;39m HikariPool-1 - Connection is not available, request timed out after 30000ms."
+    }, {
+      "at" : "2026-08-17T13:58:17.312492209Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:17\u001B[0;39m \u001B[2m[http-nio-8081-exec-77]\u001B[0;39m \u001B[31mERROR [traceId=6a83135bfe4e71bf4ac9cabe0d37e646,spanId=09965ed483aefe92,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.e.GlobalExceptionHandler\u001B[0;39m \u001B[2m-\u001B[0;39m [api-error] handleAllException"
+    }, {
+      "at" : "2026-08-17T13:58:17.312516964Z",
+      "service" : "auth-service",
+      "line" : "org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager for transaction"
+    }, {
+      "at" : "2026-08-17T13:58:17.312743832Z",
+      "service" : "auth-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-17T13:58:17.312746320Z",
+      "service" : "auth-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    }, {
+      "at" : "2026-08-17T13:58:17.313832780Z",
+      "service" : "auth-service",
+      "line" : "Caused by: org.hibernate.exception.JDBCConnectionException: Unable to acquire JDBC Connection [HikariPool-1 - Connection is not available, request timed out after 30000ms.] [n/a]"
+    }, {
+      "at" : "2026-08-17T13:58:17.313835876Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.exception.internal.SQLExceptionTypeDelegate.convert(SQLExceptionTypeDelegate.java:51)"
+    }, {
+      "at" : "2026-08-17T13:58:17.313838180Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58)"
+    }, {
+      "at" : "2026-08-17T13:58:17.313840367Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108)"
+    }, {
+      "at" : "2026-08-17T13:58:17.313842824Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:94)"
+    }, {
+      "at" : "2026-08-17T13:58:17.313888335Z",
+      "service" : "auth-service",
+      "line" : "Caused by: java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms."
+    }, {
+      "at" : "2026-08-17T13:58:17.313890810Z",
+      "service" : "auth-service",
+      "line" : "\tat com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:696)"
+    }, {
+      "at" : "2026-08-17T13:58:17.322991216Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:17\u001B[0;39m \u001B[2m[http-nio-8081-exec-77]\u001B[0;39m \u001B[31mERROR [traceId=6a83135bfe4e71bf4ac9cabe0d37e646,spanId=4ac9cabe0d37e646,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP] POST /api/login 500 - 30322ms"
+    }, {
+      "at" : "2026-08-17T13:58:17.407332767Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:17\u001B[0;39m \u001B[2m[http-nio-8081-exec-56]\u001B[0;39m \u001B[31mERROR [traceId=6a83135b582134ed19e77c716322b2e2,spanId=50cf00c11220e6a0,userId=NONE]\u001B[0;39m \u001B[36mo.h.e.jdbc.spi.SqlExceptionHelper\u001B[0;39m \u001B[2m-\u001B[0;39m HikariPool-1 - Connection is not available, request timed out after 30000ms."
+    }, {
+      "at" : "2026-08-17T13:58:17.512812059Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:17\u001B[0;39m \u001B[2m[http-nio-8081-exec-56]\u001B[0;39m \u001B[31mERROR [traceId=6a83135b582134ed19e77c716322b2e2,spanId=50cf00c11220e6a0,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.e.GlobalExceptionHandler\u001B[0;39m \u001B[2m-\u001B[0;39m [api-error] handleAllException"
+    }, {
+      "at" : "2026-08-17T13:58:17.512834039Z",
+      "service" : "auth-service",
+      "line" : "org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager for transaction"
+    }, {
+      "at" : "2026-08-17T13:58:17.513012979Z",
+      "service" : "auth-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-17T13:58:17.513015233Z",
+      "service" : "auth-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    }, {
+      "at" : "2026-08-17T13:58:17.513410540Z",
+      "service" : "auth-service",
+      "line" : "Caused by: org.hibernate.exception.JDBCConnectionException: Unable to acquire JDBC Connection [HikariPool-1 - Connection is not available, request timed out after 30000ms.] [n/a]"
+    }, {
+      "at" : "2026-08-17T13:58:17.513415655Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.exception.internal.SQLExceptionTypeDelegate.convert(SQLExceptionTypeDelegate.java:51)"
+    }, {
+      "at" : "2026-08-17T13:58:17.513418040Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58)"
+    }, {
+      "at" : "2026-08-17T13:58:17.513420654Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108)"
+    }, {
+      "at" : "2026-08-17T13:58:17.513423158Z",
+      "service" : "auth-service",
+      "line" : "\tat org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:94)"
+    }, {
+      "at" : "2026-08-17T13:58:17.513451594Z",
+      "service" : "auth-service",
+      "line" : "Caused by: java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms."
+    }, {
+      "at" : "2026-08-17T13:58:17.513453900Z",
+      "service" : "auth-service",
+      "line" : "\tat com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:696)"
+    }, {
+      "at" : "2026-08-17T13:58:17.523155828Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:17\u001B[0;39m \u001B[2m[http-nio-8081-exec-56]\u001B[0;39m \u001B[31mERROR [traceId=6a83135b582134ed19e77c716322b2e2,spanId=19e77c716322b2e2,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.f.RequestLoggingFilter\u001B[0;39m \u001B[2m-\u001B[0;39m [HTTP] POST /api/login 500 - 30123ms"
+    }, {
+      "at" : "2026-08-17T13:58:21.207321685Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:21\u001B[0;39m \u001B[2m[http-nio-8081-exec-16]\u001B[0;39m \u001B[31mERROR [traceId=6a83135ff894b5aa03f2aa437057fe27,spanId=7be04a9612355f5e,userId=NONE]\u001B[0;39m \u001B[36mo.h.e.jdbc.spi.SqlExceptionHelper\u001B[0;39m \u001B[2m-\u001B[0;39m HikariPool-1 - Connection is not available, request timed out after 30000ms."
+    }, {
+      "at" : "2026-08-17T13:58:21.308357250Z",
+      "service" : "auth-service",
+      "line" : "\u001B[2m2026-08-17 22:58:21\u001B[0;39m \u001B[2m[http-nio-8081-exec-16]\u001B[0;39m \u001B[31mERROR [traceId=6a83135ff894b5aa03f2aa437057fe27,spanId=7be04a9612355f5e,userId=NONE]\u001B[0;39m \u001B[36mc.e.t.a.c.e.GlobalExceptionHandler\u001B[0;39m \u001B[2m-\u001B[0;39m [api-error] handleAllException"
+    }, {
+      "at" : "2026-08-17T13:58:21.308382532Z",
+      "service" : "auth-service",
+      "line" : "org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager for transaction"
+    }, {
+      "at" : "2026-08-17T13:58:21.308538337Z",
+      "service" : "auth-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126)"
+    }, {
+      "at" : "2026-08-17T13:58:21.308540812Z",
+      "service" : "auth-service",
+      "line" : "\tat org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120)"
+    } ],
+    "metrics" : [ {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.57:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-zrvgl, pool=HikariPool-1, service=auth-service}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 10.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T13:57:15Z", "2026-08-17T14:03:30Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl, pool=HikariPool-1}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n, pool=HikariPool-1}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_active",
+      "series" : "{__name__=hikaricp_connections_active, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9, pool=HikariPool-1}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=auth-service, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.57:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-zrvgl, pool=HikariPool-1, service=auth-service}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 190.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T13:57:15Z", "2026-08-17T14:03:30Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl, pool=HikariPool-1}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n, pool=HikariPool-1}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "hikaricp_connections_pending",
+      "series" : "{__name__=hikaricp_connections_pending, application=content-service, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9, pool=HikariPool-1}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of major GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=MarkSweepCompact, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=auth-service, cause=G1 Evacuation Pause, cluster=yogurtte-k3s-prod, container=auth-service, gc=G1 Young Generation, instance=10.42.1.57:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-zrvgl, service=auth-service}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.016058333333333334,
+      "last" : 0.0015458333333333314,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T13:57:15Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=chat-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.3333333333325942E-4,
+      "max" : 4.0000000000001514E-4,
+      "last" : 1.5416666666657382E-4,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=chat-service, cause=GCLocker Initiated GC, cluster=yogurtte-k3s-prod, container=chat-service, gc=Copy, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 1.666666666666483E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:01:30Z", "2026-08-17T14:05:45Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=Allocation Failure, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 1.666666666666853E-5,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T13:59:45Z", "2026-08-17T14:04:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=GCLocker Initiated GC, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "rate(jvm_gc_pause_seconds_sum[5m])",
+      "series" : "{action=end of minor GC, application=content-service, cause=GCLocker Initiated GC, cluster=yogurtte-k3s-prod, container=content-service, gc=Copy, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-40-241, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-cph5l, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, app=node-exporter, cluster=yogurtte-k3s-prod, component=metrics, container=node-exporter, instance=ip-172-31-45-39, job=integrations/node_exporter, k8s_cluster_name=yogurtte-k3s-prod, namespace=monitoring, pod=grafana-k8s-monitoring-node-exporter-9kvqt, source=kubernetes, workload=DaemonSet/grafana-k8s-monitoring-node-exporter}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=auth-service, instance=10.42.1.57:8090, job=auth-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=auth-service-5999bb9f5c-zrvgl}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.1.53:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-sp24n}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, container=content-service, instance=10.42.3.46:8090, job=content-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=content-service-85f648fcff-v2pw9}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=10.42.1.248:8080, job=integrations/kubernetes/kube-state-metrics, k8s_cluster_name=yogurtte-k3s-prod, source=kubernetes}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "up",
+      "series" : "{__name__=up, cluster=yogurtte-k3s-prod, instance=62bd8b254df94616e43279f35eed72d3, job=integrations/cloudwatch, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "mongodb_up",
+      "series" : "{__name__=mongodb_up, cluster=yogurtte-k3s-prod, instance=infra-server, job=mongodb, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_brokers",
+      "series" : "{__name__=kafka_brokers, cluster=yogurtte-k3s-prod, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 1.0,
+      "max" : 1.0,
+      "last" : 1.0,
+      "zeroSpans" : [ ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.fcm-tokens}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.fcm-tokens}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-fcm-tokens, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.fcm-tokens}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=user.notification-settings}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=user.notification-settings}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=chat-service-notification-settings, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=2, topic=user.notification-settings}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=0, topic=chat.messages}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "kafka_consumergroup_lag",
+      "series" : "{__name__=kafka_consumergroup_lag, cluster=yogurtte-k3s-prod, consumergroup=db-writer, instance=infra-server, job=kafka, k8s_cluster_name=yogurtte-k3s-prod, partition=1, topic=chat.messages}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    }, {
+      "query" : "websocket_active_users",
+      "series" : "{__name__=websocket_active_users, application=chat-service, cluster=yogurtte-k3s-prod, container=chat-service, instance=10.42.1.55:8090, job=chat-service, k8s_cluster_name=yogurtte-k3s-prod, namespace=default, pod=chat-service-fdcc7c776-kh2dl}",
+      "points" : 45,
+      "firstAt" : "2026-08-17T13:56:00Z",
+      "lastAt" : "2026-08-17T14:07:00Z",
+      "min" : 0.0,
+      "max" : 0.0,
+      "last" : 0.0,
+      "zeroSpans" : [ "2026-08-17T13:56:00Z ~ 2026-08-17T14:07:00Z" ]
+    } ]
+  },
+  "serviceGraph" : {
+    "edges" : [ ],
+    "empty" : true
+  },
+  "collectionFailures" : [ "Metric 'sum(rate(http_server_requests_seconds_count{application=\"content-service\", status=\"401\"}[1m]))' returned no series in this window; skipped." ]
+}

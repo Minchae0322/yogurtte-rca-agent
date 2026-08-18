@@ -1,0 +1,169 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "swipe 200": {
+                    "name": "swipe 200",
+                    "path": "::swipe 200",
+                    "id": "e6fb31952071cba04eddb282b5ef1ffd",
+                    "passes": 133654,
+                    "fails": 2193
+                }
+            }
+    },
+    "metrics": {
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 30.628,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.030696159763270055
+        },
+        "checks": {
+            "fails": 2193,
+            "passes": 133654,
+            "value": 0.9838568389438118
+        },
+        "iterations": {
+            "count": 135847,
+            "rate": 502.412286844615
+        },
+        "http_req_receiving": {
+            "avg": 1.1635949164894466,
+            "min": 0.005,
+            "med": 0.047,
+            "max": 371.513,
+            "p(90)": 2.563,
+            "p(95)": 4.926499999999994
+        },
+        "vus": {
+            "value": 5,
+            "min": 4,
+            "max": 300
+        },
+        "http_req_duration": {
+            "min": 21.888,
+            "med": 483.129,
+            "max": 2664.877,
+            "p(90)": 869.637,
+            "p(95)": 992.6979999999999,
+            "avg": 497.1572158467792
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 479.525,
+            "max": 2664.877,
+            "p(90)": 856.7940000000001,
+            "p(95)": 979.319,
+            "avg": 491.8319628524026,
+            "min": 21.888
+        },
+        "http_req_connecting": {
+            "med": 0,
+            "max": 13.168,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.01001662115111409,
+            "min": 0
+        },
+        "http_req_sending": {
+            "med": 0.013,
+            "max": 5.904,
+            "p(90)": 0.018,
+            "p(95)": 0.02,
+            "avg": 0.012507585516490111,
+            "min": 0.001
+        },
+        "iteration_duration": {
+            "p(95)": 992.8213374999998,
+            "avg": 497.32145887084994,
+            "min": 21.9815,
+            "med": 483.283834,
+            "max": 2664.9605,
+            "p(90)": 869.7724498
+        },
+        "vus_max": {
+            "value": 300,
+            "min": 300,
+            "max": 300
+        },
+        "data_sent": {
+            "rate": 117239.78424220238,
+            "count": 31700405
+        },
+        "data_received": {
+            "count": 106488785,
+            "rate": 393834.7846853779
+        },
+        "http_reqs": {
+            "count": 135851,
+            "rate": 502.42708031923996
+        },
+        "http_req_waiting": {
+            "avg": 495.9811133447771,
+            "min": 21.578,
+            "med": 482.117,
+            "max": 2664.838,
+            "p(90)": 868.414,
+            "p(95)": 991.6534999999999
+        },
+        "http_req_duration{name:POST /battles/{id}/swipe}": {
+            "avg": 497.1694022981796,
+            "min": 21.888,
+            "med": 483.136,
+            "max": 2664.877,
+            "p(90)": 869.6382,
+            "p(95)": 992.7023999999998,
+            "thresholds": {
+                "p(99)<1000": true
+            }
+        },
+        "http_req_failed": {
+            "passes": 2195,
+            "fails": 133656,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0.016157407748194713
+        },
+        "http_req_blocked": {
+            "max": 36.889,
+            "p(90)": 0.004,
+            "p(95)": 0.004,
+            "avg": 0.043598449772186805,
+            "min": 0,
+            "med": 0.003
+        }
+    },
+    "setup_data": {
+        "targets": [
+            {
+                "itemId": 126,
+                "battleId": 22
+            },
+            {
+                "battleId": 22,
+                "itemId": 128
+            },
+            {
+                "battleId": 22,
+                "itemId": 130
+            },
+            {
+                "battleId": 22,
+                "itemId": 125
+            },
+            {
+                "battleId": 22,
+                "itemId": 127
+            },
+            {
+                "battleId": 22,
+                "itemId": 129
+            }
+        ]
+    }
+}

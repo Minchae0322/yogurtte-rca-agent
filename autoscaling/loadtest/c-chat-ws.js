@@ -12,6 +12,9 @@ const VUS = Number(__ENV.VUS || 200);
 const TOKEN_POOL = Number(__ENV.TOKEN_POOL || 50); // 로그인 비용을 측정에서 빼려고 setup 에서 미리 받는다
 const ROOM_ID = __ENV.CHAT_ROOM_ID || 'loadtest-room';
 const ENTER_ROOM = __ENV.CHAT_ROOM_ENTER === '1';
+// WS-B(메시지 처리량)·Kafka consumer 시험용: 세션당 전송 간격(ms). 낮출수록 전체 msg/s가 올라간다.
+// 전체 유입률 ≈ VUS / (MSG_INTERVAL_MS/1000) msg/s. 예: 200 VU × 1000ms = 200 msg/s.
+const MSG_INTERVAL_MS = Number(__ENV.MSG_INTERVAL_MS || 3000);
 
 export const options = {
   stages: [
@@ -40,7 +43,7 @@ export default function (data) {
       if (!connected && msg.startsWith('CONNECTED')) {
         connected = true;
         socket.send(subscribeFrame(`sub-${__VU}`, ROOM_ID));
-        socket.setInterval(() => socket.send(chatSendFrame(ROOM_ID, 'hello', ENTER_ROOM)), 3000);
+        socket.setInterval(() => socket.send(chatSendFrame(ROOM_ID, 'hello', ENTER_ROOM)), MSG_INTERVAL_MS);
       }
     });
 

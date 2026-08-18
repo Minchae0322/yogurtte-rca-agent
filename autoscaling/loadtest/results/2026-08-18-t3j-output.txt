@@ -1,0 +1,55 @@
+default ↓ [ 100% ] 0501/1000 VUs  6m0s
+
+running (6m40.0s), 0049/1000 VUs, 1150 complete and 796 interrupted iterations
+default ↓ [ 100% ] 0501/1000 VUs  6m0s
+
+running (6m41.0s), 0032/1000 VUs, 1151 complete and 812 interrupted iterations
+default ↓ [ 100% ] 0501/1000 VUs  6m0s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.95' rate=100.00%
+
+    ws_connecting
+    ✓ 'p(95)<2000' p(95)=1.03s
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 2334    5.807462/s
+    checks_succeeded...: 100.00% 2334 out of 2334
+    checks_failed......: 0.00%   0 out of 2334
+
+    ✓ ws 101
+    ✓ STOMP CONNECTED
+
+    HTTP
+    http_req_duration..............: avg=436.52ms min=200.27ms med=416.91ms max=1.19s p(90)=603.7ms  p(95)=631.51ms
+      { expected_response:true }...: avg=436.52ms min=200.27ms med=416.91ms max=1.19s p(90)=603.7ms  p(95)=631.51ms
+    http_req_failed................: 0.00%  0 out of 50
+    http_reqs......................: 50     0.12441/s
+
+    EXECUTION
+    iteration_duration.............: avg=3m0s     min=3m0s     med=3m0s     max=3m1s  p(90)=3m0s     p(95)=3m0s    
+    iterations.....................: 1167   2.903731/s
+    vus............................: 32     min=0       max=1000
+    vus_max........................: 1000   min=1000    max=1000
+
+    NETWORK
+    data_received..................: 13 MB  33 kB/s
+    data_sent......................: 4.5 MB 11 kB/s
+
+    WEBSOCKET
+    ws_connecting..................: avg=215.05ms min=22.6ms   med=34.19ms  max=2.62s p(90)=793.04ms p(95)=1.03s   
+    ws_msgs_received...............: 1995   4.963961/s
+    ws_msgs_sent...................: 3162   7.867692/s
+    ws_session_duration............: avg=3m0s     min=3m0s     med=3m0s     max=3m1s  p(90)=3m0s     p(95)=3m0s    
+    ws_sessions....................: 1995   4.963961/s
+
+
+
+
+running (6m41.9s), 0000/1000 VUs, 1167 complete and 828 interrupted iterations
+default ✓ [ 100% ] 0000/1000 VUs  6m0s

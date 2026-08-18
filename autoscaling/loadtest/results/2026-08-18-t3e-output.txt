@@ -1,0 +1,50 @@
+default   [  99% ] 025/300 VUs  4m27.6s/4m30.0s
+
+running (4m29.0s), 015/300 VUs, 135451 complete and 0 interrupted iterations
+default   [  99% ] 015/300 VUs  4m28.6s/4m30.0s
+
+running (4m30.0s), 005/300 VUs, 135807 complete and 0 interrupted iterations
+default   [ 100% ] 005/300 VUs  4m29.6s/4m30.0s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{name:POST /battles/{id}/swipe}
+    ✗ 'p(99)<1000' p(99)=1.26s
+
+    http_req_failed
+    ✓ 'rate<0.05' rate=1.61%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 135847 502.412287/s
+    checks_succeeded...: 98.38% 133654 out of 135847
+    checks_failed......: 1.61%  2193 out of 135847
+
+    ✗ swipe 200
+      ↳  98% — ✓ 133654 / ✗ 2193
+
+    HTTP
+    http_req_duration.....................: avg=497.15ms min=21.88ms med=483.12ms max=2.66s p(90)=869.63ms p(95)=992.69ms
+      { expected_response:true }..........: avg=491.83ms min=21.88ms med=479.52ms max=2.66s p(90)=856.79ms p(95)=979.31ms
+      { name:POST /battles/{id}/swipe }...: avg=497.16ms min=21.88ms med=483.13ms max=2.66s p(90)=869.63ms p(95)=992.7ms 
+    http_req_failed.......................: 1.61%  2195 out of 135851
+    http_reqs.............................: 135851 502.42708/s
+
+    EXECUTION
+    iteration_duration....................: avg=497.32ms min=21.98ms med=483.28ms max=2.66s p(90)=869.77ms p(95)=992.82ms
+    iterations............................: 135847 502.412287/s
+    vus...................................: 5      min=4              max=300
+    vus_max...............................: 300    min=300            max=300
+
+    NETWORK
+    data_received.........................: 107 MB 394 kB/s
+    data_sent.............................: 32 MB  117 kB/s
+
+
+
+
+running (4m30.4s), 000/300 VUs, 135847 complete and 0 interrupted iterations
+default ✓ [ 100% ] 000/300 VUs  4m30s
+time="2026-08-18T18:51:42+09:00" level=error msg="thresholds on metrics 'http_req_duration{name:POST /battles/{id}/swipe}' have been crossed"

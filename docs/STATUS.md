@@ -582,6 +582,24 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-08-18 (T2-A 실장애를 rca-agent로 자연어 조사 — 풀 고갈은 확정, CPU 축은 계측 공백)**:
+  T2-A가 만든 실제 장애 창(2026-08-17 22:56~23:03 KST)을 `/diagnose` 자연어 질문으로 조사.
+  1위 후보 HikariCP 풀 고갈(active 10 포화·pending 190·30s 타임아웃→500)을 메트릭·로그·
+  트레이스 3중 근거로 확정했으나, BCrypt CPU 포화 축은 CPU 지표 미수집으로 지목 못 함
+  (계측 공백으로 기록). 챕터 회차가 아니라 채점 없음, 기록은 별도 폴더에.
+  → [autoscaling/rca/](../autoscaling/rca/README.md)
+
+- **2026-08-18 (T3-E·F·J·혼합 Breakpoint 완주 — "동시 N명 한계"는 auth가 정한다)**:
+  T3-E(게스트 스와이프, 약한 행 경합) · **T3-F(서비스 전파 — auth 97% 붕괴에도 content
+  실패 0%, 폴백 격리 성공 실증)** · T3-J(WS 1,000연결 전부 성립·CPU 31%, 연결은 병목 아님) ·
+  **혼합 Breakpoint(읽기 80/로그인 15/챗 5, 1,200 VU) — 읽기는 p99 250ms로 통과, 로그인만
+  붕괴.** 551 VU 시점 노드/파드 동시 실측으로 **노드 CPU 62% 여유인데 auth 파드가 CPU
+  limit 500m에 걸린 것**을 확인 — 한계는 노드가 아니라 auth 파드 limit + 단일 replica.
+  부하테스트 설계를 v1(제한 인프라 계층 분리 · Phase 0 Node Capacity · CPU 크레딧 ·
+  CPU 대조군)로 개정. conn-pool은 auth 포화 여파로 부분 측정 후 사용자 요청으로 중단.
+  결과 문서를 시험별 md로 분리(t0~t3j · mixed · connpool). 남은 것: WS-B·spike·soak·Phase 0.
+  → [autoscaling/](../autoscaling/README.md) · [실행 인덱스](../autoscaling/loadtest/results/2026-08-16-실행-1회차.md)
+
 - **2026-08-17 (T2-B·T3-D 완주 — 세 서비스가 무너지는 방식이 전부 달랐다)**:
   **T2-B(콘텐츠 500 VU)**: 실패 0%·p99 4.5~4.9s — 레플리카 2개 CPU 99% 포화·풀 정상.
   **우아한 포화**(실패 없이 균등 지연). **T3-D(락 집중 200 VU + 대조군)**: 본군 p99 8.82s·
