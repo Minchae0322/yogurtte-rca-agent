@@ -1,0 +1,55 @@
+running (6m34.0s), 006/200 VUs, 895 complete and 98 interrupted iterations
+default ↓ [ 100% ] 069/200 VUs  6m0s
+
+running (6m35.0s), 001/200 VUs, 897 complete and 101 interrupted iterations
+default ↓ [ 100% ] 069/200 VUs  6m0s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✗ 'rate>0.99' rate=69.11%
+
+    ws_connecting
+    ✗ 'p(99)<1000' p(99)=1.1s
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1794   4.541645/s
+    checks_succeeded...: 69.11% 1240 out of 1794
+    checks_failed......: 30.88% 554 out of 1794
+
+    ✓ ws status 101
+    ✗ STOMP CONNECTED
+      ↳  38% — ✓ 343 / ✗ 554
+
+    HTTP
+    http_req_duration..............: avg=296.84ms min=153.22ms med=269.6ms max=570.7ms p(90)=439.14ms p(95)=466.48ms
+      { expected_response:true }...: avg=296.84ms min=153.22ms med=269.6ms max=570.7ms p(90)=439.14ms p(95)=466.48ms
+    http_req_failed................: 0.00%  0 out of 50
+    http_reqs......................: 50     0.126579/s
+
+    EXECUTION
+    iteration_duration.............: avg=1m0s     min=1m0s     med=1m0s    max=1m2s    p(90)=1m0s     p(95)=1m0s    
+    iterations.....................: 897    2.270823/s
+    vus............................: 1      min=0        max=200
+    vus_max........................: 200    min=200      max=200
+
+    NETWORK
+    data_received..................: 25 MB  63 kB/s
+    data_sent......................: 7.3 MB 19 kB/s
+
+    WEBSOCKET
+    ws_connecting..................: avg=125.47ms min=28.47ms  med=97.89ms max=2.49s   p(90)=119.16ms p(95)=199.24ms
+    ws_msgs_received...............: 42479  107.538765/s
+    ws_msgs_sent...................: 30419  77.007973/s
+    ws_session_duration............: avg=1m0s     min=1m0s     med=1m0s    max=1m2s    p(90)=1m0s     p(95)=1m0s    
+    ws_sessions....................: 999    2.529043/s
+
+
+
+
+running (6m35.0s), 000/200 VUs, 897 complete and 102 interrupted iterations
+default ✓ [ 100% ] 000/200 VUs  6m0s
+time="2026-08-18T19:42:00+09:00" level=error msg="thresholds on metrics 'checks, ws_connecting' have been crossed"

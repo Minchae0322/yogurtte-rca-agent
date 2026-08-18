@@ -42,6 +42,7 @@
 | **B-16** | **도착·성공 신호 수집**(INFO 포함) — 복구를 봐야 영향 판정이 된다 | **대기** | [round-3](round-3/README.md) |
 | **B-41** | kube-state-metrics 3종 — `kube_deployment_spec_replicas` 등. **파드가 왜 사라졌는지** | **대기** · 세 회차 연속 발현 | [round-6](round-6/README.md) |
 | **B-42** | **`redis_up`** 추가 — `up{job="redis"}`는 익스포터 생사이지 Redis 생사가 아니다 | **대기** · 여섯 번째 | [round-6](round-6/README.md) |
+| **B-59** | **CPU 메트릭 추가** — `process_cpu_usage`·`system_cpu_usage`. LT-1(로그인 폭주)의 CPU 포화 축이 수집 목록에 없어 도달 불가 | **대기** · 신규 (2026-08-18) | [round-7](round-7/README.md) |
 
 ### 탐색 구조 (어디를 볼지 정하는 법)
 

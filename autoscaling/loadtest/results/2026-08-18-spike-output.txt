@@ -1,0 +1,55 @@
+
+running (4m52.0s), 0001/3000 VUs, 32625 complete and 0 interrupted iterations
+spike   [  99% ] 0001/3000 VUs  4m46.4s/4m50s  020.00 iters/s
+
+running (4m53.0s), 0001/3000 VUs, 32645 complete and 0 interrupted iterations
+spike   [  99% ] 0001/3000 VUs  4m47.4s/4m50s  020.00 iters/s
+
+running (4m54.0s), 0001/3000 VUs, 32665 complete and 0 interrupted iterations
+spike   [  99% ] 0001/3000 VUs  4m48.4s/4m50s  020.00 iters/s
+
+running (4m55.0s), 0001/3000 VUs, 32685 complete and 0 interrupted iterations
+spike   [ 100% ] 0001/3000 VUs  4m49.4s/4m50s  020.00 iters/s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(99)<1000' p(99)=31.42s
+
+    http_req_failed
+    ✗ 'rate<0.02' rate=64.75%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 32697  110.61637/s
+    checks_succeeded...: 35.20% 11512 out of 32697
+    checks_failed......: 64.79% 21185 out of 32697
+
+    ✗ 200
+      ↳  35% — ✓ 11512 / ✗ 21185
+
+    HTTP
+    http_req_duration..............: avg=3.41s min=5.05ms  med=54.24ms max=59.99s p(90)=9.14s p(95)=23.79s
+      { expected_response:true }...: avg=6.36s min=48.87ms med=5.7s    max=59.76s p(90)=16.4s p(95)=24.23s
+    http_req_failed................: 64.75% 21185 out of 32718
+    http_reqs......................: 32718  110.687415/s
+
+    EXECUTION
+    dropped_iterations.............: 4002   13.539062/s
+    iteration_duration.............: avg=3.41s min=5.1ms   med=54.66ms max=1m0s   p(90)=9.15s p(95)=23.8s 
+    iterations.....................: 32697  110.61637/s
+    vus............................: 1      min=0              max=2999
+    vus_max........................: 3000   min=200            max=3000
+
+    NETWORK
+    data_received..................: 376 MB 1.3 MB/s
+    data_sent......................: 18 MB  59 kB/s
+
+
+
+
+running (4m55.6s), 0000/3000 VUs, 32697 complete and 0 interrupted iterations
+spike ✓ [ 100% ] 0000/3000 VUs  4m50s  020.00 iters/s
+time="2026-08-18T19:51:15+09:00" level=error msg="thresholds on metrics 'http_req_duration, http_req_failed' have been crossed"

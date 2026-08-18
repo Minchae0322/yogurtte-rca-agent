@@ -588,6 +588,12 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
   트레이스 3중 근거로 확정했으나, BCrypt CPU 포화 축은 CPU 지표 미수집으로 지목 못 함
   (계측 공백으로 기록). 챕터 회차가 아니라 채점 없음, 기록은 별도 폴더에.
   → [autoscaling/rca/](../autoscaling/rca/README.md)
+  **이를 새 문항 LT-1로 승격** — anchors-v2에 앵커 박제(질문 문안·6항목 배점·IN-3/AU-2
+  쌍 관계·BCrypt 귀속 불요), CPU 메트릭 추가는 **B-59**로 대기열 등재. 실험 설계: 현행
+  도구 baseline N≥2 → B-59 단일 변경 → 1)·2) 델타 측정. 오늘 조사는 **LT-1 회차 1**로
+  기록 — 문항 폴더 [docs/lt-1/](lt-1/README.md) 신설(다른 문항 폴더와 동일 구성).
+  **참고 채점 83/100**(사후 앵커라 §1.1상 정식 아님·대장 미등재, 감점 12 전액 CPU 축 =
+  B-59 전 상한). → [round-7 LT-1 절](round-7/README.md) · anchors-v2 LT-1
 
 - **2026-08-18 (T3-E·F·J·혼합 Breakpoint 완주 — "동시 N명 한계"는 auth가 정한다)**:
   T3-E(게스트 스와이프, 약한 행 경합) · **T3-F(서비스 전파 — auth 97% 붕괴에도 content
@@ -599,6 +605,13 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
   CPU 대조군)로 개정. conn-pool은 auth 포화 여파로 부분 측정 후 사용자 요청으로 중단.
   결과 문서를 시험별 md로 분리(t0~t3j · mixed · connpool). 남은 것: WS-B·spike·soak·Phase 0.
   → [autoscaling/](../autoscaling/README.md) · [실행 인덱스](../autoscaling/loadtest/results/2026-08-16-실행-1회차.md)
+
+  **이어서 WS-B·Kafka·Spike 완주.** WS-B(200연결 ~500msg/s): chat CPU 0.99 포화 ·
+  신규 연결 62% 실패 · **Kafka db-writer lag 2.6만 적체 - 전량이 chat.messages 파티션 6번
+  한 곳(단일 방 → 단일 파티션 hot-spot)**. KEDA 전에 파티셔닝 설계가 선행 과제임이 드러남.
+  Spike(10초에 800rps 급증): 실패 64.8% · **노드 CPU 99% - 계단(mixed 62%)과 달리 급증은
+  노드가 벽**. 단 회복은 빠름(종료 후 42%·84ms). 시험별 md 추가(wsb-kafka · spike) ·
+  리밋 원복 완료. 남은 것: conn-pool 완성 · soak · Phase 0(AWS CLI) · Cache(코드 변경).
 
 - **2026-08-17 (T2-B·T3-D 완주 — 세 서비스가 무너지는 방식이 전부 달랐다)**:
   **T2-B(콘텐츠 500 VU)**: 실패 0%·p99 4.5~4.9s — 레플리카 2개 CPU 99% 포화·풀 정상.
