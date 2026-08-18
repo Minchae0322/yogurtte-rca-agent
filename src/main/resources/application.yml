@@ -66,6 +66,9 @@ rca:
       - "hikaricp_connections_active"
       - "hikaricp_connections_pending"
       - "rate(jvm_gc_pause_seconds_sum[5m])"
+      # LT-1 — CPU 포화 축 (B-59). 스윕 목록에는 넣지 않았다: 단일 변경으로 분석 델타만 잰다.
+      - "process_cpu_usage"
+      - "system_cpu_usage"
       - "up"                             # 프로세스 생사 — AU-2/AU-4 (파드 부재 확정)
       - "mongodb_up"                     # CH-1 (DLQ 이후 복구 근거) · CH-3
       - "kafka_brokers"                  # IN-2 (브로커 다운 ↔ 토픽 부재 감별)
