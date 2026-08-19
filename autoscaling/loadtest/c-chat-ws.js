@@ -15,6 +15,11 @@ const ENTER_ROOM = __ENV.CHAT_ROOM_ENTER === '1';
 // WS-B(메시지 처리량)·Kafka consumer 시험용: 세션당 전송 간격(ms). 낮출수록 전체 msg/s가 올라간다.
 // 전체 유입률 ≈ VUS / (MSG_INTERVAL_MS/1000) msg/s. 예: 200 VU × 1000ms = 200 msg/s.
 const MSG_INTERVAL_MS = Number(__ENV.MSG_INTERVAL_MS || 3000);
+// 다중 방 분산(파티션 hot-spot 대조군): 방을 N개로 나누되 각 VU가 전 방을 구독한다 -
+// 메시지당 팬아웃(수신자 수)은 단일 방과 동일하게 유지하고 Kafka 파티션 키(roomId)만 분산된다.
+// 전송은 자기 방(`{ROOM_ID}-{__VU % N}`)으로만. 기본 1 = 기존 단일 방 동작.
+const ROOM_COUNT = Number(__ENV.ROOM_COUNT || 1);
+const roomName = (i) => (ROOM_COUNT === 1 ? ROOM_ID : `${ROOM_ID}-${i}`);
 
 export const options = {
   stages: [
@@ -42,8 +47,9 @@ export default function (data) {
     socket.on('message', (msg) => {
       if (!connected && msg.startsWith('CONNECTED')) {
         connected = true;
-        socket.send(subscribeFrame(`sub-${__VU}`, ROOM_ID));
-        socket.setInterval(() => socket.send(chatSendFrame(ROOM_ID, 'hello', ENTER_ROOM)), MSG_INTERVAL_MS);
+        for (let i = 0; i < ROOM_COUNT; i++) socket.send(subscribeFrame(`sub-${__VU}-${i}`, roomName(i)));
+        const myRoom = roomName(__VU % ROOM_COUNT);
+        socket.setInterval(() => socket.send(chatSendFrame(myRoom, 'hello', ENTER_ROOM)), MSG_INTERVAL_MS);
       }
     });
 
