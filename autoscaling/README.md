@@ -135,6 +135,11 @@ export default function () {
 
 ## Phase 3 - HPA 적용 → 의도된 실패 관찰
 
+> **개선 문서: [개선/cpu개선.md](개선/cpu개선.md)** - 이 Phase의 SoT다.
+> 부하테스트 소급 관측으로 "CPU 99%"를 코드(요청당 16.9ms) · 설정(파드 limit) · 스펙(노드 2 vCPU)
+> 세 층으로 분해했고, **HPA를 먼저 붙이면 3번째 replica 자리가 없다**는 것을 실측으로 확인했다.
+> 변경 ID(CPU-1~CPU-5) · 검증 순서 · 반증 조건은 그 문서에 있다. 아래 3-1~3-4는 원래 로드맵 초안이다.
+
 ### 3-1. JVM 다이어트 (HPA 전에)
 
 ```yaml
@@ -150,6 +155,9 @@ spring.main.lazy-initialization=true
 적용 전후 파드 메모리를 기록 (예: 480MB → 300MB). 이 절감분이 곧 replica 들어갈 자리다.
 
 ### 3-2. requests/limits 실측 기반 설정
+
+실측 근거와 현재 값(content requests 0.3 / limit 1.5 = **오버커밋 5배**)은
+[개선/cpu개선.md](개선/cpu개선.md)의 CPU-2 항목에 있다.
 Phase 1에서 측정한 실사용량 × 1.2~1.3을 requests로:
 
 ```yaml
