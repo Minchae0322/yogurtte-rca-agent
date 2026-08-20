@@ -582,6 +582,18 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-08-20~21 (개선 1주기 — limit의 역설 발견, 메모리 3단 다이어트, 코드 C 1차)**:
+  CPU-2 검증 재실행이 예측(+10~20%)을 반증(−16%) → 가설 소거(메모리·데이터·앱 내부 기각,
+  서버 max 2.3s vs 클라 60s) → 판별 실험으로 **CFS 동결이 주범 확정, content CPU limit 제거**
+  (서버 181.6 rps 회복·med 9배 개선). 이어 MEM-2(content 힙 512·640/896Mi, 500 VU 등가 검증)·
+  MEM-3(auth·chat 힙 384, 폭주 검증 대기). 코드 C 1차(readOnly+조회수 분리, toy-content
+  `7906ef1`): 단가 20.5→~16ms·처리량 +7.7% — **유의미하나 제한적, 남은 16ms는 캐시 몫**.
+  토폴로지 재구성(같은 비용 small+micro, vCPU 4→10) 착수 결정, 과거 신규 워커의 iptables
+  INPUT DROP 사건을 사건록+조인 체크리스트로 박제. 실측 전부 노션 서버설정과 동기화.
+  → [cpu개선.md "limit의 역설"](../autoscaling/개선/cpu개선.md) ·
+  [네트워크 사건록](../autoscaling/개선/네트워크-사건록-vxlan-dns.md) ·
+  [T2-B 재실행 4연](../autoscaling/loadtest/results/04-콘텐츠폭주/README.md)
+
 - **2026-08-19 (부하테스트 1차 종결 — 커넥션풀·WS-B 대조군 완주, 크레딧 소급, 종합 보고서)**:
   AWS CLI 연결 후 CPUCreditBalance 4일 소급 → **전 노드 unlimited·미소진 확정**(크레딧 스로틀
   가설 기각). 커넥션풀 계단 완주(20→400 VU) — pending 이탈 200 VU이나 **CPU 포화(100 VU)가
