@@ -289,7 +289,9 @@ capacity 부족. 반면 메모리는 계속 여유여서 이어서 다이어트�
 |---|---|
 | CPU limit 제거 (content) | **적용·검증 완료** (T2-B 181.6 rps) |
 | MEM-2 (content 힙 512·640/896Mi) | **적용·검증 완료** (500 VU) |
-| MEM-3 (auth·chat 힙 384·resources 축소) | **적용 - 폭주 검증 대기** (T2-A·WS-B급 재실행 시 GC 확인) |
+| MEM-3 (auth·chat 힙 384·resources 축소) | **폭주 검증 통과 (08-21)** - auth: T2-A급 300 VU에서 힙 226/384·GC 무부담·**실패 29.75%→0.39%**(limit 3배 효과, 풀 pending 190은 여전 - CPU-4 대상). chat: WS-B급에서 힙 237/384·워킹셋 700/896·**CONNECTED 38%→100%·핸드셰이크 p99 28.8s→152ms** |
+| **WS-B 결론 재해석 (08-21 발견)** | 소비 바닥(1~5 msg/s)의 진짜 원인은 CPU가 아니라 **시험 방(loadtest-room) 부재 → updateLastMessage CHAT_ROOM_NOT_FOUND 전량 재시도 루프** (`ChatRoomService.java:80`). CPU 여유(0.28/1.0)에서도 소비 1.9/s로 반증 확정. 실존 방 재시험이 진짜 소비 상한을 답한다 → [12-메시지처리량 재해석 절](../loadtest/results/12-메시지처리량/README.md) |
+| 로깅 비용 관찰 (08-21) | 3서비스 `SPRING_PROFILES_ACTIVE=dev`는 **의도된 운영 선택(당분간 유지)**. 단 chat의 메시지당 Mongo DEBUG 로그 수 KB는 CPU·I/O 비용 - 프로파일은 두고 `logging.level`만 낮추는 선택지가 있고, 그 델타는 설정 단독 변경군으로 측정 가능 |
 | 토폴로지 재구성 | **미착수** - micro 1대 실험부터, EC2 생성 대기 |
 | 코드 C 1차 (readOnly·조회수 단문 UPDATE 분리) | **적용·검증 완료 (08-21)** - toy-content `7906ef1`. 단가 20.5→18.6ms(웜업 후 ~16ms), 처리량 +7.7%(서버 195.6 rps), p95 4.89→4.53s. **유의미하나 크지 않음** - dirty checking+조회수 트랜잭션 몫이 요청당 ~4ms였다는 실측. 중간 "9.7ms" 판독은 측정 오류(파드 한쪽만 합산)로 정정 |
 | 핫리스트 캐시 (코드 C 2차) | **미착수** - 남은 단가 ~16ms의 최대 지분. 실트래픽 최다(대시보드 3종·사용자 무관 응답)라 총합 효과 1순위 |

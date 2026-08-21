@@ -103,3 +103,35 @@ T3-J(연결 1,000개에 CPU 31%)와 T2-C(200연결·5초 간격)의 중간을 �
 원본: [output](2026-08-18-wsb-output.txt) · [summary](2026-08-18-wsb-summary.json) ·
 대조군 [output](2026-08-19-wsb-multiroom-output.txt) · [summary](2026-08-19-wsb-multiroom-summary.json) ·
 [timestamps](2026-08-19-wsb-multiroom-timestamps.txt)
+
+---
+
+## 재해석 (2026-08-21 · MEM-3 폭주 검증 창에서 발견) - 이 문서의 결론에 큰 별표가 붙는다
+
+> **발견:** WS-B 전 실행의 저장 소비 바닥(1~5 msg/s)·lag 적체는 CPU도 파티션도 아니라
+> **시험 설계 결함**이 만든 것이었다. 시험이 쓰는 방 `loadtest-room`은 실존하지 않고,
+> db-writer는 저장(insert) 성공 후 `updateLastMessage`에서 `CHAT_ROOM_NOT_FOUND`로
+> **전량 예외 → retry 토픽 루프**를 돌았다 (`ChatRoomService.java:80` orElseThrow 실측,
+> retry-1000 소비가 본토픽과 1:1 동률·Mongo insert 카운터와 로그로 확인).
+
+기전: 본토픽에서 saveMessage 성공 → updateLastMessage 예외 → retry-1000 발행 →
+1초 백오프 뒤 retry에서 existsByMessageId 중복 감지 → 조기 return = "성공".
+메시지당 예외 1회 + 토픽 홉 1회 + 파티션 직렬 = 소비 ~2 msg/s 고정.
+**chat CPU 0.28/1.0(여유) 상태에서도 소비 1.9/s** - "소비 상한 = chat CPU" 결론이 반증됐다.
+
+| 기존 결론 | 재해석 |
+|---|---|
+| 단일 파티션 hot-spot이 소비 병목 | 분산 확증은 유효하나, 소비 바닥의 원인 아님 |
+| CPU 분리가 소비의 선행 조건 | **반증** - CPU 여유에서도 동일. 원인은 실패 루프 |
+| lag 2.6만·"백그라운드 소진 중" | poison 시나리오 측정값. **데이터 유실은 없음**(insert는 본토픽에서 성공) |
+
+**MEM-3 창의 확정 사실** (chat limit 1000m·힙 384 첫 폭주):
+
+- **STOMP CONNECTED 38% → 100%** · 핸드셰이크 p99 28.8s → **152ms** - 연결 축은 CPU-2가 해소
+- chat 정점 CPU 1.0(limit 도달) · **힙 237/384Mi·워킹셋 700/896Mi - MEM-3 통과**
+- 부수 발견: **운영 3서비스 profile=dev** - chat이 메시지당 Mongo DEBUG 로그 수 KB
+  (CPU 포화 지분 의심, 프로파일 정리 = 공짜 CPU 후보)
+
+다음: **실존 방(chat_rooms+participants Mongo 직접 생성)으로 재시험**해야 진짜 소비 상한과
+팬아웃 한계가 나온다. 그 전까지 이 문서의 처리량 수치는 인용하지 않는다.
+원본: [mem3 output](2026-08-21-wsb-mem3-output.txt) · [timestamps](2026-08-21-wsb-mem3-timestamps.txt)
