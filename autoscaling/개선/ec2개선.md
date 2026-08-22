@@ -145,7 +145,7 @@ NAT($45/월) 없이 도달 가능한 최적점.
 | 항목 | 상태 |
 |---|---|
 | 스팟 2대·라벨 배치·resize·관측 이주·풀 12·replica 3 | **적용·검증 완료** (파드 배치, 풀 12, 스모크 3서비스 200 실측) |
-| 새 토폴로지 T2-B baseline | **content 2-replica 구성으로 241.2 rps** (spot1+241, 08-22 17:40). **replica 3 + 풀 12 구성은 미측정** - 다음 T2-B가 새 baseline |
+| 새 토폴로지 T2-B baseline | **검증 완료 (08-23)** - replica 3 + 풀 12에서 **서버 314.3 rps (+30%, 누적 +61%)** · med 135ms. 풀 12 대가 부분 발현(pending 25·acquire 0.99s·타임아웃 0). **RDS Threads_connected 59/60 - 종착 벽 확정** (상주 점유: 풀 minIdle 36+auth 10+chat 10). 상세: [04 재실행 8](../loadtest/results/04-콘텐츠폭주/README.md) |
 | 스팟 회수 대응 | 미경험 - persistent+stop 설정만. 첫 회수가 실전 시험 |
 | micro의 파드 밖 CPU ~1코어 정밀 분해 | 미측정 (node-exporter 부재) - 기각 결론에는 영향 없음 |
 | RDS 커넥션 천장 이력(Max_used 62) | 발견·기록 - 어느 시험에서 쳤는지 소급 특정은 미실시 |

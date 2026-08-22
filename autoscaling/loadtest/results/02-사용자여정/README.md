@@ -34,3 +34,36 @@
   평시 낭비" 논거). 스파이크 시험(T2)으로 진행.
 
 원본: [output](2026-08-16-journey-output.txt) · [summary](2026-08-16-journey-summary.json)
+
+---
+
+## journey-v2 기준선 (2026-08-23 01:44~02:03) - 실사용 여정 개편판의 첫 측정 (캐시 Before)
+
+> v2는 실트래픽 화면 흐름(2026-08-20 확인) 기반: **진입 = 대시보드 3종 동시 호출**(battles/hot·
+> products·feeds/hot) → 피드 메뉴(categories + 무한스크롤 → 상세+댓글 → 좋아요·댓글) →
+> 배틀 메뉴 → 채팅(10%). 스크립트 [journey-v2.js](../../journey-v2.js). 구성: 캐시 없음 ·
+> replica 3 + 풀 12 토폴로지. **이 표가 핫리스트 캐시(앱개선 C-2)의 Before다.**
+
+| 항목 | 값 |
+|---|---|
+| 부하 | 초당 2세션 도착 · 15분 유지 · 세션 2,099개 (18,364 요청, 15.8 rps) |
+| 실패 / checks | **0.00% / 100%** (18,129/18,129) |
+| 세션 시간 | med 32.0s (think time 포함) |
+
+**경로별 (med / p95):**
+
+| 경로 | med | p95 |
+|---|---:|---:|
+| GET /feeds/hot (대시보드) | **26.9ms** | 35.1 |
+| GET /battles/hot (대시보드) | **37.1ms** | 47.8 |
+| GET /products (대시보드) | **38.2ms** | 50.8 |
+| GET /feeds/scroll | 57.7ms | 70.7 |
+| GET /feeds/{id} | 54.5ms | 67.8 |
+| POST reactions / comments | 42.0 / 67.6ms | 66.7 / 104.0 |
+| POST /login | 116.8ms | 139.2 |
+| GET /chat/rooms | 33.1ms | 45.2 |
+
+해석: 평시 부하에서 전 경로 건강 - v1 기준선(T1)의 SLO 초과 3건이 이 토폴로지에선 없다.
+캐시 After에서 볼 것: 대시보드 3종의 med(27~38ms) 하락 폭보다 **서버 CPU 단가와 RDS 커넥션
+소비의 하락**이 본 지표다 (평시 지연은 이미 낮아서 극적 변화는 T2-B 극한에서 나온다).
+원본: [output](2026-08-23-journey-v2-baseline-output.txt) · [summary](2026-08-23-journey-v2-baseline-summary.json)
