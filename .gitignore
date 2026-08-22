@@ -23,3 +23,4 @@ node_modules/
 
 # 실제 토큰이 들어간 백업본 — .env와 같이 막는다
 .env.bak-*
+autoscaling/쿠버네티스-설정.md

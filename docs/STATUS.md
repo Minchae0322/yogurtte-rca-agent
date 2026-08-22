@@ -582,6 +582,15 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-08-22 (토폴로지 재구성 — 스팟·micro 판정·in-place 축소·RDS 커넥션 천장)**:
+  스팟 small($0.007/hr, od micro의 절반 가격에 메모리 2배)이 micro 논쟁 종결 →
+  micro 실물 실험은 반전(메모리 529Mi 통과, **시스템이 CPU ~1코어 잠식해 −20% - CPU 사유로
+  기각**). medium은 in-place resize(IP·설정 보존, 이주 작업 소멸). 배치를 역할 라벨로 고정.
+  관측 스택 스팟 이주. **RDS max_connections 60·Max_used 62(천장 접촉 이력) 발견** → 풀
+  20→12 → content replica 3. 워커 계층 $0.078→$0.066/hr·vCPU 4→8·T2-B 241.2 rps(+23%).
+  SG 잠금(VPC 내부만·proxy 점프 SSH). 판단·트레이드오프 전문은 ec2개선.md.
+  → [ec2개선.md](../autoscaling/개선/ec2개선.md) · [T2-B 3연 색인](../autoscaling/loadtest/results/04-콘텐츠폭주/README.md)
+
 - **2026-08-20~21 (개선 1주기 — limit의 역설 발견, 메모리 3단 다이어트, 코드 C 1차)**:
   CPU-2 검증 재실행이 예측(+10~20%)을 반증(−16%) → 가설 소거(메모리·데이터·앱 내부 기각,
   서버 max 2.3s vs 클라 60s) → 판별 실험으로 **CFS 동결이 주범 확정, content CPU limit 제거**
