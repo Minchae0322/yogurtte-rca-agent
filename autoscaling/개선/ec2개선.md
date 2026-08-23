@@ -198,7 +198,7 @@ NAT($45/월) 없이 도달 가능한 최적점.
 | 단계 | 실측 |
 |---|---|
 | 기동 | `i-06a29c2d7dbc52fda` (`yogurtte-obs-spot`) · **172.31.33.159** · 기존 스팟 설정 클론(AMI·SG·subnet 2c·persistent+stop) |
-| **크레딧** | **unlimited로 붙음(계정 기본)** - 계획의 "0.2 baseline 스로틀" 리스크 소멸, 초과분은 종량(시험 1시간당 ~$0.01 수준) |
+| **크레딧** | 기동 시 unlimited(계정 기본)로 붙음 → **08-23 저녁 전 노드 standard로 통일** (종량 과금 회피 - 사용자 결정). 근거: 잔고 실측 562~576/576 만땅 + obs 평시 수요 ~0.1코어 < baseline 0.2로 적립 흑자. 반증 조건: 시험 중 잔고 급락·steal 급증 시 재검토 |
 | 조인 | k3s v1.34.3+k3s1 고정 조인, 31초 만에 Ready · iptables INPUT ACCEPT 확인(사건록 1번) |
 | 이주 방식 | **helm 수정 없이 라벨 이전**으로 3개 이동(receiver는 DS라 자동, metrics-0·ksm은 파드 삭제로 재스케줄) - 중앙부가 이미 `yogurtte.io/role=observability` 셀렉터였다. operator만 nodeSelector가 없어 helm rev 19로 추가 |
 | 42-158 | `role=content`로 강등(content 라벨은 별도 키 `yogurtte.io/content`라 무영향 확인 후 실행) - 잔류는 DaemonSet 2개뿐, **content 전용화 완료** |

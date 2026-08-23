@@ -1,0 +1,190 @@
+{
+    "metrics": {
+        "iterations": {
+            "count": 1,
+            "rate": 2.8432757949088305
+        },
+        "http_req_blocked": {
+            "max": 15.633,
+            "p(90)": 9.380600000000001,
+            "p(95)": 12.506799999999997,
+            "avg": 3.1282000000000005,
+            "min": 0.002,
+            "med": 0.002
+        },
+        "ws_sessions": {
+            "rate": 2.8432757949088305,
+            "count": 1
+        },
+        "ws_msgs_sent": {
+            "count": 1,
+            "rate": 2.8432757949088305
+        },
+        "http_req_connecting": {
+            "max": 4.135,
+            "p(90)": 2.4810000000000003,
+            "p(95)": 3.307999999999999,
+            "avg": 0.827,
+            "min": 0,
+            "med": 0
+        },
+        "http_req_receiving": {
+            "avg": 0.05820000000000001,
+            "min": 0.037,
+            "med": 0.049,
+            "max": 0.096,
+            "p(90)": 0.0844,
+            "p(95)": 0.0902
+        },
+        "http_req_duration": {
+            "p(95)": 97.15499999999999,
+            "avg": 56.349199999999996,
+            "min": 30.808,
+            "med": 51.998,
+            "max": 108.327,
+            "p(90)": 85.983
+        },
+        "data_sent": {
+            "count": 6850,
+            "rate": 19476.439195125487
+        },
+        "ws_connecting": {
+            "p(95)": 29.52175,
+            "avg": 29.52175,
+            "min": 29.52175,
+            "med": 29.52175,
+            "max": 29.52175,
+            "p(90)": 29.52175
+        },
+        "http_req_sending": {
+            "p(90)": 0.04,
+            "p(95)": 0.04999999999999999,
+            "avg": 0.019199999999999995,
+            "min": 0.008,
+            "med": 0.009,
+            "max": 0.06
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 5,
+            "value": 0
+        },
+        "http_req_tls_handshaking": {
+            "avg": 1.9444,
+            "min": 0,
+            "med": 0,
+            "max": 9.722,
+            "p(90)": 5.833200000000001,
+            "p(95)": 7.777599999999998
+        },
+        "ws_msgs_received": {
+            "count": 1,
+            "rate": 2.8432757949088305
+        },
+        "iteration_duration": {
+            "p(95)": 351.615875,
+            "avg": 351.615875,
+            "min": 351.615875,
+            "med": 351.615875,
+            "max": 351.615875,
+            "p(90)": 351.615875
+        },
+        "http_req_waiting": {
+            "avg": 56.2718,
+            "min": 30.763,
+            "med": 51.947,
+            "max": 108.2,
+            "p(90)": 85.8832,
+            "p(95)": 97.04159999999999
+        },
+        "checks": {
+            "passes": 7,
+            "fails": 0,
+            "thresholds": {
+                "rate==1.00": false
+            },
+            "value": 1
+        },
+        "http_reqs": {
+            "count": 5,
+            "rate": 14.216378974544153
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 56.349199999999996,
+            "min": 30.808,
+            "med": 51.998,
+            "max": 108.327,
+            "p(90)": 85.983,
+            "p(95)": 97.15499999999999
+        },
+        "data_received": {
+            "count": 32708,
+            "rate": 92997.86469987803
+        },
+        "ws_session_duration": {
+            "max": 52.987917,
+            "p(90)": 52.987917,
+            "p(95)": 52.987917,
+            "avg": 52.987917,
+            "min": 52.987917,
+            "med": 52.987917
+        }
+    },
+    "root_group": {
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "accessToken 발급": {
+                    "path": "::accessToken 발급",
+                    "id": "00361041bbfe7d45d30610305a1b50e8",
+                    "passes": 1,
+                    "fails": 0,
+                    "name": "accessToken 발급"
+                },
+                "feeds/scroll 200": {
+                    "name": "feeds/scroll 200",
+                    "path": "::feeds/scroll 200",
+                    "id": "00cb4f63723d5dabfb012cfade1edbe0",
+                    "passes": 1,
+                    "fails": 0
+                },
+                "feeds/hot 200": {
+                    "name": "feeds/hot 200",
+                    "path": "::feeds/hot 200",
+                    "id": "c5d80c7020440b5a4603fbf741e84156",
+                    "passes": 1,
+                    "fails": 0
+                },
+                "battles 200": {
+                    "passes": 1,
+                    "fails": 0,
+                    "name": "battles 200",
+                    "path": "::battles 200",
+                    "id": "120633371b7db28da0f68baa0203fbc3"
+                },
+                "chat rooms 200": {
+                    "fails": 0,
+                    "name": "chat rooms 200",
+                    "path": "::chat rooms 200",
+                    "id": "ad18c6f2462ffbf02fcc3d4d251b54d5",
+                    "passes": 1
+                },
+                "ws 101": {
+                    "name": "ws 101",
+                    "path": "::ws 101",
+                    "id": "e5b0306734b265e58be697d8196fbcbd",
+                    "passes": 1,
+                    "fails": 0
+                },
+                "STOMP CONNECTED": {
+                    "name": "STOMP CONNECTED",
+                    "path": "::STOMP CONNECTED",
+                    "id": "f22657ef1ee6b35dcc33a6a8c4cb791c",
+                    "passes": 1,
+                    "fails": 0
+                }
+            },
+        "name": "",
+        "path": ""
+    }
+}

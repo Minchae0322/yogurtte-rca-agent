@@ -1,0 +1,10 @@
+[21:08:53] 배치 시작 - 구성: diet (toy-content ca93bca) · 인그레스 상향 상태
+[21:08:53] === 시작: smoke-diet (smoke.js )
+[21:08:54] === 종료: smoke-diet (k6 exit=0)
+[21:08:54] settle 대기...
+[21:09:28] 배치 시작 - 구성: diet (toy-content ca93bca) · 인그레스 상향 상태
+[21:09:28] === 시작: smoke-diet (smoke.js )
+[21:09:28] === 종료: smoke-diet (k6 exit=0)
+[21:09:28] settle 대기...
+[21:09:51] settle 완료 (loop=0)
+[21:09:51] === 시작: baseline-diet (baseline.js -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
