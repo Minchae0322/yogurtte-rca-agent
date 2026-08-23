@@ -12,3 +12,61 @@
 [21:19:58] settle 대기...
 [21:20:27] settle 완료 (loop=0)
 [21:20:27] === 시작: journey-v2-diet (journey-v2.js -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
+
+[21:32:14] === 경로 전환: nginx 인그레스 직결(http)로 배치 재시작 - CDN 시작분(smoke·baseline 부분) 폐기
+[21:32:14] 배치 시작 - 구성: diet (toy-content ca93bca) · 인그레스 상향 상태
+[21:32:14] === 시작: smoke-diet (smoke.js )
+[21:32:15] === 종료: smoke-diet (k6 exit=0)
+[21:32:15] settle 대기...
+[21:32:36] settle 완료 (loop=0)
+[21:32:36] === 시작: baseline-diet (baseline.js -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
+[21:42:40] === 종료: baseline-diet (k6 exit=0)
+[21:42:40] settle 대기...
+[21:43:03] settle 완료 (loop=0)
+[21:43:03] === 시작: journey-v2-diet (journey-v2.js -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
+[22:02:37] === 종료: journey-v2-diet (k6 exit=0)
+[22:02:37] settle 대기...
+[22:03:01] settle 완료 (loop=0)
+[22:03:01] === 시작: t2a-diet (a-login-burst.js )
+[22:09:01] === 종료: t2a-diet (k6 exit=99)
+[22:09:01] auth 회복 대기...
+[22:09:31] auth 회복: 마지막 로그인 0.115577s (loop=2)
+[22:09:31] settle 대기...
+[22:10:20] settle 완료 (loop=1)
+[22:10:20] === 시작: t2c-diet (c-chat-ws.js -e VUS=200 -e MSG_INTERVAL_MS=5000 -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
+[22:16:45] === 종료: t2c-diet (k6 exit=0)
+[22:16:45] settle 대기...
+[22:17:14] settle 완료 (loop=0)
+[22:17:14] === 시작: t3d-diet (d-hotkey-reaction.js )
+[22:21:21] === 종료: t3d-diet (k6 exit=99)
+[22:21:21] settle 대기...
+[22:21:41] settle 완료 (loop=0)
+[22:21:41] === 시작: t3d-spread-diet (d-hotkey-reaction.js -e SPREAD=1)
+[22:25:47] === 종료: t3d-spread-diet (k6 exit=99)
+[22:25:47] settle 대기...
+[22:26:58] settle 완료 (loop=2)
+[22:26:58] === 시작: t3e-diet (e-guest-swipe-flood.js )
+[22:31:28] === 종료: t3e-diet (k6 exit=99)
+[22:31:28] settle 대기...
+[22:32:12] settle 완료 (loop=1)
+[22:32:12] === 시작: t3f-diet (f-cascade.js )
+[22:36:19] === 종료: t3f-diet (k6 exit=0)
+[22:36:19] auth 회복 대기...
+[22:36:50] auth 회복: 마지막 로그인 0.172911s (loop=2)
+[22:36:50] settle 대기...
+[22:37:36] settle 완료 (loop=1)
+[22:37:36] === 시작: t3j-diet (j-ws-storm.js )
+[22:44:02] === 종료: t3j-diet (k6 exit=0)
+[22:44:02] settle 대기...
+[22:44:28] settle 완료 (loop=0)
+[22:44:28] === 시작: connpool-diet (conn-pool-limit.js )
+[22:55:04] === 종료: connpool-diet (k6 exit=99)
+[22:55:04] settle 대기...
+[22:56:22] settle 완료 (loop=2)
+[22:56:22] === 시작: wsb-diet (c-chat-ws.js -e VUS=200 -e MSG_INTERVAL_MS=400 -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
+[23:02:27] === 종료: wsb-diet (k6 exit=99)
+[23:02:27] settle 대기...
+[23:02:52] settle 완료 (loop=0)
+[23:02:52] === 시작: spike-diet (stress.js -e PROFILE=spike -e RPS_MAX=800 -e TARGET=feeds-scroll)
+[23:02:52] === 종료: spike-diet (k6 exit=107)
+[23:02:52] 배치 완료

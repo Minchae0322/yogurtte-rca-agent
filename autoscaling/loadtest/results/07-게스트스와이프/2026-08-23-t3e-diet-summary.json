@@ -1,0 +1,169 @@
+{
+    "metrics": {
+        "data_received": {
+            "count": 125624979,
+            "rate": 464655.39391471364
+        },
+        "iterations": {
+            "count": 236567,
+            "rate": 875.0021965951697
+        },
+        "data_sent": {
+            "count": 58634564,
+            "rate": 216874.59491983269
+        },
+        "checks": {
+            "passes": 236567,
+            "fails": 0,
+            "value": 1
+        },
+        "http_req_duration{name:POST /battles/{id}/swipe}": {
+            "avg": 285.5097474330776,
+            "min": 18.628,
+            "med": 159.177,
+            "max": 5614.902,
+            "p(90)": 696.2180000000001,
+            "p(95)": 912.1333999999995,
+            "thresholds": {
+                "p(99)<1000": true
+            }
+        },
+        "vus_max": {
+            "value": 300,
+            "min": 300,
+            "max": 300
+        },
+        "http_req_failed": {
+            "passes": 2,
+            "fails": 236569,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0.00000845412159563091
+        },
+        "http_req_receiving": {
+            "avg": 0.5451033643175554,
+            "min": 0.005,
+            "med": 0.043,
+            "max": 522.069,
+            "p(90)": 1.662,
+            "p(95)": 2.44
+        },
+        "http_reqs": {
+            "count": 236571,
+            "rate": 875.01699159526
+        },
+        "http_req_connecting": {
+            "p(95)": 0,
+            "avg": 0.009373266376690293,
+            "min": 0,
+            "med": 0,
+            "max": 13.885,
+            "p(90)": 0
+        },
+        "http_req_sending": {
+            "min": 0.001,
+            "med": 0.013,
+            "max": 6.942,
+            "p(90)": 0.018,
+            "p(95)": 0.02,
+            "avg": 0.013082258603133093
+        },
+        "http_req_waiting": {
+            "avg": 284.9481376626874,
+            "min": 18.415,
+            "med": 158.545,
+            "max": 5614.033,
+            "p(90)": 695.843,
+            "p(95)": 911.7385
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 285.50839765988303,
+            "min": 18.628,
+            "med": 159.176,
+            "max": 5614.902,
+            "p(90)": 696.217,
+            "p(95)": 912.1281999999994
+        },
+        "http_req_blocked": {
+            "avg": 0.012450503231653042,
+            "min": 0,
+            "med": 0.003,
+            "max": 15.081,
+            "p(90)": 0.004,
+            "p(95)": 0.004
+        },
+        "http_req_duration": {
+            "med": 159.175,
+            "max": 5614.902,
+            "p(90)": 696.216,
+            "p(95)": 912.1229999999995,
+            "avg": 285.5063232856134,
+            "min": 18.628
+        },
+        "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0
+        },
+        "vus": {
+            "max": 300,
+            "value": 4,
+            "min": 4
+        },
+        "iteration_duration": {
+            "avg": 285.6429277847218,
+            "min": 18.735541,
+            "med": 159.308416,
+            "max": 5615.038542,
+            "p(90)": 696.3730418,
+            "p(95)": 912.2687830999996
+        }
+    },
+    "setup_data": {
+        "targets": [
+            {
+                "battleId": 22,
+                "itemId": 127
+            },
+            {
+                "itemId": 129,
+                "battleId": 22
+            },
+            {
+                "battleId": 22,
+                "itemId": 128
+            },
+            {
+                "battleId": 22,
+                "itemId": 125
+            },
+            {
+                "battleId": 22,
+                "itemId": 126
+            },
+            {
+                "battleId": 22,
+                "itemId": 130
+            }
+        ]
+    },
+    "root_group": {
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "swipe 200": {
+                    "path": "::swipe 200",
+                    "id": "e6fb31952071cba04eddb282b5ef1ffd",
+                    "passes": 236567,
+                    "fails": 0,
+                    "name": "swipe 200"
+                }
+            },
+        "name": ""
+    }
+}

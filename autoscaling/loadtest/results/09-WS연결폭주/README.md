@@ -45,3 +45,27 @@ message-intensive였다. Chapter 4(scale-out + Redis)의 동기는 "연결이 �
 수(2,000)나 FD 한계는 재보지 않았다 - 현재로선 1,000이 여유이므로 우선순위 낮음.
 
 원본: [output](2026-08-18-t3j-output.txt) · [summary](2026-08-18-t3j-summary.json)
+
+---
+
+## 재실행 (2026-08-23 밤 · 2차 diet 구성 · nginx 직결) - 1,000연결 여전히 무부하 - 단 워킹셋 계단(+58Mi)이 사건의 두 번째 씨앗이었다
+
+> **결론:** 1,000 동시 WS 연결 100% 성립(1,167/1,167) · ws_connecting med 15.7ms ·
+> chat CPU max **84m**(1차 310m) - "연결 수는 병목 아님" 재확인. 그러나 시험 구간에
+> chat 워킹셋이 **692 → 750Mi(+58Mi)로 오르고 종료 후에도 반납되지 않았다** (ktop 실측).
+> T2-C의 +84Mi에 이은 두 번째 계단으로, 직후 WS-B에서의 노드 사망을 만든 누적이다.
+
+### 결과 비교
+
+| 항목 | 1차 | **2차** |
+|---|---|---|
+| ws 101 + STOMP CONNECTED | 100% (2,334) | **100%** (세션 2,000) |
+| ws_connecting | p95 1.03s | **med 15.7ms** (직결) |
+| chat CPU | 0.31 | **0.084** |
+| chat 워킹셋 | (미관측) | **692 → 750Mi (+58Mi, 미반납)** |
+
+판정 유지: chat은 connection-intensive가 아니라 message-intensive. 새 발견은 메모리 축 -
+**연결은 CPU가 아니라 워킹셋을 계단식으로 늘리며, 세션 해제 후에도 JVM이 OS에 반납하지
+않는다.** 상세와 귀결은 [12-메시지처리량 재실행](../12-메시지처리량/README.md).
+
+원본: [output](2026-08-23-t3j-diet-output.txt) · [summary](2026-08-23-t3j-diet-summary.json) · [timestamps](2026-08-23-t3j-diet-timestamps.txt)

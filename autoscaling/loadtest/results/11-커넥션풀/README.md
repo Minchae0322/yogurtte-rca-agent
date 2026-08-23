@@ -56,3 +56,36 @@ T2-A(auth 풀 10에 pending 190)·T3-D(락이 풀 고갈)와 함께 놓으면: *
 
 원본: [output](2026-08-19-connpool-output.txt) · [summary](2026-08-19-connpool-summary.json) ·
 [timestamps](2026-08-19-connpool-timestamps.txt) · [1차 부분 output](2026-08-18-connpool-partial-output.txt)
+
+---
+
+## 재실행 (2026-08-23 밤 · 2차 diet 구성 · nginx 직결) - 고갈 지점이 사라졌다 - 400 VU에서 pending 0, C-3의 커넥션 회전 효과 실증
+
+> **결론:** 1차에서 "pending 이탈 200 VU"였던 것이 **관측 상한(400 VU)까지 고갈이 아예
+> 나타나지 않았다** - Mimir가 커버한 400 VU 구간(22:46~54)에서 **Hikari active max 5/12 ·
+> pending 0(세 파드 전부) · acquire max 0.5s**. 처리량 228 rps(1차 170) · 실패 0 ·
+> acquire 타임아웃 0. **C-3 쿼리 다이어트(커넥션을 쥔 채 돌던 Redis 순차 20왕복 제거 +
+> levelTable 캐시)가 커넥션 점유 시간을 줄인 직접 증거**다.
+
+### 결과 비교
+
+| 항목 | 1차 (풀 20/파드·replica 2) | **2차 (풀 12/파드·replica 3·diet)** |
+|---|---|---|
+| 처리량 (전체) | 83,647 (129.8 rps) · 400VU 구간 170.2 | **144,960 (228.1 rps)** |
+| med / p95 / p99 | 263ms / 2.42s / 2.9s | **55.2ms / 2.02s / 3.49s** |
+| pending 이탈 지점 | **200 VU** (pending 10 · active 20/20) | **관측 안 됨** (400 VU에서 pending 0 · active 5/12) |
+| acquire | max 1.19s · 타임아웃 0 | **max 0.5s · 타임아웃 0** |
+| 실패율 | 0% | **0%** |
+| content CPU | 0.83(100VU)→0.99 | 합 5.0코어 · 노드 90% (풀가동) |
+
+### 판정 - 1차 결론이 한 단계 진화
+
+1차: "풀 고갈은 CPU 포화의 하류 증상" → 2차: **"점유 시간을 줄이면 하류 증상 자체가
+사라진다."** 풀이 20→12로 줄었는데도 고갈이 안 나타난 것이 결정적 - 풀 크기가 아니라
+점유 시간이 변수였음의 최종 실증. 남은 임계 초과(p99 3.49s)는 순수 CPU 포화 몫
+(content 5.0코어 풀가동)이고, DB 계층 판정 보류(MySQL 익스포터 부재)는 그대로다.
+
+관측 한계: 20~100 VU 초반 계단은 Mimir 공백(관측 노드 플래핑) - 위 풀 수치는 400 VU
+구간(최악 지점) 실측이라 판정에는 충분하다.
+
+원본: [output](2026-08-23-connpool-diet-output.txt) · [summary](2026-08-23-connpool-diet-summary.json) · [timestamps](2026-08-23-connpool-diet-timestamps.txt)
