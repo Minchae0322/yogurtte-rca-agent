@@ -1,0 +1,928 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /Users/minchae/sources/yogurtte-rca-agent/autoscaling/loadtest/b-content-spike.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 500 max VUs, 6m30s max duration (incl. graceful stop):
+              * default: Up to 500 looping VUs for 6m0s over 4 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+
+running (0m01.0s), 002/500 VUs, 2 complete and 0 interrupted iterations
+default   [   0% ] 002/500 VUs  0m00.7s/6m00.0s
+
+running (0m02.0s), 003/500 VUs, 17 complete and 0 interrupted iterations
+default   [   0% ] 003/500 VUs  0m01.7s/6m00.0s
+
+running (0m03.0s), 005/500 VUs, 43 complete and 0 interrupted iterations
+default   [   1% ] 005/500 VUs  0m02.7s/6m00.0s
+
+running (0m04.0s), 007/500 VUs, 81 complete and 0 interrupted iterations
+default   [   1% ] 007/500 VUs  0m03.7s/6m00.0s
+
+running (0m05.0s), 008/500 VUs, 126 complete and 0 interrupted iterations
+default   [   1% ] 008/500 VUs  0m04.7s/6m00.0s
+
+running (0m06.0s), 010/500 VUs, 178 complete and 0 interrupted iterations
+default   [   2% ] 010/500 VUs  0m05.7s/6m00.0s
+
+running (0m07.0s), 011/500 VUs, 238 complete and 0 interrupted iterations
+default   [   2% ] 011/500 VUs  0m06.7s/6m00.0s
+
+running (0m08.0s), 013/500 VUs, 311 complete and 0 interrupted iterations
+default   [   2% ] 013/500 VUs  0m07.7s/6m00.0s
+
+running (0m09.0s), 015/500 VUs, 388 complete and 0 interrupted iterations
+default   [   2% ] 015/500 VUs  0m08.7s/6m00.0s
+
+running (0m10.0s), 016/500 VUs, 468 complete and 0 interrupted iterations
+default   [   3% ] 016/500 VUs  0m09.7s/6m00.0s
+
+running (0m11.0s), 018/500 VUs, 559 complete and 0 interrupted iterations
+default   [   3% ] 018/500 VUs  0m10.7s/6m00.0s
+
+running (0m12.0s), 020/500 VUs, 655 complete and 0 interrupted iterations
+default   [   3% ] 020/500 VUs  0m11.7s/6m00.0s
+
+running (0m13.0s), 021/500 VUs, 753 complete and 0 interrupted iterations
+default   [   4% ] 021/500 VUs  0m12.7s/6m00.0s
+
+running (0m14.0s), 023/500 VUs, 847 complete and 0 interrupted iterations
+default   [   4% ] 023/500 VUs  0m13.7s/6m00.0s
+
+running (0m15.0s), 025/500 VUs, 948 complete and 0 interrupted iterations
+default   [   4% ] 025/500 VUs  0m14.7s/6m00.0s
+
+running (0m16.0s), 026/500 VUs, 1029 complete and 0 interrupted iterations
+default   [   4% ] 026/500 VUs  0m15.7s/6m00.0s
+
+running (0m17.0s), 028/500 VUs, 1114 complete and 0 interrupted iterations
+default   [   5% ] 028/500 VUs  0m16.7s/6m00.0s
+
+running (0m18.0s), 030/500 VUs, 1201 complete and 0 interrupted iterations
+default   [   5% ] 030/500 VUs  0m17.7s/6m00.0s
+
+running (0m19.0s), 031/500 VUs, 1294 complete and 0 interrupted iterations
+default   [   5% ] 031/500 VUs  0m18.7s/6m00.0s
+
+running (0m20.0s), 033/500 VUs, 1402 complete and 0 interrupted iterations
+default   [   5% ] 033/500 VUs  0m19.7s/6m00.0s
+
+running (0m21.0s), 035/500 VUs, 1516 complete and 0 interrupted iterations
+default   [   6% ] 035/500 VUs  0m20.7s/6m00.0s
+
+running (0m22.0s), 036/500 VUs, 1636 complete and 0 interrupted iterations
+default   [   6% ] 036/500 VUs  0m21.7s/6m00.0s
+
+running (0m23.0s), 038/500 VUs, 1752 complete and 0 interrupted iterations
+default   [   6% ] 038/500 VUs  0m22.7s/6m00.0s
+
+running (0m24.0s), 040/500 VUs, 1868 complete and 0 interrupted iterations
+default   [   7% ] 040/500 VUs  0m23.7s/6m00.0s
+
+running (0m25.0s), 041/500 VUs, 1981 complete and 0 interrupted iterations
+default   [   7% ] 041/500 VUs  0m24.7s/6m00.0s
+
+running (0m26.0s), 043/500 VUs, 2094 complete and 0 interrupted iterations
+default   [   7% ] 043/500 VUs  0m25.7s/6m00.0s
+
+running (0m27.0s), 044/500 VUs, 2212 complete and 0 interrupted iterations
+default   [   7% ] 044/500 VUs  0m26.7s/6m00.0s
+
+running (0m28.0s), 046/500 VUs, 2330 complete and 0 interrupted iterations
+default   [   8% ] 046/500 VUs  0m27.7s/6m00.0s
+
+running (0m29.0s), 048/500 VUs, 2435 complete and 0 interrupted iterations
+default   [   8% ] 048/500 VUs  0m28.7s/6m00.0s
+
+running (0m30.0s), 049/500 VUs, 2528 complete and 0 interrupted iterations
+default   [   8% ] 049/500 VUs  0m29.7s/6m00.0s
+
+running (0m31.0s), 051/500 VUs, 2632 complete and 0 interrupted iterations
+default   [   9% ] 051/500 VUs  0m30.7s/6m00.0s
+
+running (0m32.0s), 053/500 VUs, 2707 complete and 0 interrupted iterations
+default   [   9% ] 053/500 VUs  0m31.7s/6m00.0s
+
+running (0m33.0s), 054/500 VUs, 2808 complete and 0 interrupted iterations
+default   [   9% ] 054/500 VUs  0m32.7s/6m00.0s
+
+running (0m34.0s), 056/500 VUs, 2912 complete and 0 interrupted iterations
+default   [   9% ] 056/500 VUs  0m33.7s/6m00.0s
+
+running (0m35.0s), 058/500 VUs, 3016 complete and 0 interrupted iterations
+default   [  10% ] 058/500 VUs  0m34.7s/6m00.0s
+
+running (0m36.0s), 059/500 VUs, 3140 complete and 0 interrupted iterations
+default   [  10% ] 059/500 VUs  0m35.7s/6m00.0s
+
+running (0m37.0s), 061/500 VUs, 3256 complete and 0 interrupted iterations
+default   [  10% ] 061/500 VUs  0m36.7s/6m00.0s
+
+running (0m38.0s), 063/500 VUs, 3365 complete and 0 interrupted iterations
+default   [  10% ] 063/500 VUs  0m37.7s/6m00.0s
+
+running (0m39.0s), 064/500 VUs, 3489 complete and 0 interrupted iterations
+default   [  11% ] 064/500 VUs  0m38.7s/6m00.0s
+
+running (0m40.0s), 066/500 VUs, 3608 complete and 0 interrupted iterations
+default   [  11% ] 066/500 VUs  0m39.7s/6m00.0s
+
+running (0m41.0s), 068/500 VUs, 3721 complete and 0 interrupted iterations
+default   [  11% ] 068/500 VUs  0m40.7s/6m00.0s
+
+running (0m42.0s), 069/500 VUs, 3821 complete and 0 interrupted iterations
+default   [  12% ] 069/500 VUs  0m41.7s/6m00.0s
+
+running (0m43.0s), 071/500 VUs, 3944 complete and 0 interrupted iterations
+default   [  12% ] 071/500 VUs  0m42.7s/6m00.0s
+
+running (0m44.0s), 073/500 VUs, 4046 complete and 0 interrupted iterations
+default   [  12% ] 073/500 VUs  0m43.7s/6m00.0s
+
+running (0m45.0s), 074/500 VUs, 4140 complete and 0 interrupted iterations
+default   [  12% ] 074/500 VUs  0m44.7s/6m00.0s
+
+running (0m46.0s), 076/500 VUs, 4270 complete and 0 interrupted iterations
+default   [  13% ] 076/500 VUs  0m45.7s/6m00.0s
+
+running (0m47.0s), 077/500 VUs, 4392 complete and 0 interrupted iterations
+default   [  13% ] 077/500 VUs  0m46.7s/6m00.0s
+
+running (0m48.0s), 079/500 VUs, 4515 complete and 0 interrupted iterations
+default   [  13% ] 079/500 VUs  0m47.7s/6m00.0s
+
+running (0m49.0s), 081/500 VUs, 4643 complete and 0 interrupted iterations
+default   [  14% ] 081/500 VUs  0m48.7s/6m00.0s
+
+running (0m50.0s), 082/500 VUs, 4774 complete and 0 interrupted iterations
+default   [  14% ] 082/500 VUs  0m49.7s/6m00.0s
+
+running (0m51.0s), 084/500 VUs, 4897 complete and 0 interrupted iterations
+default   [  14% ] 084/500 VUs  0m50.7s/6m00.0s
+
+running (0m52.0s), 086/500 VUs, 5020 complete and 0 interrupted iterations
+default   [  14% ] 086/500 VUs  0m51.7s/6m00.0s
+
+running (0m53.0s), 087/500 VUs, 5139 complete and 0 interrupted iterations
+default   [  15% ] 087/500 VUs  0m52.7s/6m00.0s
+
+running (0m54.0s), 089/500 VUs, 5255 complete and 0 interrupted iterations
+default   [  15% ] 089/500 VUs  0m53.7s/6m00.0s
+
+running (0m55.0s), 091/500 VUs, 5356 complete and 0 interrupted iterations
+default   [  15% ] 091/500 VUs  0m54.7s/6m00.0s
+
+running (0m56.0s), 092/500 VUs, 5464 complete and 0 interrupted iterations
+default   [  15% ] 092/500 VUs  0m55.7s/6m00.0s
+
+running (0m57.0s), 094/500 VUs, 5570 complete and 0 interrupted iterations
+default   [  16% ] 094/500 VUs  0m56.7s/6m00.0s
+
+running (0m58.0s), 096/500 VUs, 5694 complete and 0 interrupted iterations
+default   [  16% ] 096/500 VUs  0m57.7s/6m00.0s
+
+running (0m59.0s), 097/500 VUs, 5832 complete and 0 interrupted iterations
+default   [  16% ] 097/500 VUs  0m58.7s/6m00.0s
+
+running (1m00.0s), 099/500 VUs, 5955 complete and 0 interrupted iterations
+default   [  17% ] 099/500 VUs  0m59.7s/6m00.0s
+
+running (1m01.0s), 102/500 VUs, 6076 complete and 0 interrupted iterations
+default   [  17% ] 102/500 VUs  1m00.7s/6m00.0s
+
+running (1m02.0s), 105/500 VUs, 6200 complete and 0 interrupted iterations
+default   [  17% ] 105/500 VUs  1m01.7s/6m00.0s
+
+running (1m03.0s), 108/500 VUs, 6295 complete and 0 interrupted iterations
+default   [  17% ] 108/500 VUs  1m02.7s/6m00.0s
+
+running (1m04.0s), 112/500 VUs, 6398 complete and 0 interrupted iterations
+default   [  18% ] 112/500 VUs  1m03.7s/6m00.0s
+
+running (1m05.0s), 115/500 VUs, 6506 complete and 0 interrupted iterations
+default   [  18% ] 115/500 VUs  1m04.7s/6m00.0s
+
+running (1m06.0s), 118/500 VUs, 6631 complete and 0 interrupted iterations
+default   [  18% ] 118/500 VUs  1m05.7s/6m00.0s
+
+running (1m07.0s), 122/500 VUs, 6749 complete and 0 interrupted iterations
+default   [  19% ] 122/500 VUs  1m06.7s/6m00.0s
+
+running (1m08.0s), 125/500 VUs, 6873 complete and 0 interrupted iterations
+default   [  19% ] 125/500 VUs  1m07.7s/6m00.0s
+
+running (1m09.0s), 128/500 VUs, 6982 complete and 0 interrupted iterations
+default   [  19% ] 128/500 VUs  1m08.7s/6m00.0s
+
+running (1m10.0s), 132/500 VUs, 7102 complete and 0 interrupted iterations
+default   [  19% ] 132/500 VUs  1m09.7s/6m00.0s
+
+running (1m11.0s), 135/500 VUs, 7211 complete and 0 interrupted iterations
+default   [  20% ] 135/500 VUs  1m10.7s/6m00.0s
+
+running (1m12.0s), 138/500 VUs, 7342 complete and 0 interrupted iterations
+default   [  20% ] 138/500 VUs  1m11.7s/6m00.0s
+
+running (1m13.0s), 142/500 VUs, 7458 complete and 0 interrupted iterations
+default   [  20% ] 142/500 VUs  1m12.7s/6m00.0s
+
+running (1m14.0s), 145/500 VUs, 7579 complete and 0 interrupted iterations
+default   [  20% ] 145/500 VUs  1m13.7s/6m00.0s
+
+running (1m15.0s), 148/500 VUs, 7705 complete and 0 interrupted iterations
+default   [  21% ] 148/500 VUs  1m14.7s/6m00.0s
+
+running (1m16.0s), 152/500 VUs, 7828 complete and 0 interrupted iterations
+default   [  21% ] 152/500 VUs  1m15.7s/6m00.0s
+
+running (1m17.0s), 155/500 VUs, 7935 complete and 0 interrupted iterations
+default   [  21% ] 155/500 VUs  1m16.7s/6m00.0s
+
+running (1m18.0s), 158/500 VUs, 8061 complete and 0 interrupted iterations
+default   [  22% ] 158/500 VUs  1m17.7s/6m00.0s
+
+running (1m19.0s), 162/500 VUs, 8186 complete and 0 interrupted iterations
+default   [  22% ] 162/500 VUs  1m18.7s/6m00.0s
+
+running (1m20.0s), 165/500 VUs, 8295 complete and 0 interrupted iterations
+default   [  22% ] 165/500 VUs  1m19.7s/6m00.0s
+
+running (1m21.0s), 168/500 VUs, 8398 complete and 0 interrupted iterations
+default   [  22% ] 168/500 VUs  1m20.7s/6m00.0s
+
+running (1m22.0s), 172/500 VUs, 8496 complete and 0 interrupted iterations
+default   [  23% ] 172/500 VUs  1m21.7s/6m00.0s
+
+running (1m23.0s), 175/500 VUs, 8580 complete and 0 interrupted iterations
+default   [  23% ] 175/500 VUs  1m22.7s/6m00.0s
+
+running (1m24.0s), 178/500 VUs, 8711 complete and 0 interrupted iterations
+default   [  23% ] 178/500 VUs  1m23.7s/6m00.0s
+
+running (1m25.0s), 182/500 VUs, 8835 complete and 0 interrupted iterations
+default   [  24% ] 182/500 VUs  1m24.7s/6m00.0s
+
+running (1m26.0s), 185/500 VUs, 8975 complete and 0 interrupted iterations
+default   [  24% ] 185/500 VUs  1m25.7s/6m00.0s
+
+running (1m27.0s), 188/500 VUs, 9098 complete and 0 interrupted iterations
+default   [  24% ] 188/500 VUs  1m26.7s/6m00.0s
+
+running (1m28.0s), 192/500 VUs, 9224 complete and 0 interrupted iterations
+default   [  24% ] 192/500 VUs  1m27.7s/6m00.0s
+
+running (1m29.0s), 195/500 VUs, 9332 complete and 0 interrupted iterations
+default   [  25% ] 195/500 VUs  1m28.7s/6m00.0s
+
+running (1m30.0s), 198/500 VUs, 9437 complete and 0 interrupted iterations
+default   [  25% ] 198/500 VUs  1m29.7s/6m00.0s
+
+running (1m31.0s), 202/500 VUs, 9560 complete and 0 interrupted iterations
+default   [  25% ] 202/500 VUs  1m30.7s/6m00.0s
+
+running (1m32.0s), 205/500 VUs, 9623 complete and 0 interrupted iterations
+default   [  25% ] 205/500 VUs  1m31.7s/6m00.0s
+
+running (1m33.0s), 208/500 VUs, 9686 complete and 0 interrupted iterations
+default   [  26% ] 208/500 VUs  1m32.7s/6m00.0s
+
+running (1m34.0s), 212/500 VUs, 9790 complete and 0 interrupted iterations
+default   [  26% ] 212/500 VUs  1m33.7s/6m00.0s
+
+running (1m35.0s), 215/500 VUs, 9882 complete and 0 interrupted iterations
+default   [  26% ] 215/500 VUs  1m34.7s/6m00.0s
+
+running (1m36.0s), 218/500 VUs, 9979 complete and 0 interrupted iterations
+default   [  27% ] 218/500 VUs  1m35.7s/6m00.0s
+
+running (1m37.0s), 222/500 VUs, 10097 complete and 0 interrupted iterations
+default   [  27% ] 222/500 VUs  1m36.7s/6m00.0s
+
+running (1m38.0s), 225/500 VUs, 10217 complete and 0 interrupted iterations
+default   [  27% ] 225/500 VUs  1m37.7s/6m00.0s
+
+running (1m39.0s), 228/500 VUs, 10332 complete and 0 interrupted iterations
+default   [  27% ] 228/500 VUs  1m38.7s/6m00.0s
+
+running (1m40.0s), 232/500 VUs, 10418 complete and 0 interrupted iterations
+default   [  28% ] 232/500 VUs  1m39.7s/6m00.0s
+
+running (1m41.0s), 235/500 VUs, 10547 complete and 0 interrupted iterations
+default   [  28% ] 235/500 VUs  1m40.7s/6m00.0s
+
+running (1m42.0s), 238/500 VUs, 10661 complete and 0 interrupted iterations
+default   [  28% ] 238/500 VUs  1m41.7s/6m00.0s
+
+running (1m43.0s), 242/500 VUs, 10781 complete and 0 interrupted iterations
+default   [  29% ] 242/500 VUs  1m42.7s/6m00.0s
+
+running (1m44.0s), 245/500 VUs, 10898 complete and 0 interrupted iterations
+default   [  29% ] 245/500 VUs  1m43.7s/6m00.0s
+
+running (1m45.0s), 248/500 VUs, 11020 complete and 0 interrupted iterations
+default   [  29% ] 248/500 VUs  1m44.7s/6m00.0s
+
+running (1m46.0s), 252/500 VUs, 11117 complete and 0 interrupted iterations
+default   [  29% ] 252/500 VUs  1m45.7s/6m00.0s
+
+running (1m47.0s), 255/500 VUs, 11223 complete and 0 interrupted iterations
+default   [  30% ] 255/500 VUs  1m46.7s/6m00.0s
+
+running (1m48.0s), 258/500 VUs, 11347 complete and 0 interrupted iterations
+default   [  30% ] 258/500 VUs  1m47.7s/6m00.0s
+
+running (1m49.0s), 262/500 VUs, 11469 complete and 0 interrupted iterations
+default   [  30% ] 262/500 VUs  1m48.7s/6m00.0s
+
+running (1m50.0s), 265/500 VUs, 11613 complete and 0 interrupted iterations
+default   [  30% ] 265/500 VUs  1m49.7s/6m00.0s
+
+running (1m51.0s), 268/500 VUs, 11749 complete and 0 interrupted iterations
+default   [  31% ] 268/500 VUs  1m50.7s/6m00.0s
+
+running (1m52.0s), 272/500 VUs, 11876 complete and 0 interrupted iterations
+default   [  31% ] 272/500 VUs  1m51.7s/6m00.0s
+
+running (1m53.0s), 275/500 VUs, 11984 complete and 0 interrupted iterations
+default   [  31% ] 275/500 VUs  1m52.7s/6m00.0s
+
+running (1m54.0s), 278/500 VUs, 12109 complete and 0 interrupted iterations
+default   [  32% ] 278/500 VUs  1m53.7s/6m00.0s
+
+running (1m55.0s), 282/500 VUs, 12245 complete and 0 interrupted iterations
+default   [  32% ] 282/500 VUs  1m54.7s/6m00.0s
+
+running (1m56.0s), 285/500 VUs, 12374 complete and 0 interrupted iterations
+default   [  32% ] 285/500 VUs  1m55.7s/6m00.0s
+
+running (1m57.0s), 288/500 VUs, 12492 complete and 0 interrupted iterations
+default   [  32% ] 288/500 VUs  1m56.7s/6m00.0s
+
+running (1m58.0s), 292/500 VUs, 12615 complete and 0 interrupted iterations
+default   [  33% ] 292/500 VUs  1m57.7s/6m00.0s
+
+running (1m59.0s), 295/500 VUs, 12731 complete and 0 interrupted iterations
+default   [  33% ] 295/500 VUs  1m58.7s/6m00.0s
+
+running (2m00.0s), 298/500 VUs, 12838 complete and 0 interrupted iterations
+default   [  33% ] 298/500 VUs  1m59.7s/6m00.0s
+
+running (2m01.0s), 302/500 VUs, 12943 complete and 0 interrupted iterations
+default   [  34% ] 302/500 VUs  2m00.7s/6m00.0s
+
+running (2m02.0s), 305/500 VUs, 13047 complete and 0 interrupted iterations
+default   [  34% ] 305/500 VUs  2m01.7s/6m00.0s
+
+running (2m03.0s), 308/500 VUs, 13164 complete and 0 interrupted iterations
+default   [  34% ] 308/500 VUs  2m02.7s/6m00.0s
+
+running (2m04.0s), 312/500 VUs, 13288 complete and 0 interrupted iterations
+default   [  34% ] 312/500 VUs  2m03.7s/6m00.0s
+
+running (2m05.0s), 315/500 VUs, 13423 complete and 0 interrupted iterations
+default   [  35% ] 315/500 VUs  2m04.7s/6m00.0s
+
+running (2m06.0s), 318/500 VUs, 13548 complete and 0 interrupted iterations
+default   [  35% ] 318/500 VUs  2m05.7s/6m00.0s
+
+running (2m07.0s), 322/500 VUs, 13677 complete and 0 interrupted iterations
+default   [  35% ] 322/500 VUs  2m06.7s/6m00.0s
+
+running (2m08.0s), 325/500 VUs, 13814 complete and 0 interrupted iterations
+default   [  35% ] 325/500 VUs  2m07.7s/6m00.0s
+
+running (2m09.0s), 328/500 VUs, 13936 complete and 0 interrupted iterations
+default   [  36% ] 328/500 VUs  2m08.7s/6m00.0s
+
+running (2m10.0s), 332/500 VUs, 14056 complete and 0 interrupted iterations
+default   [  36% ] 332/500 VUs  2m09.7s/6m00.0s
+
+running (2m11.0s), 335/500 VUs, 14168 complete and 0 interrupted iterations
+default   [  36% ] 335/500 VUs  2m10.7s/6m00.0s
+
+running (2m12.0s), 338/500 VUs, 14281 complete and 0 interrupted iterations
+default   [  37% ] 338/500 VUs  2m11.7s/6m00.0s
+
+running (2m13.0s), 342/500 VUs, 14397 complete and 0 interrupted iterations
+default   [  37% ] 342/500 VUs  2m12.7s/6m00.0s
+
+running (2m14.0s), 345/500 VUs, 14515 complete and 0 interrupted iterations
+default   [  37% ] 345/500 VUs  2m13.7s/6m00.0s
+
+running (2m15.0s), 348/500 VUs, 14630 complete and 0 interrupted iterations
+default   [  37% ] 348/500 VUs  2m14.7s/6m00.0s
+
+running (2m16.0s), 352/500 VUs, 14757 complete and 0 interrupted iterations
+default   [  38% ] 352/500 VUs  2m15.7s/6m00.0s
+
+running (2m17.0s), 355/500 VUs, 14896 complete and 0 interrupted iterations
+default   [  38% ] 355/500 VUs  2m16.7s/6m00.0s
+
+running (2m18.0s), 358/500 VUs, 15037 complete and 0 interrupted iterations
+default   [  38% ] 358/500 VUs  2m17.7s/6m00.0s
+
+running (2m19.0s), 362/500 VUs, 15162 complete and 0 interrupted iterations
+default   [  39% ] 362/500 VUs  2m18.7s/6m00.0s
+
+running (2m20.0s), 365/500 VUs, 15309 complete and 0 interrupted iterations
+default   [  39% ] 365/500 VUs  2m19.7s/6m00.0s
+
+running (2m21.0s), 368/500 VUs, 15393 complete and 0 interrupted iterations
+default   [  39% ] 368/500 VUs  2m20.7s/6m00.0s
+
+running (2m22.0s), 372/500 VUs, 15466 complete and 0 interrupted iterations
+default   [  39% ] 372/500 VUs  2m21.7s/6m00.0s
+
+running (2m23.0s), 375/500 VUs, 15571 complete and 0 interrupted iterations
+default   [  40% ] 375/500 VUs  2m22.7s/6m00.0s
+
+running (2m24.0s), 378/500 VUs, 15722 complete and 0 interrupted iterations
+default   [  40% ] 378/500 VUs  2m23.7s/6m00.0s
+
+running (2m25.0s), 382/500 VUs, 15833 complete and 0 interrupted iterations
+default   [  40% ] 382/500 VUs  2m24.7s/6m00.0s
+
+running (2m26.0s), 385/500 VUs, 15945 complete and 0 interrupted iterations
+default   [  40% ] 385/500 VUs  2m25.7s/6m00.0s
+
+running (2m27.0s), 388/500 VUs, 16045 complete and 0 interrupted iterations
+default   [  41% ] 388/500 VUs  2m26.7s/6m00.0s
+
+running (19m03.6s), 392/500 VUs, 16054 complete and 0 interrupted iterations
+default   [  41% ] 392/500 VUs  2m27.7s/6m00.0s
+
+running (19m04.6s), 395/500 VUs, 16077 complete and 0 interrupted iterations
+default   [  41% ] 395/500 VUs  2m28.7s/6m00.0s
+
+running (19m05.6s), 398/500 VUs, 16129 complete and 0 interrupted iterations
+default   [  42% ] 398/500 VUs  2m29.7s/6m00.0s
+
+running (19m06.5s), 402/500 VUs, 16200 complete and 0 interrupted iterations
+default   [  42% ] 402/500 VUs  2m30.7s/6m00.0s
+
+running (19m07.5s), 405/500 VUs, 16279 complete and 0 interrupted iterations
+default   [  42% ] 405/500 VUs  2m31.7s/6m00.0s
+
+running (21m01.3s), 408/500 VUs, 16324 complete and 0 interrupted iterations
+default   [  42% ] 408/500 VUs  2m32.7s/6m00.0s
+
+running (21m02.3s), 412/500 VUs, 16359 complete and 0 interrupted iterations
+default   [  43% ] 412/500 VUs  2m33.7s/6m00.0s
+
+running (21m03.3s), 415/500 VUs, 16440 complete and 0 interrupted iterations
+default   [  43% ] 415/500 VUs  2m34.7s/6m00.0s
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58243->13.225.134.109:443: read: connection reset by peer"
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58240->13.225.134.109:443: read: connection reset by peer"
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58244->13.225.134.25:443: read: connection reset by peer"
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58245->13.225.134.25:443: read: connection reset by peer"
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58239->13.225.134.46:443: read: connection reset by peer"
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58234->13.225.134.51:443: read: connection reset by peer"
+time="2026-08-23T17:07:34+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": read tcp 192.168.45.203:58238->13.225.134.25:443: read: connection reset by peer"
+
+running (21m04.3s), 418/500 VUs, 16502 complete and 0 interrupted iterations
+default   [  43% ] 418/500 VUs  2m35.7s/6m00.0s
+
+running (21m05.3s), 422/500 VUs, 16604 complete and 0 interrupted iterations
+default   [  44% ] 422/500 VUs  2m36.7s/6m00.0s
+
+running (21m06.3s), 425/500 VUs, 16733 complete and 0 interrupted iterations
+default   [  44% ] 425/500 VUs  2m37.7s/6m00.0s
+
+running (21m07.3s), 428/500 VUs, 16858 complete and 0 interrupted iterations
+default   [  44% ] 428/500 VUs  2m38.7s/6m00.0s
+
+running (21m08.3s), 432/500 VUs, 16979 complete and 0 interrupted iterations
+default   [  44% ] 432/500 VUs  2m39.7s/6m00.0s
+
+running (21m09.3s), 435/500 VUs, 17100 complete and 0 interrupted iterations
+default   [  45% ] 435/500 VUs  2m40.7s/6m00.0s
+
+running (21m10.3s), 438/500 VUs, 17216 complete and 0 interrupted iterations
+default   [  45% ] 438/500 VUs  2m41.7s/6m00.0s
+
+running (21m11.3s), 442/500 VUs, 17355 complete and 0 interrupted iterations
+default   [  45% ] 442/500 VUs  2m42.7s/6m00.0s
+
+running (21m12.3s), 445/500 VUs, 17475 complete and 0 interrupted iterations
+default   [  45% ] 445/500 VUs  2m43.7s/6m00.0s
+
+running (21m13.3s), 448/500 VUs, 17583 complete and 0 interrupted iterations
+default   [  46% ] 448/500 VUs  2m44.7s/6m00.0s
+
+running (21m14.3s), 452/500 VUs, 17665 complete and 0 interrupted iterations
+default   [  46% ] 452/500 VUs  2m45.7s/6m00.0s
+
+running (21m15.3s), 455/500 VUs, 17794 complete and 0 interrupted iterations
+default   [  46% ] 455/500 VUs  2m46.7s/6m00.0s
+
+running (21m16.3s), 458/500 VUs, 17927 complete and 0 interrupted iterations
+default   [  47% ] 458/500 VUs  2m47.7s/6m00.0s
+
+running (21m17.3s), 462/500 VUs, 18060 complete and 0 interrupted iterations
+default   [  47% ] 462/500 VUs  2m48.7s/6m00.0s
+
+running (21m18.3s), 465/500 VUs, 18166 complete and 0 interrupted iterations
+default   [  47% ] 465/500 VUs  2m49.7s/6m00.0s
+
+running (21m19.3s), 468/500 VUs, 18300 complete and 0 interrupted iterations
+default   [  47% ] 468/500 VUs  2m50.7s/6m00.0s
+
+running (21m20.3s), 472/500 VUs, 18412 complete and 0 interrupted iterations
+default   [  48% ] 472/500 VUs  2m51.7s/6m00.0s
+
+running (21m21.3s), 475/500 VUs, 18540 complete and 0 interrupted iterations
+default   [  48% ] 475/500 VUs  2m52.7s/6m00.0s
+
+running (21m22.3s), 478/500 VUs, 18658 complete and 0 interrupted iterations
+default   [  48% ] 478/500 VUs  2m53.7s/6m00.0s
+
+running (21m23.3s), 482/500 VUs, 18762 complete and 0 interrupted iterations
+default   [  49% ] 482/500 VUs  2m54.7s/6m00.0s
+
+running (21m24.3s), 485/500 VUs, 18860 complete and 0 interrupted iterations
+default   [  49% ] 485/500 VUs  2m55.7s/6m00.0s
+
+running (21m25.3s), 488/500 VUs, 18992 complete and 0 interrupted iterations
+default   [  49% ] 488/500 VUs  2m56.7s/6m00.0s
+
+running (21m26.3s), 492/500 VUs, 19140 complete and 0 interrupted iterations
+default   [  49% ] 492/500 VUs  2m57.7s/6m00.0s
+
+running (21m27.3s), 495/500 VUs, 19270 complete and 0 interrupted iterations
+default   [  50% ] 495/500 VUs  2m58.7s/6m00.0s
+
+running (21m28.3s), 498/500 VUs, 19382 complete and 0 interrupted iterations
+default   [  50% ] 498/500 VUs  2m59.7s/6m00.0s
+
+running (21m29.3s), 500/500 VUs, 19499 complete and 0 interrupted iterations
+default   [  50% ] 500/500 VUs  3m00.7s/6m00.0s
+
+running (21m30.3s), 500/500 VUs, 19649 complete and 0 interrupted iterations
+default   [  50% ] 500/500 VUs  3m01.7s/6m00.0s
+
+running (21m31.3s), 500/500 VUs, 19772 complete and 0 interrupted iterations
+default   [  51% ] 500/500 VUs  3m02.7s/6m00.0s
+
+running (21m32.3s), 500/500 VUs, 19897 complete and 0 interrupted iterations
+default   [  51% ] 500/500 VUs  3m03.7s/6m00.0s
+
+running (21m33.3s), 500/500 VUs, 20022 complete and 0 interrupted iterations
+default   [  51% ] 500/500 VUs  3m04.7s/6m00.0s
+
+running (21m34.3s), 500/500 VUs, 20139 complete and 0 interrupted iterations
+default   [  52% ] 500/500 VUs  3m05.7s/6m00.0s
+
+running (21m35.3s), 500/500 VUs, 20261 complete and 0 interrupted iterations
+default   [  52% ] 500/500 VUs  3m06.7s/6m00.0s
+
+running (21m36.3s), 500/500 VUs, 20380 complete and 0 interrupted iterations
+default   [  52% ] 500/500 VUs  3m07.7s/6m00.0s
+
+running (21m37.3s), 500/500 VUs, 20509 complete and 0 interrupted iterations
+default   [  52% ] 500/500 VUs  3m08.7s/6m00.0s
+
+running (21m38.3s), 500/500 VUs, 20600 complete and 0 interrupted iterations
+default   [  53% ] 500/500 VUs  3m09.7s/6m00.0s
+
+running (21m39.3s), 500/500 VUs, 20694 complete and 0 interrupted iterations
+default   [  53% ] 500/500 VUs  3m10.7s/6m00.0s
+
+running (21m40.3s), 500/500 VUs, 20795 complete and 0 interrupted iterations
+default   [  53% ] 500/500 VUs  3m11.7s/6m00.0s
+
+running (21m41.3s), 500/500 VUs, 20896 complete and 0 interrupted iterations
+default   [  54% ] 500/500 VUs  3m12.7s/6m00.0s
+
+running (21m42.3s), 500/500 VUs, 21030 complete and 0 interrupted iterations
+default   [  54% ] 500/500 VUs  3m13.7s/6m00.0s
+
+running (21m43.3s), 500/500 VUs, 21180 complete and 0 interrupted iterations
+default   [  54% ] 500/500 VUs  3m14.7s/6m00.0s
+
+running (21m44.3s), 500/500 VUs, 21319 complete and 0 interrupted iterations
+default   [  54% ] 500/500 VUs  3m15.7s/6m00.0s
+
+running (21m45.3s), 500/500 VUs, 21463 complete and 0 interrupted iterations
+default   [  55% ] 500/500 VUs  3m16.7s/6m00.0s
+
+running (21m46.3s), 500/500 VUs, 21605 complete and 0 interrupted iterations
+default   [  55% ] 500/500 VUs  3m17.7s/6m00.0s
+
+running (21m47.3s), 500/500 VUs, 21746 complete and 0 interrupted iterations
+default   [  55% ] 500/500 VUs  3m18.7s/6m00.0s
+
+running (21m48.3s), 500/500 VUs, 21886 complete and 0 interrupted iterations
+default   [  55% ] 500/500 VUs  3m19.7s/6m00.0s
+
+running (21m49.3s), 500/500 VUs, 22020 complete and 0 interrupted iterations
+default   [  56% ] 500/500 VUs  3m20.7s/6m00.0s
+
+running (21m50.3s), 500/500 VUs, 22137 complete and 0 interrupted iterations
+default   [  56% ] 500/500 VUs  3m21.7s/6m00.0s
+
+running (21m51.3s), 500/500 VUs, 22237 complete and 0 interrupted iterations
+default   [  56% ] 500/500 VUs  3m22.7s/6m00.0s
+
+running (21m52.3s), 500/500 VUs, 22363 complete and 0 interrupted iterations
+default   [  57% ] 500/500 VUs  3m23.7s/6m00.0s
+
+running (21m53.3s), 500/500 VUs, 22499 complete and 0 interrupted iterations
+default   [  57% ] 500/500 VUs  3m24.7s/6m00.0s
+
+running (21m54.3s), 500/500 VUs, 22608 complete and 0 interrupted iterations
+default   [  57% ] 500/500 VUs  3m25.7s/6m00.0s
+
+running (21m55.3s), 500/500 VUs, 22730 complete and 0 interrupted iterations
+default   [  57% ] 500/500 VUs  3m26.7s/6m00.0s
+
+running (21m56.3s), 500/500 VUs, 22874 complete and 0 interrupted iterations
+default   [  58% ] 500/500 VUs  3m27.7s/6m00.0s
+
+running (21m57.3s), 500/500 VUs, 22999 complete and 0 interrupted iterations
+default   [  58% ] 500/500 VUs  3m28.7s/6m00.0s
+
+running (21m58.3s), 500/500 VUs, 23120 complete and 0 interrupted iterations
+default   [  58% ] 500/500 VUs  3m29.7s/6m00.0s
+
+running (21m59.3s), 500/500 VUs, 23249 complete and 0 interrupted iterations
+default   [  59% ] 500/500 VUs  3m30.7s/6m00.0s
+
+running (22m00.3s), 500/500 VUs, 23343 complete and 0 interrupted iterations
+default   [  59% ] 500/500 VUs  3m31.7s/6m00.0s
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/136\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/136\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/139\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/142\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/138\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:08:31+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+
+running (22m01.3s), 500/500 VUs, 23457 complete and 0 interrupted iterations
+default   [  59% ] 500/500 VUs  3m32.7s/6m00.0s
+
+running (22m02.3s), 500/500 VUs, 23581 complete and 0 interrupted iterations
+default   [  59% ] 500/500 VUs  3m33.7s/6m00.0s
+
+running (22m03.3s), 500/500 VUs, 23694 complete and 0 interrupted iterations
+default   [  60% ] 500/500 VUs  3m34.7s/6m00.0s
+
+running (22m04.3s), 500/500 VUs, 23809 complete and 0 interrupted iterations
+default   [  60% ] 500/500 VUs  3m35.7s/6m00.0s
+
+running (22m05.3s), 500/500 VUs, 23908 complete and 0 interrupted iterations
+default   [  60% ] 500/500 VUs  3m36.7s/6m00.0s
+
+running (22m06.3s), 500/500 VUs, 24004 complete and 0 interrupted iterations
+default   [  60% ] 500/500 VUs  3m37.7s/6m00.0s
+
+running (22m07.3s), 500/500 VUs, 24089 complete and 0 interrupted iterations
+default   [  61% ] 500/500 VUs  3m38.7s/6m00.0s
+
+running (22m08.3s), 500/500 VUs, 24218 complete and 0 interrupted iterations
+default   [  61% ] 500/500 VUs  3m39.7s/6m00.0s
+
+running (22m09.3s), 500/500 VUs, 24357 complete and 0 interrupted iterations
+default   [  61% ] 500/500 VUs  3m40.7s/6m00.0s
+
+running (22m10.3s), 500/500 VUs, 24489 complete and 0 interrupted iterations
+default   [  62% ] 500/500 VUs  3m41.7s/6m00.0s
+
+running (22m11.3s), 500/500 VUs, 24620 complete and 0 interrupted iterations
+default   [  62% ] 500/500 VUs  3m42.7s/6m00.0s
+
+running (22m12.3s), 500/500 VUs, 24741 complete and 0 interrupted iterations
+default   [  62% ] 500/500 VUs  3m43.7s/6m00.0s
+
+running (22m13.3s), 500/500 VUs, 24868 complete and 0 interrupted iterations
+default   [  62% ] 500/500 VUs  3m44.7s/6m00.0s
+
+running (22m14.3s), 500/500 VUs, 25005 complete and 0 interrupted iterations
+default   [  63% ] 500/500 VUs  3m45.7s/6m00.0s
+
+running (22m15.3s), 500/500 VUs, 25126 complete and 0 interrupted iterations
+default   [  63% ] 500/500 VUs  3m46.7s/6m00.0s
+
+running (22m16.3s), 500/500 VUs, 25252 complete and 0 interrupted iterations
+default   [  63% ] 500/500 VUs  3m47.7s/6m00.0s
+
+running (22m17.3s), 500/500 VUs, 25344 complete and 0 interrupted iterations
+default   [  64% ] 500/500 VUs  3m48.7s/6m00.0s
+
+running (22m18.3s), 500/500 VUs, 25434 complete and 0 interrupted iterations
+default   [  64% ] 500/500 VUs  3m49.7s/6m00.0s
+
+running (22m19.3s), 500/500 VUs, 25511 complete and 0 interrupted iterations
+default   [  64% ] 500/500 VUs  3m50.7s/6m00.0s
+
+running (22m20.3s), 500/500 VUs, 25612 complete and 0 interrupted iterations
+default   [  64% ] 500/500 VUs  3m51.7s/6m00.0s
+
+running (22m21.3s), 500/500 VUs, 25743 complete and 0 interrupted iterations
+default   [  65% ] 500/500 VUs  3m52.7s/6m00.0s
+
+running (22m22.3s), 500/500 VUs, 25884 complete and 0 interrupted iterations
+default   [  65% ] 500/500 VUs  3m53.7s/6m00.0s
+
+running (22m23.3s), 500/500 VUs, 26021 complete and 0 interrupted iterations
+default   [  65% ] 500/500 VUs  3m54.7s/6m00.0s
+
+running (22m24.3s), 500/500 VUs, 26154 complete and 0 interrupted iterations
+default   [  65% ] 500/500 VUs  3m55.7s/6m00.0s
+
+running (22m25.3s), 500/500 VUs, 26274 complete and 0 interrupted iterations
+default   [  66% ] 500/500 VUs  3m56.7s/6m00.0s
+
+running (22m26.3s), 500/500 VUs, 26376 complete and 0 interrupted iterations
+default   [  66% ] 500/500 VUs  3m57.7s/6m00.0s
+
+running (22m27.3s), 500/500 VUs, 26500 complete and 0 interrupted iterations
+default   [  66% ] 500/500 VUs  3m58.7s/6m00.0s
+
+running (22m28.3s), 500/500 VUs, 26632 complete and 0 interrupted iterations
+default   [  67% ] 500/500 VUs  3m59.7s/6m00.0s
+
+running (22m29.3s), 500/500 VUs, 26748 complete and 0 interrupted iterations
+default   [  67% ] 500/500 VUs  4m00.7s/6m00.0s
+
+running (22m30.3s), 500/500 VUs, 26822 complete and 0 interrupted iterations
+default   [  67% ] 500/500 VUs  4m01.7s/6m00.0s
+
+running (22m31.3s), 500/500 VUs, 26907 complete and 0 interrupted iterations
+default   [  67% ] 500/500 VUs  4m02.7s/6m00.0s
+time="2026-08-23T17:09:02+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+
+running (22m32.3s), 500/500 VUs, 26989 complete and 0 interrupted iterations
+default   [  68% ] 500/500 VUs  4m03.7s/6m00.0s
+time="2026-08-23T17:09:02+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:02+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:02+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/114\": request timeout"
+time="2026-08-23T17:09:02+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/90\": request timeout"
+time="2026-08-23T17:09:02+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/42\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/34\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/33\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/121\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+
+running (22m33.3s), 500/500 VUs, 27079 complete and 0 interrupted iterations
+default   [  68% ] 500/500 VUs  4m04.7s/6m00.0s
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/48\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/126\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:03+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/28\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/110\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/82\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/109\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/68\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/122\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/126\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/110\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/82\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/24\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/82\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/25\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/93\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/26\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/hot?page=0&size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/77\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/118\": request timeout"
+time="2026-08-23T17:09:04+09:00" level=warning msg="Request Failed" error="Get \"https://yogurtte.com/api/content/feeds/scroll?size=20\": request timeout"
+
+running (22m34.3s), 500/500 VUs, 27233 complete and 0 interrupted iterations
+default   [  68% ] 500/500 VUs  4m05.7s/6m00.0s
+
+running (22m35.3s), 500/500 VUs, 27370 complete and 0 interrupted iterations
+default   [  69% ] 500/500 VUs  4m06.7s/6m00.0s
+
+running (22m36.3s), 500/500 VUs, 27512 complete and 0 interrupted iterations
+default   [  69% ] 500/500 VUs  4m07.7s/6m00.0s
+
+running (22m37.3s), 500/500 VUs, 27647 complete and 0 interrupted iterations
+default   [  69% ] 500/500 VUs  4m08.7s/6m00.0s
+
+running (22m38.3s), 500/500 VUs, 27780 complete and 0 interrupted iterations
+default   [  69% ] 500/500 VUs  4m09.7s/6m00.0s
+
+running (22m39.3s), 500/500 VUs, 27909 complete and 0 interrupted iterations
+default   [  70% ] 500/500 VUs  4m10.7s/6m00.0s
+
+running (22m40.3s), 500/500 VUs, 28026 complete and 0 interrupted iterations
+default   [  70% ] 500/500 VUs  4m11.7s/6m00.0s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration{name:GET /feeds/{id}}
+    ✗ 'p(99)<500' p(99)=6.43s
+
+    http_req_duration{name:GET /feeds/hot}
+    ✗ 'p(99)<800' p(99)=2.73s
+
+    http_req_duration{name:GET /feeds/scroll}
+    ✗ 'p(99)<800' p(99)=6.63s
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.12%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 84601  62.186336/s
+    checks_succeeded...: 99.87% 84499 out of 84601
+    checks_failed......: 0.12%  102 out of 84601
+
+    ✗ scroll 200
+      ↳  99% — ✓ 28295 / ✗ 47
+    ✗ hot 200
+      ↳  99% — ✓ 28195 / ✗ 26
+    ✗ detail 200
+      ↳  99% — ✓ 28009 / ✗ 29
+
+    HTTP
+    http_req_duration..............: avg=5.98s min=39µs     med=200.85ms max=18m44s p(90)=2.58s p(95)=3.75s
+      { expected_response:true }...: avg=5.82s min=39µs     med=200.6ms  max=18m44s p(90)=2.56s p(95)=3.72s
+      { name:GET /feeds/{id} }.....: avg=7.16s min=39µs     med=210.13ms max=18m44s p(90)=3.21s p(95)=4.16s
+      { name:GET /feeds/hot }......: avg=3.72s min=457µs    med=145.35ms max=18m40s p(90)=1.53s p(95)=2.01s
+      { name:GET /feeds/scroll }...: avg=7.08s min=87µs     med=245.77ms max=18m43s p(90)=3.29s p(95)=4.24s
+    http_req_failed................: 0.12%  102 out of 84603
+    http_reqs......................: 84603  62.187806/s
+
+    EXECUTION
+    iteration_duration.............: avg=2.59s min=100.27ms med=1.48s    max=1m5s   p(90)=5.85s p(95)=7.4s 
+    iterations.....................: 28038  20.609455/s
+    vus............................: 500    min=2            max=500
+    vus_max........................: 500    min=500          max=500
+
+    NETWORK
+    data_received..................: 966 MB 710 kB/s
+    data_sent......................: 34 MB  25 kB/s
+
+
+
+
+running (22m40.5s), 000/500 VUs, 28038 complete and 500 interrupted iterations
+default ✗ [  70% ] 458/500 VUs  4m11.8s/6m00.0s
+time="2026-08-23T17:09:11+09:00" level=error msg="test run was aborted because k6 received a 'terminated' signal"
