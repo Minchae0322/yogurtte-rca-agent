@@ -158,3 +158,53 @@ NAT($45/월) 없이 도달 가능한 최적점.
 3. k3s 조인은 클러스터 버전 고정(`INSTALL_K3S_VERSION`) - 마스터에서 토큰
 4. 역할 라벨 부여 → 디플로이먼트는 손대지 않아도 라벨 따라 배치됨
 5. content 노드 추가 시 **RDS 커넥션 예산부터 검산** (풀 12 × replica 수 + auth 10 + chat)
+
+## 관측 중앙부의 micro spot 분리 계획 - 동거 절약이 병목 제조로 판명됐다 (08-23 수립, 미실행)
+
+### 상황
+
+| 항목 | 내용 |
+|---|---|
+| 발단 | T2-B 재실행 10 원인 해부 - **obs 동거 노드(42-158)가 최악 파드의 제조처**. 노드-파드 CPU 갭 0.29코어 · MemAvailable 최저(avg 255Mi) · 같은 92 rps에서 p95 3.19s (전용 노드 파드는 0.36s) |
+| 기존 트레이드 | "spot2 동거(content+관측) = 노드 1대 절약, 경합 ~0.15코어" - **이번 실측(0.29코어+대기열 쏠림)으로 지불 비용이 상향 판정**. 이 계획이 그 행을 대체한다 |
+| 결정 | 관측 **중앙부 4개를 t3.micro spot 전용 노드로 전부 이주** (~$3/월). receiver 분리 권고가 있었으나 단순화 우선으로 포함 - 리스크는 반증 조건으로 편입 |
+| 이동 대상 (실측) | alloy-metrics-0 **259Mi** · alloy-receiver **99Mi·CPU max 0.36(시험 중)** · operator 55Mi · kube-state-metrics 36Mi ≈ **합 450Mi · 평시 ~0.1코어** |
+| 이동 아님 | alloy-logs·node-exporter는 **DaemonSet - 노드마다 상주가 원리**. micro에도 자기 몫(~80Mi)이 뜬다 |
+| micro 수용 검산 | 450 + 시스템/데몬셋 ~250 ≈ **700Mi/1GB (헤드룸 ~300Mi)** · CPU baseline 0.2코어 vs 평시 0.1 - 평시는 성립, **시험 중 receiver가 초과 주범** |
+
+### 실행 순서 (변경군 격리 - obs 이주 단독, 앱 변경 미포함)
+
+1. t3.micro spot 기동 - [§신규 노드 재사용 절차](#신규-노드를-추가할-때-재사용-절차) 그대로 (SG `yogurtte-worker-internal` · k3s 버전 고정 조인). **기동 시 크레딧 모드(spot의 unlimited 지원 여부) 콘솔에서 확인·기록**
+2. 역할 라벨(예: `role=obs`) + taint `obs=true:NoSchedule` - content·타 워크로드 유입 차단
+3. 중앙부 4개에 nodeSelector/toleration 부여 - **주의: operator/helm 관리 리소스라 디플로이 직접 패치는 되돌려질 수 있다.** grafana-k8s-monitoring 릴리스 values 경유가 정도 (릴리스 위치 확인 필요)
+4. 42-158에서 중앙부 퇴거 확인 → content 전용화
+5. 같은 작업 창에 별건 처리: **40-241 swapoff + fstab 정리** (스왑 3.8GB 설정 비대칭, 재실행 10 감사에서 발견)
+6. T2-B 재실행으로 델타 측정 (다른 변수 동결)
+
+### 예측과 반증 조건
+
+| 예측 | 수치 | 반증 시 |
+|---|---|---|
+| T2-B에서 42-158 파드 정상화 | p95 3.19s → 전용 노드 수준(~1s 이하) · 파드 편차 축소 | 편차 잔존 시 원인은 동거가 아니었던 것 - 분배·steal 재조사 |
+| 처리량 | 회수 0.2~0.3코어 ≈ **+12~18 rps** | 무변화면 CPU 외 상한(풀 12) 재지목 |
+| micro 크레딧 | 평시 0.1/0.2로 흑자 | **시험 중 스로틀(steal 급증·수집 랙·스크레이프 갭) → 플랜 B: receiver만 타 노드 분리** |
+| micro 메모리 | 워킹셋 ~700Mi 유지 | 상습 초과/OOM → small spot 승격 (+$3/월) |
+
+### 현재 상태 - 실행 완료 (08-23 16:2x, 같은 날 즉시 실행)
+
+**이주 완료·검증 통과.** AWS CLI가 로컬에 설치돼 있어(문서의 "미설치"는 구정보) 세션에서
+전 과정 실행했다. 실측 기록:
+
+| 단계 | 실측 |
+|---|---|
+| 기동 | `i-06a29c2d7dbc52fda` (`yogurtte-obs-spot`) · **172.31.33.159** · 기존 스팟 설정 클론(AMI·SG·subnet 2c·persistent+stop) |
+| **크레딧** | **unlimited로 붙음(계정 기본)** - 계획의 "0.2 baseline 스로틀" 리스크 소멸, 초과분은 종량(시험 1시간당 ~$0.01 수준) |
+| 조인 | k3s v1.34.3+k3s1 고정 조인, 31초 만에 Ready · iptables INPUT ACCEPT 확인(사건록 1번) |
+| 이주 방식 | **helm 수정 없이 라벨 이전**으로 3개 이동(receiver는 DS라 자동, metrics-0·ksm은 파드 삭제로 재스케줄) - 중앙부가 이미 `yogurtte.io/role=observability` 셀렉터였다. operator만 nodeSelector가 없어 helm rev 19로 추가 |
+| 42-158 | `role=content`로 강등(content 라벨은 별도 키 `yogurtte.io/content`라 무영향 확인 후 실행) - 잔류는 DaemonSet 2개뿐, **content 전용화 완료** |
+| 새 노드 안착 | 중앙부 4개 전부 Running: metrics-0 210Mi·receiver 63·operator 37·ksm 20 · 노드 680Mi/914 (74%, 헤드룸 ~230Mi - 예측 700Mi 적중) |
+| 수집 연속성 | 새 노드 지표 Mimir 유입 + content 앱 메트릭 최신 스크레이프 18.8s 전 - 공백 없음 |
+| 40-241 스왑 | swapoff + swapfile 3.5G 삭제 + fstab 주석(백업 `fstab.bak-20260823`) - **fstab에 스왑 항목이 2줄 중복**돼 있었다 |
+
+**미측정:** 이주 후 T2-B 델타(42-158 전용화 효과 +12~18 rps 예측·파드 편차 축소)는 다음
+T2-B 실행이 검증한다. micro의 시험 중 크레딧 소모 실측도 그때 함께.

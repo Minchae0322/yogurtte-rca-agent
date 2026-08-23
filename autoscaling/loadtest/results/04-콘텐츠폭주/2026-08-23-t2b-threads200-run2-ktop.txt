@@ -1,0 +1,154 @@
+=== 14:58:38
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   26m          1%       1114Mi          58%         
+ip-172-31-38-225   103m         5%       638Mi           69%         
+ip-172-31-40-241   40m          2%       1240Mi          65%         
+ip-172-31-42-158   51m          2%       1352Mi          70%         
+ip-172-31-45-39    130m         6%       1573Mi          82%         
+worker-proxy       205m         10%      212Mi           51%         
+
+auth-service-b4bff4bf4-29pn2       2m           577Mi           
+chat-service-5bc8b8794d-cf4hp      32m          559Mi           
+content-service-6d54dccbd7-8qfvd   3m           683Mi           
+content-service-6d54dccbd7-hnz5x   3m           635Mi           
+content-service-6d54dccbd7-hss8h   3m           645Mi           
+=== 14:59:41
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   19m          0%       1113Mi          58%         
+ip-172-31-38-225   78m          3%       631Mi           69%         
+ip-172-31-40-241   26m          1%       1255Mi          65%         
+ip-172-31-42-158   45m          2%       1355Mi          70%         
+ip-172-31-45-39    118m         5%       1583Mi          83%         
+worker-proxy       44m          2%       206Mi           49%         
+
+auth-service-b4bff4bf4-29pn2       3m           575Mi           
+chat-service-5bc8b8794d-cf4hp      32m          559Mi           
+content-service-6d54dccbd7-8qfvd   3m           684Mi           
+content-service-6d54dccbd7-hnz5x   4m           635Mi           
+content-service-6d54dccbd7-hss8h   22m          643Mi           
+=== 15:00:50
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   420m         21%      1114Mi          58%         
+ip-172-31-38-225   72m          3%       636Mi           69%         
+ip-172-31-40-241   489m         24%      1260Mi          66%         
+ip-172-31-42-158   523m         26%      1398Mi          73%         
+ip-172-31-45-39    120m         6%       1591Mi          83%         
+worker-proxy       258m         12%      254Mi           61%         
+
+auth-service-b4bff4bf4-29pn2       2m           575Mi           
+chat-service-5bc8b8794d-cf4hp      32m          559Mi           
+content-service-6d54dccbd7-8qfvd   428m         688Mi           
+content-service-6d54dccbd7-hnz5x   376m         636Mi           
+content-service-6d54dccbd7-hss8h   327m         647Mi           
+=== 15:01:54
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1366m        68%      1116Mi          58%         
+ip-172-31-38-225   58m          2%       610Mi           66%         
+ip-172-31-40-241   1538m        76%      1264Mi          66%         
+ip-172-31-42-158   2000m        100%     1466Mi          76%         
+ip-172-31-45-39    125m         6%       1601Mi          84%         
+worker-proxy       286m         14%      256Mi           61%         
+
+auth-service-b4bff4bf4-29pn2       3m           575Mi           
+chat-service-5bc8b8794d-cf4hp      33m          560Mi           
+content-service-6d54dccbd7-8qfvd   1616m        690Mi           
+content-service-6d54dccbd7-hnz5x   1378m        637Mi           
+content-service-6d54dccbd7-hss8h   1517m        650Mi           
+=== 15:02:58
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1458m        72%      1133Mi          59%         
+ip-172-31-38-225   90m          4%       661Mi           72%         
+ip-172-31-40-241   1683m        84%      1281Mi          67%         
+ip-172-31-42-158   2000m        100%     1484Mi          77%         
+ip-172-31-45-39    67m          3%       1603Mi          84%         
+worker-proxy       527m         26%      253Mi           61%         
+
+auth-service-b4bff4bf4-29pn2       3m           575Mi           
+chat-service-5bc8b8794d-cf4hp      33m          560Mi           
+content-service-6d54dccbd7-8qfvd   1686m        698Mi           
+content-service-6d54dccbd7-hnz5x   1410m        645Mi           
+content-service-6d54dccbd7-hss8h   1606m        675Mi           
+=== 15:04:03
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1626m        81%      1143Mi          59%         
+ip-172-31-38-225   45m          2%       672Mi           73%         
+ip-172-31-40-241   1839m        91%      1282Mi          67%         
+ip-172-31-42-158   2000m        100%     1501Mi          78%         
+ip-172-31-45-39    69m          3%       1564Mi          82%         
+worker-proxy       405m         20%      221Mi           53%         
+
+auth-service-b4bff4bf4-29pn2       3m           576Mi           
+chat-service-5bc8b8794d-cf4hp      32m          560Mi           
+content-service-6d54dccbd7-8qfvd   1746m        703Mi           
+content-service-6d54dccbd7-hnz5x   1543m        650Mi           
+content-service-6d54dccbd7-hss8h   1596m        694Mi           
+=== 15:05:08
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1525m        76%      1144Mi          59%         
+ip-172-31-38-225   58m          2%       524Mi           57%         
+ip-172-31-40-241   1731m        86%      1290Mi          67%         
+ip-172-31-42-158   2000m        100%     1514Mi          79%         
+ip-172-31-45-39    72m          3%       1548Mi          81%         
+worker-proxy       437m         21%      248Mi           59%         
+
+auth-service-b4bff4bf4-29pn2       3m           578Mi           
+chat-service-5bc8b8794d-cf4hp      32m          561Mi           
+content-service-6d54dccbd7-8qfvd   1649m        708Mi           
+content-service-6d54dccbd7-hnz5x   1419m        650Mi           
+content-service-6d54dccbd7-hss8h   1624m        704Mi           
+=== 15:06:12
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1477m        73%      1145Mi          59%         
+ip-172-31-38-225   50m          2%       661Mi           72%         
+ip-172-31-40-241   1593m        79%      1292Mi          67%         
+ip-172-31-42-158   2000m        100%     1479Mi          77%         
+ip-172-31-45-39    118m         5%       1543Mi          81%         
+worker-proxy       502m         25%      228Mi           55%         
+
+auth-service-b4bff4bf4-29pn2       3m           578Mi           
+chat-service-5bc8b8794d-cf4hp      32m          561Mi           
+content-service-6d54dccbd7-8qfvd   1585m        709Mi           
+content-service-6d54dccbd7-hnz5x   1438m        650Mi           
+content-service-6d54dccbd7-hss8h   1605m        706Mi           
+=== 15:07:16
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   55m          2%       1144Mi          59%         
+ip-172-31-38-225   143m         7%       671Mi           73%         
+ip-172-31-40-241   65m          3%       1293Mi          67%         
+ip-172-31-42-158   965m         48%      1492Mi          78%         
+ip-172-31-45-39    69m          3%       1549Mi          81%         
+worker-proxy       85m          4%       238Mi           57%         
+
+auth-service-b4bff4bf4-29pn2       3m           575Mi           
+chat-service-5bc8b8794d-cf4hp      31m          560Mi           
+content-service-6d54dccbd7-8qfvd   1028m        709Mi           
+content-service-6d54dccbd7-hnz5x   593m         649Mi           
+content-service-6d54dccbd7-hss8h   323m         707Mi           
+=== 15:08:19
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   24m          1%       1137Mi          59%         
+ip-172-31-38-225   61m          3%       606Mi           66%         
+ip-172-31-40-241   64m          3%       1281Mi          67%         
+ip-172-31-42-158   48m          2%       1489Mi          77%         
+ip-172-31-45-39    69m          3%       1555Mi          81%         
+worker-proxy       60m          3%       213Mi           51%         
+
+auth-service-b4bff4bf4-29pn2       3m           575Mi           
+chat-service-5bc8b8794d-cf4hp      32m          560Mi           
+content-service-6d54dccbd7-8qfvd   11m          692Mi           
+content-service-6d54dccbd7-hnz5x   5m           642Mi           
+content-service-6d54dccbd7-hss8h   6m           703Mi           
+=== 15:09:24
+NAME               CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   21m          1%       1133Mi          59%         
+ip-172-31-38-225   104m         5%       681Mi           74%         
+ip-172-31-40-241   95m          4%       1281Mi          67%         
+ip-172-31-42-158   44m          2%       1413Mi          73%         
+ip-172-31-45-39    66m          3%       1577Mi          82%         
+worker-proxy       49m          2%       230Mi           55%         
+
+auth-service-b4bff4bf4-29pn2       3m           575Mi           
+chat-service-5bc8b8794d-cf4hp      32m          560Mi           
+content-service-6d54dccbd7-8qfvd   7m           689Mi           
+content-service-6d54dccbd7-hnz5x   4m           636Mi           
+content-service-6d54dccbd7-hss8h   3m           682Mi           
