@@ -8,3 +8,7 @@
 [21:09:28] settle 대기...
 [21:09:51] settle 완료 (loop=0)
 [21:09:51] === 시작: baseline-diet (baseline.js -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
+[21:19:58] === 종료: baseline-diet (k6 exit=0)
+[21:19:58] settle 대기...
+[21:20:27] settle 완료 (loop=0)
+[21:20:27] === 시작: journey-v2-diet (journey-v2.js -e CHAT_ROOM_ID=6a8183c7d2c54bf44544e516)
