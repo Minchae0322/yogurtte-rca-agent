@@ -90,8 +90,12 @@ ktop 60s 로거 병행 · 결과는 연결/폭풍 → `results/09-WS연결폭주
 | 시험 | 명령 | 목표 | SLO | 상태 |
 |---|---|---|---|---|
 | 연결 유지 | `j-ws-storm.js -e VUS=1250` | 1,250 연결 | 핸드셰이크 p95<2s·실패<1% | **[실측] 통과 (08-30)** |
-| 발화 평시 정렬 | `c-chat-ws.js -e VUS=60 -e ROOM_COUNT=30 -e SUB_ALL=0 -e MSG_INTERVAL_MS=30000` | 인입 2 msg/s·전달 4 | 배달 p99<1s·checks>99% | 미실행 |
-| 발화 스파이크 정렬 | `c-chat-ws.js -e VUS=300 -e ROOM_COUNT=150 -e SUB_ALL=0 -e MSG_INTERVAL_MS=30000` | 인입 10 msg/s·전달 20 | 동일 | 미실행 |
+| 발화 평시 정렬 | `ws-chat-real.js -e PAIRS=30 -e MSG_INTERVAL_MS=30000` | 인입 2 msg/s·전달 4 | 배달 p99<1s·checks>99% | **[실측] 통과 (08-31)** - med 33ms·p95 60ms |
+| 발화 스파이크 정렬 | `ws-chat-real.js -e PAIRS=150 -e MSG_INTERVAL_MS=30000` | 인입 10 msg/s·전달 20 | 동일 | **[실측] 통과 (08-31)** - med 30ms·p95 47ms |
+
+주: c-chat-ws의 가상 방 방식은 chat 재배포(참여자 검증) 이후 **배달 0건**이 되어 폐기 -
+setup에서 실제 1:1 방을 만드는 **ws-chat-real.js**로 교체했다 (해부 전문:
+[12-메시지처리량 README](loadtest/results/12-메시지처리량/README.md) 모델 정렬 회차).
 | 재접속 폭풍 | `j-ws-storm.js -e VUS=1250 -e RECONNECT=1` | handshake 폭주 내성 | 관찰 목적 | 미실행 (규모 재정렬 대기) |
 
 공통 env: `-e CHAT_WS_URL=ws://3.36.114.36/api/chat/ws/websocket -e AUTH_URL=http://3.36.114.36/api/auth`
@@ -113,7 +117,7 @@ ktop 60s 로거 병행 · 결과는 연결/폭풍 → `results/09-WS연결폭주
 | 항목 | 상태 |
 |---|---|
 | 연결 1,250 유지 | **[실측] 통과** - 실패 0 · 메모리 82% · ~175KB/연결 |
-| 발화 평시·스파이크 정렬 | 미실행 |
+| 발화 평시·스파이크 정렬 | **[실측] 통과 (08-31)** - med 33/30ms · p95 60/47ms · 체크 100% (ws-chat-real.js, 실제 방) |
 | 재접속 폭풍 | 미실행 |
 | 해제 후 워킹셋 미회수(730Mi) | 관찰 항목 - 시간 경과 후 재확인, 지속 시 세션 정리 경로 조사 |
 | Redis presence·JVM 스레드·Mongo 쓰기 | 미측정 - 시험 창에 obs 노드 재고착(크레딧 나선 2차)으로 Mimir 소급 불가, ktop만 생존 |

@@ -196,3 +196,48 @@ WS-B 재시험의 선행 조건: ① chat off-heap 상한 설정 ② 코어 노�
 (워킹셋 계단 리셋) - 이것 없이 돌리면 측정이 아니라 장애 재현이 된다.
 
 원본: [output](2026-08-23-wsb-diet-output.txt) · [summary](2026-08-23-wsb-diet-summary.json) · [timestamps](2026-08-23-wsb-diet-timestamps.txt)
+
+## 모델 정렬 회차 (2026-08-31 00:26~00:45 KST) - 진짜 방에서의 발화: 두 티어 모두 SLO 통과, 그리고 "배달 0"의 해부
+
+> **결론:** 부하모델-chat.md의 발화 모델 두 티어(평시 2 msg/s·스파이크 10 msg/s)를
+> **실제 1:1 방** 위에서 시험해 모두 통과 - 배달 지연 **평시 med 33ms/p95 60ms ·
+> 스파이크 med 30ms/p95 47ms/max 526ms**, 체크 100%, SLO(배달 p99<1s) 여유 충족.
+> 전제 작업이 본편이었다: 기존 c-chat-ws의 가상 방(loadtest-room-N)은 **배달 0건**이
+> 됐는데, 원인은 chat 재배포에 실린 relay의 참여자 검증
+> (`roomMemberIds.isEmpty() → return`, log.debug라 무음)이었다. 프레임 덤프 →
+> Kafka 오프셋 증분 실험(producer 생존 확인) → consumer lag 0 확인 → 소스 추적으로
+> 특정했고, **setup에서 REST로 실제 방을 만들어 시험하는 [ws-chat-real.js](../../ws-chat-real.js)를
+> 신설**했다. 시험이 저장(Mongo)·참여자 조회·발신자 조회까지 실경로 전체를 타게 된 부수 개선.
+
+### 조건
+
+[ws-chat-real.js](../../ws-chat-real.js) · 직결 경로 · 인그레스 한시 상향 후 원복 ·
+1:1 방 setup 생성(POST /v1/chat/rooms/chat, participantIds는 JWT userId 클레임에서 추출) ·
+세션 60s 순환 · 배달 지연은 **상대 세션 수신만** 집계(자기 에코 제외).
+
+| 티어 | 구성 | 목표 인입 | 실측 |
+|---|---|---|---|
+| 평시 (읽기 83rps 시간대) | 30쌍·60세션·간격 30s | 2 msg/s | 배달 292건 · **med 33ms · p95 60ms · max 158ms** · 체크 100% |
+| 스파이크 (읽기 400rps 시간대) | 150쌍·300세션·간격 30s | 10 msg/s | 배달 3,109건 · **med 30ms · p95 47ms · max 526ms** · 체크 2,698/2,698 |
+
+### 서버 (ktop 60s)
+
+chat CPU: 평시 ~80-110m · 스파이크 최대 **459m** (300세션 핸드셰이크+발화) - CPU limit
+1000m의 절반 이하. 워킹셋 **778Mi(87%/896)** - 단 이 값은 직전 1,250 연결 시험의
+미회수분(730Mi) 위에 얹힌 것이라 발화 시험 자체의 몫은 작다. 워킹셋 미회수 추세는
+09-WS연결폭주 관찰 항목과 동일 건. (Mimir 소급은 obs 노드 재고착으로 불가 - ktop만.)
+
+### 판정
+
+1. **발화 모델 두 티어 모두 현재 구성(1 replica)이 SLO 여유로 수용** - 모델치가 기존
+   WS-B 한계 실측의 1/50 수준이라는 예측과 정합.
+2. **"저부하인데 배달 p99>1s면 경로 결함" 반증 조건은 발동 안 함** - 대신 그 전 단계에서
+   "배달 0"이라는 더 근본적인 경로 결함(가상 방 스킵)을 발견·해부·우회했다. 기존
+   c-chat-ws 기반 회차와의 비교 시 이 스크립트 차이를 명시할 것.
+3. 부하시험 인프라 교훈: 배포가 시험 스크립트의 전제(멤버십 무검증)를 소리 없이
+   무효화할 수 있다 - 시험 자산도 앱과 함께 버전 관리가 필요하다.
+
+원본: 평시 [output](2026-08-31-wsmodel-normal-output.txt) · [summary](2026-08-31-wsmodel-normal-summary.json) ·
+[timestamps](2026-08-31-wsmodel-normal-timestamps.txt) / 스파이크 [output](2026-08-31-wsmodel-spike-output.txt) ·
+[summary](2026-08-31-wsmodel-spike-summary.json) · [timestamps](2026-08-31-wsmodel-spike-timestamps.txt) /
+[ktop](2026-08-31-wsmodel-ktop.txt) · 폐기: 가상 방 1차(2026-08-30-wsmodel-normal-*, 배달 0 - 해부의 증거로 보존)

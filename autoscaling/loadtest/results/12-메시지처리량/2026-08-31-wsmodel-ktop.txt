@@ -1,0 +1,75 @@
+=== 00:25:29
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    98m          4%          1588Mi          83%         
+auth-service-b4bff4bf4-p8rmh       7m           536Mi           
+chat-service-7c4cf87cc8-48dvs      73m          757Mi           
+=== 00:26:35
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    130m         6%          1593Mi          83%         
+auth-service-b4bff4bf4-p8rmh       7m           539Mi           
+chat-service-7c4cf87cc8-48dvs      108m         758Mi           
+=== 00:27:40
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    172m         8%          1590Mi          83%         
+auth-service-b4bff4bf4-p8rmh       11m          539Mi           
+chat-service-7c4cf87cc8-48dvs      124m         759Mi           
+=== 00:28:44
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    182m         9%          1596Mi          83%         
+auth-service-b4bff4bf4-p8rmh       21m          539Mi           
+chat-service-7c4cf87cc8-48dvs      112m         761Mi           
+=== 00:29:48
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    159m         7%          1586Mi          83%         
+auth-service-b4bff4bf4-p8rmh       3m           539Mi           
+chat-service-7c4cf87cc8-48dvs      140m         764Mi           
+=== 00:30:52
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    167m         8%          1599Mi          83%         
+auth-service-b4bff4bf4-p8rmh       6m           540Mi           
+chat-service-7c4cf87cc8-48dvs      112m         766Mi           
+=== 00:31:57
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    129m         6%          1594Mi          83%         
+auth-service-b4bff4bf4-p8rmh       4m           540Mi           
+chat-service-7c4cf87cc8-48dvs      82m          765Mi           
+=== 00:33:01
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    96m          4%          1593Mi          83%         
+auth-service-b4bff4bf4-p8rmh       5m           539Mi           
+chat-service-7c4cf87cc8-48dvs      55m          764Mi           
+=== 00:34:05
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    115m         5%          1588Mi          83%         
+auth-service-b4bff4bf4-p8rmh       3m           539Mi           
+chat-service-7c4cf87cc8-48dvs      109m         764Mi           
+=== 00:35:09
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    150m         7%          1594Mi          83%         
+auth-service-b4bff4bf4-p8rmh       3m           540Mi           
+chat-service-7c4cf87cc8-48dvs      107m         765Mi           
+=== 00:36:14
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    422m         21%         1598Mi          83%         
+auth-service-b4bff4bf4-p8rmh       511m         540Mi           
+chat-service-7c4cf87cc8-48dvs      79m          771Mi           
+=== 00:37:18
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    116m         5%          1592Mi          83%         
+auth-service-b4bff4bf4-p8rmh       4m           543Mi           
+chat-service-7c4cf87cc8-48dvs      79m          773Mi           
+=== 00:38:22
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    437m         21%         1576Mi          82%         
+auth-service-b4bff4bf4-p8rmh       31m          539Mi           
+chat-service-7c4cf87cc8-48dvs      325m         778Mi           
+=== 00:39:27
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    529m         26%         1558Mi          81%         
+auth-service-b4bff4bf4-p8rmh       4m           539Mi           
+chat-service-7c4cf87cc8-48dvs      439m         777Mi           
+=== 00:40:31
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-45-39    615m         30%         1556Mi          81%         
+auth-service-b4bff4bf4-p8rmh       4m           534Mi           
+chat-service-7c4cf87cc8-48dvs      459m         778Mi           
