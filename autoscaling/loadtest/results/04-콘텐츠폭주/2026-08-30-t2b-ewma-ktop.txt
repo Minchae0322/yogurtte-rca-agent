@@ -1,0 +1,195 @@
+=== 15:05:43
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   19m          0%          1188Mi          62%         
+ip-172-31-38-225   62m          3%          682Mi           74%         
+ip-172-31-40-241   28m          1%          1356Mi          71%         
+ip-172-31-42-158   26m          1%          1130Mi          59%         
+ip-172-31-45-39    179m         8%          1596Mi          83%         
+worker-proxy       58m          2%          231Mi           55%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   3m    718Mi   
+content-service-66d5d89ccb-l9l2w   4m    761Mi   
+content-service-66d5d89ccb-wd4jd   13m   813Mi   
+=== 15:06:09
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   84m          4%          1188Mi          62%         
+ip-172-31-38-225   217m         10%         660Mi           72%         
+ip-172-31-40-241   1341m        67%         1358Mi          71%         
+ip-172-31-42-158   846m         42%         1130Mi          59%         
+ip-172-31-45-39    144m         7%          1614Mi          84%         
+worker-proxy       335m         16%         214Mi           51%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1000m   719Mi   
+content-service-66d5d89ccb-l9l2w   18m     761Mi   
+content-service-66d5d89ccb-wd4jd   45m     813Mi   
+=== 15:06:33
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1484m        74%         1189Mi          62%         
+ip-172-31-38-225   182m         9%          594Mi           65%         
+ip-172-31-40-241   924m         46%         1359Mi          71%         
+ip-172-31-42-158   1455m        72%         1132Mi          59%         
+ip-172-31-45-39    209m         10%         1589Mi          83%         
+worker-proxy       506m         25%         236Mi           57%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1000m   719Mi   
+content-service-66d5d89ccb-l9l2w   1245m   763Mi   
+content-service-66d5d89ccb-wd4jd   1525m   814Mi   
+=== 15:06:57
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1518m        75%         1198Mi          62%         
+ip-172-31-38-225   110m         5%          584Mi           63%         
+ip-172-31-40-241   1380m        69%         1363Mi          71%         
+ip-172-31-42-158   1328m        66%         1140Mi          59%         
+ip-172-31-45-39    117m         5%          1587Mi          83%         
+worker-proxy       795m         39%         252Mi           60%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1295m   725Mi   
+content-service-66d5d89ccb-l9l2w   1408m   766Mi   
+content-service-66d5d89ccb-wd4jd   1189m   819Mi   
+=== 15:07:23
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1453m        72%         1207Mi          63%         
+ip-172-31-38-225   79m          3%          576Mi           63%         
+ip-172-31-40-241   1326m        66%         1367Mi          71%         
+ip-172-31-42-158   1280m        64%         1144Mi          59%         
+ip-172-31-45-39    105m         5%          1588Mi          83%         
+worker-proxy       356m         17%         218Mi           52%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1196m   730Mi   
+content-service-66d5d89ccb-l9l2w   1406m   773Mi   
+content-service-66d5d89ccb-wd4jd   1354m   822Mi   
+=== 15:07:46
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1467m        73%         1217Mi          63%         
+ip-172-31-38-225   294m         14%         600Mi           65%         
+ip-172-31-40-241   1159m        57%         1380Mi          72%         
+ip-172-31-42-158   1514m        75%         1163Mi          60%         
+ip-172-31-45-39    125m         6%          1592Mi          83%         
+worker-proxy       583m         29%         206Mi           49%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1334m   737Mi   
+content-service-66d5d89ccb-l9l2w   1415m   786Mi   
+content-service-66d5d89ccb-wd4jd   1128m   830Mi   
+=== 15:08:11
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1433m        71%         1227Mi          64%         
+ip-172-31-38-225   110m         5%          560Mi           61%         
+ip-172-31-40-241   1017m        50%         1392Mi          72%         
+ip-172-31-42-158   1678m        83%         1166Mi          61%         
+ip-172-31-45-39    103m         5%          1618Mi          84%         
+worker-proxy       769m         38%         210Mi           50%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1433m   742Mi   
+content-service-66d5d89ccb-l9l2w   1502m   786Mi   
+content-service-66d5d89ccb-wd4jd   1237m   832Mi   
+=== 15:08:40
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1492m        74%         1228Mi          64%         
+ip-172-31-38-225   142m         7%          491Mi           53%         
+ip-172-31-40-241   1391m        69%         1393Mi          73%         
+ip-172-31-42-158   1483m        74%         1170Mi          61%         
+ip-172-31-45-39    119m         5%          1602Mi          84%         
+worker-proxy       416m         20%         207Mi           50%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1488m   744Mi   
+content-service-66d5d89ccb-l9l2w   1330m   787Mi   
+content-service-66d5d89ccb-wd4jd   1239m   835Mi   
+=== 15:09:03
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1580m        79%         1226Mi          64%         
+ip-172-31-38-225   404m         20%         637Mi           69%         
+ip-172-31-40-241   1487m        74%         1410Mi          73%         
+ip-172-31-42-158   1378m        68%         1171Mi          61%         
+ip-172-31-45-39    207m         10%         1582Mi          83%         
+worker-proxy       551m         27%         233Mi           56%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1336m   746Mi   
+content-service-66d5d89ccb-l9l2w   1533m   787Mi   
+content-service-66d5d89ccb-wd4jd   1239m   835Mi   
+=== 15:09:27
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1546m        77%         1227Mi          64%         
+ip-172-31-38-225   164m         8%          611Mi           66%         
+ip-172-31-40-241   1422m        71%         1396Mi          73%         
+ip-172-31-42-158   1796m        89%         1175Mi          61%         
+ip-172-31-45-39    142m         7%          1579Mi          82%         
+worker-proxy       485m         24%         220Mi           53%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1502m   751Mi   
+content-service-66d5d89ccb-l9l2w   1403m   788Mi   
+content-service-66d5d89ccb-wd4jd   1230m   836Mi   
+=== 15:09:54
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1648m        82%         1228Mi          64%         
+ip-172-31-38-225   189m         9%          589Mi           64%         
+ip-172-31-40-241   1407m        70%         1397Mi          73%         
+ip-172-31-42-158   1624m        81%         1185Mi          62%         
+ip-172-31-45-39    174m         8%          1587Mi          83%         
+worker-proxy       685m         34%         243Mi           58%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1680m   760Mi   
+content-service-66d5d89ccb-l9l2w   1088m   788Mi   
+content-service-66d5d89ccb-wd4jd   1373m   835Mi   
+=== 15:10:22
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1506m        75%         1230Mi          64%         
+ip-172-31-38-225   209m         10%         622Mi           68%         
+ip-172-31-40-241   1357m        67%         1402Mi          73%         
+ip-172-31-42-158   1629m        81%         1188Mi          62%         
+ip-172-31-45-39    103m         5%          1597Mi          83%         
+worker-proxy       412m         20%         243Mi           58%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1464m   760Mi   
+content-service-66d5d89ccb-l9l2w   1504m   788Mi   
+content-service-66d5d89ccb-wd4jd   1450m   835Mi   
+=== 15:10:45
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1533m        76%         1234Mi          64%         
+ip-172-31-38-225   71m          3%          616Mi           67%         
+ip-172-31-40-241   1286m        64%         1398Mi          73%         
+ip-172-31-42-158   1680m        84%         1188Mi          62%         
+ip-172-31-45-39    109m         5%          1606Mi          84%         
+worker-proxy       584m         29%         201Mi           48%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1449m   764Mi   
+content-service-66d5d89ccb-l9l2w   1487m   792Mi   
+content-service-66d5d89ccb-wd4jd   1495m   836Mi   
+=== 15:11:12
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1439m        71%         1235Mi          64%         
+ip-172-31-38-225   194m         9%          568Mi           62%         
+ip-172-31-40-241   1143m        57%         1415Mi          74%         
+ip-172-31-42-158   1821m        91%         1191Mi          62%         
+ip-172-31-45-39    130m         6%          1609Mi          84%         
+worker-proxy       839m         41%         193Mi           46%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1608m   766Mi   
+content-service-66d5d89ccb-l9l2w   1332m   792Mi   
+content-service-66d5d89ccb-wd4jd   1343m   836Mi   
+=== 15:11:36
+NAME               CPU(cores)   CPU(%)      MEMORY(bytes)   MEMORY(%)   
+ip-172-31-32-115   1446m        72%         1235Mi          64%         
+ip-172-31-38-225   171m         8%          668Mi           73%         
+ip-172-31-40-241   1499m        74%         1400Mi          73%         
+ip-172-31-42-158   1376m        68%         1196Mi          62%         
+ip-172-31-45-39    115m         5%          1601Mi          84%         
+worker-proxy       600m         30%         224Mi           54%         
+ip-172-31-33-159   <unknown>    <unknown>   <unknown>       <unknown>   
+
+content-service-66d5d89ccb-fsjrn   1142m   766Mi   
+content-service-66d5d89ccb-l9l2w   1438m   793Mi   
+content-service-66d5d89ccb-wd4jd   1366m   836Mi   
