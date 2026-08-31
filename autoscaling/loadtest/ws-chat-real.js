@@ -32,6 +32,8 @@ const deliveryLatency = new Trend('ws_delivery_latency', true);
 const delivered = new Counter('ws_delivered');
 
 export const options = {
+  // 방 PAIRS개 생성 + 로그인 2×PAIRS회. 서버가 부하 회복 중이면 기본 60s로는 부족하다(실측).
+  setupTimeout: '5m',
   stages: [
     { duration: '2m', target: VUS },
     { duration: '3m', target: VUS },

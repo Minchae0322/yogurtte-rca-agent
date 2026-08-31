@@ -1,0 +1,174 @@
+=== 23:28:52
+chat-service-7c4cf87cc8-48dvs   41m   786Mi   
+chat restarts: 0
+obs node: 29m 647Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:29:24
+chat-service-7c4cf87cc8-48dvs   47m   787Mi   
+chat restarts: 0
+obs node: 46m 658Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:30:03
+chat-service-7c4cf87cc8-48dvs   947m   787Mi   
+chat restarts: 0
+obs node: 127m 652Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:30:40
+chat-service-7c4cf87cc8-48dvs   983m   793Mi   
+chat restarts: 0
+obs node: 219m 652Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:31:13
+chat-service-7c4cf87cc8-48dvs   976m   795Mi   
+chat restarts: 0
+obs node: 142m 647Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:31:48
+chat-service-7c4cf87cc8-48dvs   980m   797Mi   
+chat restarts: 0
+obs node: 200m 645Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:32:25
+chat-service-7c4cf87cc8-48dvs   976m   797Mi   
+chat restarts: 0
+obs node: 132m 670Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:33:03
+chat-service-7c4cf87cc8-48dvs   935m   798Mi   
+chat restarts: 0
+obs node: 179m 668Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:33:37
+chat-service-7c4cf87cc8-48dvs   878m   797Mi   
+chat restarts: 0
+obs node: 177m 644Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:34:17
+chat-service-7c4cf87cc8-48dvs   950m   795Mi   
+chat restarts: 0
+obs node: 151m 640Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:34:51
+chat-service-7c4cf87cc8-48dvs   946m   795Mi   
+chat restarts: 0
+obs node: 192m 641Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:35:31
+chat-service-7c4cf87cc8-48dvs   807m   794Mi   
+chat restarts: 0
+obs node: 170m 641Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:36:05
+chat-service-7c4cf87cc8-48dvs   864m   796Mi   
+chat restarts: 0
+obs node: 140m 641Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:36:45
+chat-service-7c4cf87cc8-48dvs   984m   797Mi   
+chat restarts: 0
+obs node: 183m 637Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:37:18
+chat-service-7c4cf87cc8-48dvs   901m   793Mi   
+chat restarts: 0
+obs node: 545m 665Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:37:56
+chat-service-7c4cf87cc8-48dvs   971m   800Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:38:29
+chat-service-7c4cf87cc8-48dvs   923m   795Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:39:05
+chat-service-7c4cf87cc8-48dvs   961m   793Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:39:39
+chat-service-7c4cf87cc8-48dvs   792m   796Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:40:15
+chat-service-7c4cf87cc8-48dvs   552m   796Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:40:48
+chat-service-7c4cf87cc8-48dvs   936m   797Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:41:24
+chat-service-7c4cf87cc8-48dvs   975m   797Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:42:03
+chat-service-7c4cf87cc8-48dvs   978m   795Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:42:40
+chat-service-7c4cf87cc8-48dvs   964m   794Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:43:14
+chat-service-7c4cf87cc8-48dvs   984m   800Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:43:49
+chat-service-7c4cf87cc8-48dvs   947m   797Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:44:20
+chat-service-7c4cf87cc8-48dvs   924m   798Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Terminating 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:44:55
+chat-service-7c4cf87cc8-48dvs   519m   794Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Terminating 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:45:28
+chat-service-7c4cf87cc8-48dvs   348m   793Mi   
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+obs grafana-k8s-monitoring-alloy-metrics-0 Terminating 0
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
