@@ -6,7 +6,7 @@
  *
  * 출력: t2b-journey.svg · t2b-spike.svg · t2b-model.svg (같은 이름 .png는 변환 산출물)
  * 데이터 출처: t2b-총정리.md · cpu총개선.md · 라우팅개선.md · 부하모델.md ·
- *             loadtest/results/04-콘텐츠폭주 · 14-현실모드 (전부 실측, 가정치 없음)
+ *             loadtest/results/04-콘텐츠폭주 · 14-콘텐츠현실모드 (전부 실측, 가정치 없음)
  */
 const fs = require('fs');
 const path = require('path');
