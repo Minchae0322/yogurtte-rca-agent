@@ -254,3 +254,39 @@ NotReady 시점의 실측:
 교훈: **"잔고가 0이었다"는 상관이지 인과가 아니었다.** 스래싱으로 CPU가 iowait에 묶이면
 크레딧이 회복되고(지금 96), 반대로 초기 압박 구간에선 kswapd가 CPU를 태워 잔고가 준다 -
 같은 뿌리(메모리)의 두 얼굴을 나는 두 개의 원인으로 읽었다.
+
+### 처방 적용 (2026-08-31 23:15) - micro 유지 · standard 복귀 · limit으로 "노드 대신 컨테이너가 죽게"
+
+사용자 결정: **인스턴스 증설 없이(micro 유지) 크레딧도 standard로 되돌리고**, 컨테이너
+limit으로 실패 모드만 바꾼다 - 느려지더라도 노드는 살아 있게. 근거는 위 정정과 같다
+(CPU가 아니라 메모리가 원인이므로 unlimited는 무효 지출).
+
+**limit 총합을 노드 용량 아래로** (핵심: 커널 cgroup OOM은 kubelet이 굶어도 작동하므로,
+limit이 노드 죽음을 막는 유일한 방어선이다):
+
+| 컴포넌트 | 실측 | 변경 전 | **변경 후** |
+|---|---:|---:|---:|
+| alloy-metrics | 210Mi | 600Mi | **280Mi** |
+| alloy-logs (DS) | 80~103Mi | 200Mi | **130Mi** |
+| alloy-receiver | 63Mi | 200Mi | **100Mi** |
+| alloy-operator | 37Mi | 없음(무제한) | **50Mi** |
+| kube-state-metrics | 35Mi | 100Mi | **45Mi** |
+| node-exporter (DS) | 16Mi | 80Mi | **35Mi** |
+| **합계** | ~420Mi | **1,180Mi > 노드 914Mi** | **640Mi < 914Mi** |
+
+적용 경로에 함정이 하나 있었다 - **helm으로 값을 바꿔도 반영되지 않는다.** alloy 3종은
+alloy-operator가 CR을 거쳐 StatefulSet/DaemonSet을 만드는 구조인데, 그 operator가
+죽은 노드 위에 있어 조정이 불가능했다(교착). helm 저장값 → CR(280/130/100)까지는
+갔지만 워크로드 스펙은 옛값이었고, operator도 리더 선출에서 계속 타임아웃했다.
+**`kubectl set resources`로 워크로드에 직접 패치**해 교착을 끊었다(CR 값과 동일하므로
+operator 조정과 충돌하지 않는다).
+
+결과: 노드 Ready · 메모리 **452Mi/914 (49%)** · CPU 7% · 수집 재개(스크레이프 40s 전,
+JVM 내부 지표 복귀). 8일 만에 관측 정상화.
+
+**남은 반증 조건:** ① 다음 부하시험에서 alloy-metrics가 280Mi를 넘으면 그 컨테이너만
+OOMKill되고 노드는 살아야 한다(이 설계의 성패는 여기서 갈린다). ② alloy-logs 130Mi는
+로그량 많은 노드에서 빠듯할 수 있다(실측 최대 103Mi) - 재시작이 잦으면 150Mi로 완화.
+③ 컨테이너 재시작은 restartPolicy=Always로 이미 보장(receiver 14회 재시작 실측이 증거).
+**노드 자체가 죽으면 obs는 여전히 갈 곳이 없다** - 하드 nodeSelector 때문. failover
+(preferred 어피니티) 적용은 미결.
