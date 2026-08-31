@@ -1,0 +1,57 @@
+=== 23:52:43
+chat-service-7c4cf87cc8-48dvs   45m   789Mi   
+chat restarts: 0
+obs node: 104m 613Mi
+=== 23:53:15
+chat-service-7c4cf87cc8-48dvs   60m   791Mi   
+chat restarts: 0
+chat restarts: 0
+obs node: 86m 619Mi
+=== 23:53:47
+chat-service-7c4cf87cc8-48dvs   64m   792Mi   
+chat restarts: 0
+chat restarts: 0
+obs node: 57m 627Mi
+=== 23:54:20
+error: Metrics not available for pod default/chat-service-7c4cf87cc8-48dvs, age: 27h21m26.908712166s
+chat restarts: 0
+chat restarts: 0
+obs node: 60m 667Mi
+=== 23:54:53
+error: Metrics not available for pod default/chat-service-7c4cf87cc8-48dvs, age: 27h21m59.741031901s
+chat restarts: 0
+chat restarts: 0
+obs node: 63m 655Mi
+=== 23:55:26
+ssh: connect to host ec2-3-36-114-36.ap-northeast-2.compute.amazonaws.com port 22: Can't assign requested address
+Connection closed by UNKNOWN port 65535
+=== 23:55:56
+ssh: connect to host ec2-3-36-114-36.ap-northeast-2.compute.amazonaws.com port 22: Can't assign requested address
+Connection closed by UNKNOWN port 65535
+=== 23:56:26
+ssh: connect to host ec2-3-36-114-36.ap-northeast-2.compute.amazonaws.com port 22: Can't assign requested address
+Connection closed by UNKNOWN port 65535
+=== 23:56:56
+ssh: connect to host ec2-3-36-114-36.ap-northeast-2.compute.amazonaws.com port 22: Can't assign requested address
+Connection closed by UNKNOWN port 65535
+=== 23:57:26
+ssh: connect to host ec2-3-36-114-36.ap-northeast-2.compute.amazonaws.com port 22: Can't assign requested address
+Connection closed by UNKNOWN port 65535
+=== 23:57:56
+error: Metrics not available for pod default/chat-service-7c4cf87cc8-48dvs, age: 27h25m6.358035826s
+chat restarts: 0
+chat restarts: 0
+obs node: 65m 654Mi
+=== 23:58:33
+ssh: connect to host ec2-3-36-114-36.ap-northeast-2.compute.amazonaws.com port 22: Can't assign requested address
+Connection closed by UNKNOWN port 65535
+=== 23:59:01
+error: Metrics not available for pod default/chat-service-7c4cf87cc8-48dvs, age: 27h26m15.963242118s
+chat restarts: 0
+chat restarts: 0
+Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
+=== 23:59:41
+error: Metrics not available for pod default/chat-service-7c4cf87cc8-48dvs, age: 27h26m49.1453979s
+chat restarts: 0
+chat restarts: 0
+obs node: 54m 644Mi

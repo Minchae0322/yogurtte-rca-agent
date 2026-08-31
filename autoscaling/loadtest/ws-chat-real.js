@@ -18,7 +18,7 @@
 //   차를 잰다 (자기 에코는 제외 - 순수 상대방 배달 지연만).
 import ws from 'k6/ws';
 import http from 'k6/http';
-import { check, fail } from 'k6';
+import { check, fail, sleep } from 'k6';
 import { Trend, Counter } from 'k6/metrics';
 import { b64decode } from 'k6/encoding';
 import { CHAT, CHAT_WS, account, login, bearer } from './lib/common.js';
@@ -106,6 +106,11 @@ export default function (data) {
     }, 60000);
   });
 
-  check(res, { 'ws status 101': (r) => r && r.status === 101 });
+  const ok101 = check(res, { 'ws status 101': (r) => r && r.status === 101 });
   check(connected, { 'STOMP CONNECTED': (c) => c === true });
+
+  // 실패 시 backoff. 없으면 거절당한 VU가 즉시 재시도해 초당 수백 회로 증폭되고,
+  // 인그레스 rate limit(DDoS 방어)에 스스로 걸려 시험 전체가 무의미해진다 - 2026-08-31 실측
+  // (연결 99 성공 / 310,499 실패). 시험 하네스가 자기 자신을 DDoS 하지 않게 하는 안전장치.
+  if (!ok101 || !connected) sleep(3);
 }

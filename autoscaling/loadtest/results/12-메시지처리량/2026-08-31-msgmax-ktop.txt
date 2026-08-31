@@ -208,3 +208,33 @@ chat restarts: 0
 Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
 obs grafana-k8s-monitoring-alloy-metrics-0 Pending 0
 obs grafana-k8s-monitoring-alloy-receiver-kz9fd Unknown 0
+=== 23:50:05
+chat-service-7c4cf87cc8-48dvs   43m   791Mi   
+chat restarts: 0
+obs node: 76m 510Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Error 1
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Error 2
+=== 23:50:38
+chat-service-7c4cf87cc8-48dvs   43m   789Mi   
+chat restarts: 0
+obs node: 95m 572Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 2
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 3
+=== 23:51:16
+chat-service-7c4cf87cc8-48dvs   61m   787Mi   
+chat restarts: 0
+obs node: 172m 581Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 2
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 3
+=== 23:51:50
+chat-service-7c4cf87cc8-48dvs   45m   791Mi   
+chat restarts: 0
+obs node: 57m 588Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 2
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 3
+=== 23:52:27
+chat-service-7c4cf87cc8-48dvs   58m   792Mi   
+chat restarts: 0
+obs node: 147m 606Mi
+obs grafana-k8s-monitoring-alloy-metrics-0 Running 2
+obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 3
