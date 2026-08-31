@@ -1,0 +1,84 @@
+=== 22:49:13
+chat-service-7c4cf87cc8-48dvs   45m   784Mi   
+restarts: 0 Running
+=== 22:49:45
+chat-service-7c4cf87cc8-48dvs   47m   786Mi   
+restarts: 0 Running
+=== 22:50:17
+chat-service-7c4cf87cc8-48dvs   50m   785Mi   
+restarts: 0 Running
+=== 22:50:53
+chat-service-7c4cf87cc8-48dvs   59m   786Mi   
+restarts: 0 Running
+=== 22:51:26
+chat-service-7c4cf87cc8-48dvs   176m   794Mi   
+restarts: 0 Running
+=== 22:52:02
+chat-service-7c4cf87cc8-48dvs   131m   795Mi   
+restarts: 0 Running
+=== 22:52:35
+chat-service-7c4cf87cc8-48dvs   135m   797Mi   
+restarts: 0 Running
+=== 22:53:09
+chat-service-7c4cf87cc8-48dvs   47m   797Mi   
+restarts: 0 Running
+=== 22:53:44
+chat-service-7c4cf87cc8-48dvs   48m   796Mi   
+restarts: 0 Running
+=== 22:54:19
+chat-service-7c4cf87cc8-48dvs   44m   795Mi   
+restarts: 0 Running
+=== 22:54:52
+chat-service-7c4cf87cc8-48dvs   54m   795Mi   
+restarts: 0 Running
+=== 22:55:28
+chat-service-7c4cf87cc8-48dvs   107m   796Mi   
+restarts: 0 Running
+=== 22:56:04
+chat-service-7c4cf87cc8-48dvs   107m   799Mi   
+restarts: 0 Running
+=== 22:56:39
+chat-service-7c4cf87cc8-48dvs   76m   800Mi   
+restarts: 0 Running
+=== 22:57:12
+chat-service-7c4cf87cc8-48dvs   40m   800Mi   
+restarts: 0 Running
+=== 22:57:47
+chat-service-7c4cf87cc8-48dvs   81m   800Mi   
+restarts: 0 Running
+=== 22:58:21
+chat-service-7c4cf87cc8-48dvs   49m   800Mi   
+restarts: 0 Running
+=== 22:58:56
+chat-service-7c4cf87cc8-48dvs   66m   800Mi   
+restarts: 0 Running
+=== 22:59:29
+chat-service-7c4cf87cc8-48dvs   140m   801Mi   
+restarts: 0 Running
+=== 23:00:07
+chat-service-7c4cf87cc8-48dvs   110m   802Mi   
+restarts: 0 Running
+=== 23:00:41
+chat-service-7c4cf87cc8-48dvs   214m   804Mi   
+restarts: 0 Running
+=== 23:01:16
+chat-service-7c4cf87cc8-48dvs   348m   805Mi   
+restarts: 0 Running
+=== 23:01:47
+chat-service-7c4cf87cc8-48dvs   323m   805Mi   
+restarts: 0 Running
+=== 23:02:27
+chat-service-7c4cf87cc8-48dvs   362m   806Mi   
+restarts: 0 Running
+=== 23:03:00
+chat-service-7c4cf87cc8-48dvs   318m   806Mi   
+restarts: 0 Running
+=== 23:03:35
+chat-service-7c4cf87cc8-48dvs   114m   805Mi   
+restarts: 0 Running
+=== 23:04:09
+chat-service-7c4cf87cc8-48dvs   37m   795Mi   
+restarts: 0 Running
+=== 23:04:43
+chat-service-7c4cf87cc8-48dvs   35m   795Mi   
+restarts: 0 Running
