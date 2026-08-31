@@ -93,11 +93,12 @@ ktop 60s 로거 병행 · 결과는 연결/폭풍 → `results/09-WS연결폭주
 | 발화 평시 정렬 | `ws-chat-real.js -e PAIRS=30 -e MSG_INTERVAL_MS=30000` | 인입 2 msg/s·전달 4 | 배달 p99<1s·checks>99% | **[실측] 통과 (08-31)** - med 33ms·p95 60ms |
 | **발화 한계 탐색** | `ws-chat-real.js -e PAIRS=100` + 간격 계단(4000/2857/2000ms) | 최대 인입 탐색 | - | **[실측] 최대 ~50 msg/s (08-31)** - 70 붕괴·100 완전붕괴 · 벽은 chat CPU 1000m |
 | 발화 스파이크 정렬 | `ws-chat-real.js -e PAIRS=150 -e MSG_INTERVAL_MS=30000` | 인입 10 msg/s·전달 20 | 동일 | **[실측] 통과 (08-31)** - med 30ms·p95 47ms |
+| 재접속 폭풍 | `j-ws-storm.js -e VUS=1250 -e RECONNECT=1` | handshake 폭주 내성 | 관찰 목적 | 미실행 (규모 재정렬 대기) |
+| 연결 한계 탐색 | `j-ws-storm.js` 계단 1500→2200→3000 | 최대 연결 탐색 | - | **[실측] 3,000 전량 통과 (08-31)** - 한계 미도달 |
 
 주: c-chat-ws의 가상 방 방식은 chat 재배포(참여자 검증) 이후 **배달 0건**이 되어 폐기 -
 setup에서 실제 1:1 방을 만드는 **ws-chat-real.js**로 교체했다 (해부 전문:
 [12-메시지처리량 README](loadtest/results/12-메시지처리량/README.md) 모델 정렬 회차).
-| 재접속 폭풍 | `j-ws-storm.js -e VUS=1250 -e RECONNECT=1` | handshake 폭주 내성 | 관찰 목적 | 미실행 (규모 재정렬 대기) |
 
 공통 env: `-e CHAT_WS_URL=ws://3.36.114.36/api/chat/ws/websocket -e AUTH_URL=http://3.36.114.36/api/auth`
 

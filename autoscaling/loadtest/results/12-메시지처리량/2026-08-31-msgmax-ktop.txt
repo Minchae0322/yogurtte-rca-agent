@@ -172,3 +172,5 @@ chat restarts: 0
 Error from server (NotFound): nodemetrics.metrics.k8s.io "ip-172-31-33-159" not found
 obs grafana-k8s-monitoring-alloy-metrics-0 Terminating 0
 obs grafana-k8s-monitoring-alloy-receiver-kz9fd Running 0
+=== 23:46:06
+chat-service-7c4cf87cc8-48dvs   51m   792Mi   
