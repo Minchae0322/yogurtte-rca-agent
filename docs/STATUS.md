@@ -582,6 +582,17 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-09-05 저녁 (RDS gp2 버스트 크레딧 고갈 — 기본 조회 전면 지연, gp3 전환으로 해소)**:
+  대량 데이터 적재(16:50~18:00 KST, WriteIOPS 최대 2,913)로 `yogurtte-db-01`(gp2 20GB, 기본 100 IOPS)
+  BurstBalance가 18:00에 0%. 이후 Read/WriteLatency 0.5ms → 50~90ms, DiskQueueDepth 7~16.
+  연쇄: 18:00 FeedHotScore 시간 가중치 UPDATE 락 타임아웃(1205, 50s) · `/categories/list` 39s ·
+  `/feeds/scroll` 21~133s · `/feeds/hot`·`/products` 60s 타임아웃 · Hikari 풀 고갈(total=3 active=3)
+  → content hnw52 readiness 실패 0/1. RDS CPU 6%로 한가한데 IOPS 사용이 기본 한도에 걸려 크레딧이
+  안 쌓이는 상태. **처방: 스토리지 gp2 → gp3(사용자 실행, 19:05 KST 적용).** 직후 Latency 1ms,
+  DiskQueueDepth 0.005, 외부 curl 6개 엔드포인트 전부 200 · 40~270ms, 파드 3/3 Ready.
+  관측 노드 스왑 작업과는 무관(크레딧 하락 16:50 시작, 스왑 17:45). 남은 결함: `tb_feed.updated_at`
+  인덱스 부재(시간 가중치 UPDATE가 풀스캔+행 락) · 1분 주기 battle-deadline 스케줄러 쿼리 7~21s ·
+  17시·18시 실행 트레이스는 receiver 다운으로 유실.
 - **2026-09-05 (관측 노드 OOM 복구 — micro 스팟 노드에 스왑 1G + kubelet LimitedSwap)**:
   t3.micro 관측 노드(172.31.33.159, alloy-metrics·receiver·operator 핀)가 09-02 22:45 KST
   커널 OOM(`Killed process (alloy) anon-rss 254MB`)으로 멈춰 메트릭·트레이스가 2.5일 끊겼다
