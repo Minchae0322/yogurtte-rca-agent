@@ -582,6 +582,18 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-09-05 (관측 노드 OOM 복구 — micro 스팟 노드에 스왑 1G + kubelet LimitedSwap)**:
+  t3.micro 관측 노드(172.31.33.159, alloy-metrics·receiver·operator 핀)가 09-02 22:45 KST
+  커널 OOM(`Killed process (alloy) anon-rss 254MB`)으로 멈춰 메트릭·트레이스가 2.5일 끊겼다
+  (로그는 다른 노드 alloy-logs가 직접 보내 무사). kube-state-metrics 기준 08-23 이주 후 **5번째
+  NotReady**(08-23 · 08-24~25 · 08-30~31 · 09-01 · 09-02~05) — 병목은 크레딧이 아니라 **메모리**
+  (1 GiB에 파드 요청 합 575Mi + k3s). 처방: 재부팅 → `/swapfile` + `vm.swappiness=10` +
+  kubelet 드롭인 `kubelet.conf.d/10-swap.conf`(`memorySwap.swapBehavior: LimitedSwap`, 기본
+  `memorySwap: {}`는 파드에 스왑 미허용) → 2G 스왑이 루트 6.8G를 채워 **DiskPressure evict 순환**
+  발생 → 1G로 축소 + apt clean·journal vacuum. 결과: 노드 Ready, 관측 파드 5종 Running, Mimir
+  샘플 age 4s · Tempo 3분 5 traces · Loki 3분 391 lines. 정상 상태 가용 193 MiB · 스왑 270M ·
+  디스크 73%. 미처리: monitoring ns Evicted 잔여 65건 정리, 마스터 디스크 97%(syslog 2×100M ·
+  journal 425M) disk-pressure taint. 근본 해결은 small 교체 또는 alloy-metrics를 core 노드로 이전.
 - **2026-09-02 (README 경력기술서 유입용 재정리)**: 루트 README를 포트폴리오 v16 구성에 맞춰
   재작성 — 대표 성과 표(72→95 · 비용 −33~47%)를 상단으로, 관측 파이프라인 구조도
   (`docs/charts/monitoring-pipeline.png`, monitoring_v16 preview 복사본) + 5층 표 신설, 핵심
