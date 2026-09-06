@@ -582,6 +582,13 @@ timeout(3s)보다 빨라 커넥션 점유가 오히려 짧아졌다 — **auth�
 
 ## ④ 활동 로그 (최신이 위)
 
+- **2026-09-06 (toy-content 알림 전달 보장 — 변경군 A, 미배포·미커밋. IN-2 앵커 영향)**:
+  알림 14타입을 전달 등급으로 나눔(GUARANTEED 7: 배틀 결과 2·D-7·승인 요청 2·초대·시스템 / BEST_EFFORT 7).
+  GUARANTEED만 Transactional Outbox(`TB_NOTIFICATION_OUTBOX`) + 커밋 직후 즉시 전송 + ShedLock 리더 30초 청소.
+  스케줄러 창 확대(종료 6m·D-7 ±1h)로 리더 종료 누락 제거. 테스트 269 통과. 판단 과정·대안 10개·미측정 목록은
+  toy-content `docs/notifications/알림개선.md`. **주의**: IN-2 앵커 v2는 "Kafka 다운 → 조용한 유실"을 전제한다.
+  이 변경이 배포되면 GUARANTEED 타입은 유실되지 않으므로 **다음 IN-2 회차 채록 전에 앵커 개정**이 필요하다
+  (채록 후 수정은 그 회차 무효). 배포 시점은 회차 경계에 맞춘다.
 - **2026-09-05 저녁 (RDS gp2 버스트 크레딧 고갈 — 기본 조회 전면 지연, gp3 전환으로 해소)**:
   대량 데이터 적재(16:50~18:00 KST, WriteIOPS 최대 2,913)로 `yogurtte-db-01`(gp2 20GB, 기본 100 IOPS)
   BurstBalance가 18:00에 0%. 이후 Read/WriteLatency 0.5ms → 50~90ms, DiskQueueDepth 7~16.
