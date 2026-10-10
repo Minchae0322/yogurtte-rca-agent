@@ -187,8 +187,14 @@ public record SurveyProperties(
         return parse(step, Duration.ofMinutes(1));
     }
 
-    /** {@code 5m} · {@code 60s} · {@code 90} (초) 형태를 읽는다. */
-    static Duration parse(String raw, Duration fallback) {
+    /**
+     * {@code 5m} · {@code 60s} · {@code 90} (초) 형태를 읽는다.
+     *
+     * <p><b>public인 이유.</b> {@code mcp} 패키지가 {@link com.yogurtte.rca.triage.TriageService}와
+     * <b>같은 폴백</b>으로 lookback을 계산해야 두 경로의 신호 추출이 바이트 단위로 같다
+     * ({@link #stepDuration()}의 폴백은 1분, lookback은 5분이라 서로 쓸 수 없다).
+     */
+    public static Duration parse(String raw, Duration fallback) {
         if (raw == null || raw.isBlank()) {
             return fallback;
         }

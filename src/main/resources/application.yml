@@ -2,10 +2,25 @@ spring:
   application:
     name: rca-agent
 
+  # MCP 서버 - 수집·정제 계층을 Claude Code 같은 클라이언트에 툴로 노출한다.
+  # 기본 off: 회차를 돌리는 구성과 대화형 구성이 한 기동에서 섞이면 나중에
+  # "그 회차에 MCP가 떠 있었나"를 확인할 수 없다. 측정 경로는 이 플래그와 무관하게 돈다.
+  # 전송은 SSE다 (GET /sse -> POST /mcp/message?sessionId=...) - Spring AI 1.0.0 webmvc 스타터.
+  ai:
+    mcp:
+      server:
+        enabled: ${RCA_MCP_ENABLED:false}
+        name: rca-agent
+        version: 0.0.1
+
 server:
   port: ${SERVER_PORT:8080}
 
 rca:
+  # 툴 등록도 같은 env 하나로 묶는다 - 둘이 갈리면 "서버는 떴는데 툴이 없다"가 된다.
+  mcp:
+    enabled: ${RCA_MCP_ENABLED:false}
+
   llm:
     provider: ${RCA_LLM_PROVIDER:claude-cli}   # anthropic | openai | claude-cli
     anthropic:

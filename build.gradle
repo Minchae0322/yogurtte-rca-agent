@@ -37,6 +37,12 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-anthropic'
     implementation 'org.springframework.ai:spring-ai-openai'
 
+    // MCP 서버 - 수집·정제 계층을 Claude Code 같은 MCP 클라이언트에 툴로 노출한다.
+    // BOM이 버전을 맞춘다(1.0.0). 측정 경로(POST /diagnose · ClaudeCliLlmClient)는 건드리지 않고,
+    // 같은 Surveyor·Collector·ContextAssembler 빈을 재사용만 한다 - 두 경로가 정제 로직을
+    // 공유해야 "툴로 옮겨서 점수가 달라졌다"가 아니라 "루프만 다르다"가 성립한다.
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+
     // Slack/Discord는 RestClient로 webhook POST만 한다 - SDK 없음.
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
